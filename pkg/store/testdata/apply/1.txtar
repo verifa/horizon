@@ -1,0 +1,136 @@
+# format of filename is:
+# <command>[:<manager>][:<error-status>]
+#
+# Commands:
+# - apply: apply the file contents (requires manager)
+# - assert: checks the current object against the file contents
+#
+# Examples:
+# - apply:m1 => apply contents as manager "m1"
+# - apply:m1:409 => apply contents as manager "m1" and expect error status 409 (conflict)
+# - assert => check the current object eqauls file contents
+#
+
+-- apply:m1 --
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+spec:
+  text: test
+  object:
+    text: test
+    numbers: [1,2,3]
+-- assert --
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+  managedFields:
+  - manager: m1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:spec:
+        f:text: {}
+        f:object:
+          f:text: {}
+          f:numbers: {}
+spec:
+  text: test
+  object:
+    text: test
+    numbers: [1,2,3]
+-- apply:m1 --
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+spec:
+  text: test
+  object:
+    text: test
+  array:
+    - id: "1"
+      text: test
+-- assert --
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+  managedFields:
+  - manager: m1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:spec:
+        f:text: {}
+        f:object:
+          f:text: {}
+        f:array:
+          k:{"id":"1"}:
+            f:id: {}
+            f:text: {}
+spec:
+  text: test
+  object:
+    text: test
+  array:
+    - id: "1"
+      text: test
+
+-- apply:m2:409 --
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+spec:
+  text: test
+
+-- apply:m2 --
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+spec:
+  object:
+    number: 123
+  array:
+    - id: "2"
+      text: test
+
+-- assert --
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+  managedFields:
+  - manager: m1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:spec:
+        f:text: {}
+        f:object:
+          f:text: {}
+        f:array:
+          k:{"id":"1"}:
+            f:id: {}
+            f:text: {}
+  - manager: m2
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:spec:
+        f:object:
+          f:number: {}
+        f:array:
+          k:{"id":"2"}:
+            f:id: {}
+            f:text: {}
+spec:
+  text: test
+  object:
+    number: 123
+    text: test
+  array:
+    - id: "1"
+      text: test
+    - id: "2"
+      text: test
