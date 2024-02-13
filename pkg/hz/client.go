@@ -93,11 +93,19 @@ func (oc ObjectClient[T]) List(
 	ctx context.Context,
 	opts ...ListOption,
 ) ([]*T, error) {
-	var t T
-	key := KeyForObject(t)
-	data, err := oc.Client.List(ctx, key, opts...)
+	opt := listOption{}
+	for _, o := range opts {
+		o(&opt)
+	}
+
+	if opt.key == "" {
+		var t T
+		key := KeyForObject(t)
+		opts = append(opts, WithListKey(key))
+	}
+	data, err := oc.Client.List(ctx, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("listing objects %q: %w", key, err)
+		return nil, fmt.Errorf("listing objects: %w", err)
 	}
 
 	type Result struct {
@@ -413,20 +421,36 @@ func (c *Client) Get(
 	}
 }
 
+func WithListKey(key string) ListOption {
+	return func(lo *listOption) {
+		lo.key = key
+	}
+}
+
+func WithListKeyFromObject(obj ObjectKeyer) ListOption {
+	return func(lo *listOption) {
+		lo.key = KeyForObject(obj)
+	}
+}
+
 type ListOption func(*listOption)
 
-type listOption struct{}
+type listOption struct {
+	key string
+}
 
 func (c *Client) List(
 	ctx context.Context,
-	key string,
 	opts ...ListOption,
 ) ([]byte, error) {
 	lo := listOption{}
 	for _, opt := range opts {
 		opt(&lo)
 	}
-	msg := nats.NewMsg("STORE.list." + key)
+	if lo.key == "" {
+		return nil, fmt.Errorf("list: key required")
+	}
+	msg := nats.NewMsg("STORE.list." + lo.key)
 	reply, err := c.Conn.RequestMsg(msg, time.Second)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {

@@ -108,7 +108,7 @@ func StartStore(
 	store.mutex = mutex
 
 	sub, err := conn.QueueSubscribe(
-		"STORE.*.*.*.*",
+		subjectStore,
 		"store",
 		func(msg *nats.Msg) {
 			slog.Info("received store message", "msg", msg)

@@ -13,22 +13,24 @@ import (
 
 type WatcherOption func(*watcherOptions)
 
-func WithWatcherForObject(obj Objecter) WatcherOption {
+func WithWatcherForObject(obj ObjectKeyer) WatcherOption {
 	return func(o *watcherOptions) {
 		o.forObject = obj
 	}
 }
 
-func WithWatcherFn(fn func(event Event) (Result, error)) WatcherOption {
+func WithWatcherFn(
+	fn func(ctx context.Context, event Event) (Result, error),
+) WatcherOption {
 	return func(o *watcherOptions) {
 		o.fn = fn
 	}
 }
 
 type watcherOptions struct {
-	forObject Objecter
+	forObject ObjectKeyer
 	ackWait   time.Duration
-	fn        func(event Event) (Result, error)
+	fn        func(ctx context.Context, event Event) (Result, error)
 	backoff   time.Duration
 }
 
@@ -96,6 +98,7 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 		AckPolicy:      jetstream.AckExplicitPolicy,
 		DeliverPolicy:  jetstream.DeliverLastPerSubjectPolicy,
 		FilterSubjects: []string{subject},
+		MaxAckPending:  -1,
 		// AckWait specifies how long a consumer waits before considering a
 		// message delivered to a consumer as lost.
 		// Hence, the consumer needs to ack/nak or mark the msg as in progress
@@ -108,7 +111,7 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 	cc, err := con.Consume(func(msg jetstream.Msg) {
 		kvop := opFromMsg(msg)
 		handleEvent := func(msg jetstream.Msg, event Event) {
-			result, err := opt.fn(event)
+			result, err := opt.fn(ctx, event)
 			if err != nil {
 				slog.Error(
 					"handling event",

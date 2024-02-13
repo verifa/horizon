@@ -22,7 +22,18 @@ func (u User) ObjectKind() string {
 	return "User"
 }
 
-type UserSpec struct{}
+type UserSpec struct {
+	Claims *UserClaims `json:"claims,omitempty" cue:""`
+}
+
+type UserClaims struct {
+	Sub     *string  `json:"sub,omitempty" cue:""`
+	Iss     *string  `json:"iss,omitempty" cue:""`
+	Name    *string  `json:"name,omitempty" cue:""`
+	Email   *string  `json:"email,omitempty" cue:""`
+	Groups  []string `json:"groups,omitempty"`
+	Picture *string  `json:"picture,omitempty"`
+}
 
 type UserStatus struct {
 	// ID of the user, which for NATS is the public key.

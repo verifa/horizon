@@ -78,10 +78,12 @@ func TestReconciler(t *testing.T) {
 		ObjectMeta: hz.ObjectMeta{
 			Account: "test",
 			Name:    "child",
-			OwnerReference: &hz.OwnerReference{
-				Kind:    do.ObjectKind(),
-				Name:    do.Name,
-				Account: do.Account,
+			OwnerReferences: []hz.OwnerReference{
+				{
+					Kind:    do.ObjectKind(),
+					Name:    do.Name,
+					Account: do.Account,
+				},
 			},
 		},
 	}
@@ -303,10 +305,12 @@ func TestReconcilerConcurrent(t *testing.T) {
 		ObjectMeta: hz.ObjectMeta{
 			Account: "test",
 			Name:    "child",
-			OwnerReference: &hz.OwnerReference{
-				Kind:    do.ObjectKind(),
-				Name:    do.Name,
-				Account: do.Account,
+			OwnerReferences: []hz.OwnerReference{
+				{
+					Kind:    do.ObjectKind(),
+					Name:    do.Name,
+					Account: do.Account,
+				},
 			},
 		},
 	}

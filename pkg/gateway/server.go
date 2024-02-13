@@ -288,7 +288,10 @@ func (s *Server) Close() error {
 	return errs
 }
 
-func (s *Server) handlePortalEvent(event hz.Event) (hz.Result, error) {
+func (s *Server) handlePortalEvent(
+	ctx context.Context,
+	event hz.Event,
+) (hz.Result, error) {
 	switch event.Operation {
 	case hz.EventOperationPut:
 		var portal hz.Portal

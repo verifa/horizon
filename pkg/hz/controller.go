@@ -261,6 +261,7 @@ func (c *Controller) startReconciler(
 		AckPolicy:      jetstream.AckExplicitPolicy,
 		DeliverPolicy:  jetstream.DeliverLastPerSubjectPolicy,
 		FilterSubjects: []string{subject},
+		MaxAckPending:  -1,
 		// AckWait specifies how long a consumer waits before considering a
 		// message delivered to a consumer as lost.
 		// Hence, the consumer needs to ack/nak or mark the msg as in progress
@@ -309,6 +310,7 @@ func (c *Controller) startReconciler(
 			Description:    "Reconciler for " + forObj.ObjectKind() + " owns " + obj.ObjectKind(),
 			DeliverPolicy:  jetstream.DeliverLastPerSubjectPolicy,
 			FilterSubjects: []string{subject},
+			MaxAckPending:  -1,
 			// AckWait specifies how long a consumer waits before considering a
 			// message delivered to a consumer as lost.
 			// Hence, the consumer needs to ack/nak or mark the msg as in
@@ -336,12 +338,12 @@ func (c *Controller) startReconciler(
 				_ = msg.Term()
 				return
 			}
-			if emptyObject.OwnerReference == nil {
+			if len(emptyObject.OwnerReferences) == 0 {
 				_ = msg.Ack()
 				return
 			}
-			ownerRef := emptyObject.OwnerReference
-			if ownerRef.ObjectKind() != forObj.ObjectKind() {
+			ownerRef, ok := emptyObject.ObjectOwnerReference(forObj)
+			if !ok {
 				_ = msg.Ack()
 				return
 			}

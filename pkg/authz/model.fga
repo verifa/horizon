@@ -1,0 +1,27 @@
+model
+  schema 1.1
+type user
+type account
+    relations
+        define owner: [user]
+        define can_create: creator or owner
+        define can_read: creator or editor or viewer or owner
+        define can_update: editor or owner
+        define can_delete: destroyer or owner
+        define creator: [group#member]
+        define viewer: [group#member]
+        define editor: [group#member]
+        define destroyer: [group#member]
+
+type group
+    relations
+        define member: [user]
+
+# object is very useful for list operations...
+# otherwise we have to iterate through each object and send it to openfga
+type object
+    relations
+        define parent: [account]
+        define can_read: can_read from parent
+        define can_update: can_update from parent
+        define can_delete: can_delete from parent

@@ -52,16 +52,21 @@ func TestAccount(t *testing.T) {
 		ctx,
 		ti.Conn,
 		hz.WithWatcherForObject(account),
-		hz.WithWatcherFn(func(event hz.Event) (hz.Result, error) {
-			var acc Account
-			if err := json.Unmarshal(event.Data, &acc); err != nil {
-				return hz.Result{}, fmt.Errorf("unmarshalling account: %w", err)
-			}
-			if acc.Status.Ready == true {
-				close(done)
-			}
-			return hz.Result{}, nil
-		}),
+		hz.WithWatcherFn(
+			func(ctx context.Context, event hz.Event) (hz.Result, error) {
+				var acc Account
+				if err := json.Unmarshal(event.Data, &acc); err != nil {
+					return hz.Result{}, fmt.Errorf(
+						"unmarshalling account: %w",
+						err,
+					)
+				}
+				if acc.Status.Ready == true {
+					close(done)
+				}
+				return hz.Result{}, nil
+			},
+		),
 	)
 	tu.AssertNoError(t, err)
 	defer watcher.Close()

@@ -2,6 +2,8 @@ package hz
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -10,8 +12,8 @@ type Objecter interface {
 	ObjectRevision() *uint64
 	ObjectDeletionTimestamp() *Time
 	// ObjectDeleteAt(Time)
-	ObjectOwnerReference() *OwnerReference
-	ObjectIsOwnedBy(Objecter) bool
+	ObjectOwnerReferences() []OwnerReference
+	ObjectOwnerReference(Objecter) (OwnerReference, bool)
 }
 
 // ObjectKeyer is an interface that can produce a unique key for an object.
@@ -25,6 +27,87 @@ type Kinder interface {
 	ObjectKind() string
 	// ObjectAPIVersion() string
 	// ObjectGroup() string
+}
+
+var _ ObjectKeyer = (*ObjectKey[EmptyObjectWithMeta])(nil)
+
+type ObjectKey[T Objecter] struct {
+	Name    string `json:"name,omitempty"`
+	Account string `json:"account,omitempty"`
+}
+
+func (o ObjectKey[T]) ObjectAccount() string {
+	if o.Account == "" {
+		return "*"
+	}
+	return o.Account
+}
+
+func (o ObjectKey[T]) ObjectKind() string {
+	var t T
+	return t.ObjectKind()
+}
+
+func (o ObjectKey[T]) ObjectName() string {
+	if o.Name == "" {
+		return "*"
+	}
+	return o.Name
+}
+
+func (o ObjectKey[T]) String() string {
+	return o.ObjectKind() + "/" + o.Account + "/" + o.Name
+}
+
+var KeyAllObjects = Key{
+	Name:    "*",
+	Account: "*",
+	Kind:    "*",
+}
+
+func KeyFromString(s string) (Key, error) {
+	parts := strings.Split(s, ".")
+	if len(parts) != 3 {
+		return Key{}, fmt.Errorf("invalid key: %q", s)
+	}
+	return Key{
+		Kind:    parts[0],
+		Account: parts[1],
+		Name:    parts[2],
+	}, nil
+}
+
+var _ ObjectKeyer = (*Key)(nil)
+
+type Key struct {
+	Name    string
+	Account string
+	Kind    string
+}
+
+func (o Key) ObjectAccount() string {
+	if o.Account == "" {
+		return "*"
+	}
+	return o.Account
+}
+
+func (o Key) ObjectKind() string {
+	if o.Kind == "" {
+		return "*"
+	}
+	return o.Kind
+}
+
+func (o Key) ObjectName() string {
+	if o.Name == "" {
+		return "*"
+	}
+	return o.Name
+}
+
+func (o Key) String() string {
+	return o.Kind + "/" + o.Account + "/" + o.Name
 }
 
 type EmptyObjectWithMeta struct {
@@ -42,10 +125,10 @@ type ObjectMeta struct {
 	Labels map[string]string `json:"labels,omitempty" cue:",opt"`
 
 	// Revision is the revision number of the object.
-	Revision          *uint64         `json:"revision,omitempty" cue:"-"`
-	OwnerReference    *OwnerReference `json:"ownerReference,omitempty" cue:"-"`
-	DeletionTimestamp *Time           `json:"deletionTimestamp,omitempty" cue:"-"`
-	ManagedFields     json.RawMessage `json:"managedFields,omitempty" cue:"-"`
+	Revision          *uint64          `json:"revision,omitempty" cue:"-"`
+	OwnerReferences   []OwnerReference `json:"ownerReferences,omitempty" cue:"-"`
+	DeletionTimestamp *Time            `json:"deletionTimestamp,omitempty" cue:"-"`
+	ManagedFields     json.RawMessage  `json:"managedFields,omitempty" cue:"-"`
 }
 
 func (o ObjectMeta) ObjectName() string {
@@ -70,15 +153,22 @@ func (o ObjectMeta) ObjectDeleteNow() bool {
 	return o.DeletionTimestamp != nil && o.DeletionTimestamp.Before(time.Now())
 }
 
-func (o ObjectMeta) ObjectOwnerReference() *OwnerReference {
-	return o.OwnerReference
+func (o ObjectMeta) ObjectOwnerReferences() []OwnerReference {
+	return o.OwnerReferences
 }
 
-func (o ObjectMeta) ObjectIsOwnedBy(owner Objecter) bool {
-	if o.OwnerReference == nil {
-		return false
+func (o ObjectMeta) ObjectOwnerReference(
+	owner Objecter,
+) (OwnerReference, bool) {
+	if o.OwnerReferences == nil {
+		return OwnerReference{}, false
 	}
-	return o.OwnerReference.IsOwnedBy(owner.ObjectOwnerReference())
+	for _, ow := range o.OwnerReferences {
+		if ow.IsOwnedBy(owner) {
+			return ow, true
+		}
+	}
+	return OwnerReference{}, false
 }
 
 func OwnerReferenceFromObject(object Objecter) *OwnerReference {
@@ -107,7 +197,7 @@ func (o OwnerReference) ObjectName() string {
 	return o.Name
 }
 
-func (o OwnerReference) IsOwnedBy(owner *OwnerReference) bool {
+func (o OwnerReference) IsOwnedBy(owner Objecter) bool {
 	if owner == nil {
 		return false
 	}
