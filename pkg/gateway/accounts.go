@@ -8,13 +8,14 @@ import (
 
 	"github.com/verifa/horizon/pkg/extensions/accounts"
 	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/sessions"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/nats-io/jwt/v2"
 )
 
 func (s *Server) serveAccount(w http.ResponseWriter, r *http.Request) {
-	userInfo, ok := r.Context().Value(authContext).(UserInfo)
+	userInfo, ok := r.Context().Value(authContext).(sessions.UserInfo)
 	if !ok {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return
@@ -25,7 +26,7 @@ func (s *Server) serveAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveAccountUsers(w http.ResponseWriter, r *http.Request) {
-	userInfo, ok := r.Context().Value(authContext).(UserInfo)
+	userInfo, ok := r.Context().Value(authContext).(sessions.UserInfo)
 	if !ok {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return

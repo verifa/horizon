@@ -19,8 +19,9 @@ const (
 )
 
 const (
-	HeaderStatus       = "Hz-Status"
-	HeaderFieldManager = "Hz-Field-Manager"
+	HeaderStatus        = "Hz-Status"
+	HeaderAuthorization = "Hz-Authorization"
+	HeaderFieldManager  = "Hz-Field-Manager"
 )
 
 var (

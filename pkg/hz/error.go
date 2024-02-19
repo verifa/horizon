@@ -20,6 +20,14 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s (status %d)", e.Message, e.Status)
 }
 
+func (e *Error) Is(err error) bool {
+	target, ok := err.(*Error)
+	if !ok {
+		return false
+	}
+	return e.Status == target.Status && e.Message == target.Message
+}
+
 // respondError responds to a NATS message with an error.
 // It expects the err to be an *Error and will use the status and message for
 // the response.
@@ -37,6 +45,7 @@ func RespondError(
 	var respErr *Error
 	if errors.As(err, &respErr) {
 		status = respErr.Status
+		text = respErr.Message
 	}
 	response := nats.NewMsg(msg.Reply)
 	response.Data = []byte(text)

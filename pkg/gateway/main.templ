@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"github.com/verifa/horizon/pkg/extensions/accounts"
 	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/sessions"
 )
 
-templ layout(title string, userInfo *UserInfo, body templ.Component) {
+templ layout(title string, userInfo *sessions.UserInfo, body templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en" data-theme="lofi">
 		<head>
@@ -66,7 +67,7 @@ templ accountLayout(account string, portals map[string]hz.Portal, body templ.Com
 	</div>
 }
 
-templ nav(userInfo *UserInfo) {
+templ nav(userInfo *sessions.UserInfo) {
 	<div class="navbar bg-primary">
 		<div class="flex-1"><a href="/" class="btn btn-ghost normal-case text-xl text-primary-content">Horizon</a></div>
 		if userInfo != nil {

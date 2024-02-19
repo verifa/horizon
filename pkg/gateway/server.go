@@ -13,6 +13,7 @@ import (
 
 	"github.com/verifa/horizon/pkg/extensions/accounts"
 	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/sessions"
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
@@ -48,7 +49,7 @@ func WithOIDCConfig(oidc OIDCConfig) ServerOption {
 	}
 }
 
-func WithDummyAuth(user UserInfo) ServerOption {
+func WithDummyAuth(user sessions.UserInfo) ServerOption {
 	return func(o *serverOptions) {
 		o.dummyAuth = &user
 	}
@@ -66,7 +67,7 @@ type serverOptions struct {
 	Conn *nats.Conn
 	oidc *OIDCConfig
 
-	dummyAuth        *UserInfo
+	dummyAuth        *sessions.UserInfo
 	dummyAuthDefault bool
 
 	listener net.Listener
@@ -142,11 +143,7 @@ func (s *Server) start(
 	// Auth
 	//
 	if opt.oidc != nil {
-		sessionKV, err := s.initSessionBucket(ctx)
-		if err != nil {
-			return fmt.Errorf("init session bucket: %w", err)
-		}
-		oidcHandler, err := newOIDCHandler(ctx, sessionKV, *opt.oidc)
+		oidcHandler, err := newOIDCHandler(ctx, s.Conn, *opt.oidc)
 		if err != nil {
 			return fmt.Errorf("oidc auth middleware: %w", err)
 		}
@@ -309,7 +306,7 @@ func (s *Server) handlePortalEvent(
 }
 
 func (s *Server) serveHome(w http.ResponseWriter, r *http.Request) {
-	userInfo, ok := r.Context().Value(authContext).(UserInfo)
+	userInfo, ok := r.Context().Value(authContext).(sessions.UserInfo)
 	if !ok {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return
@@ -330,7 +327,7 @@ func (s *Server) serveLoggedOut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveAccountsNew(w http.ResponseWriter, r *http.Request) {
-	userInfo, ok := r.Context().Value(authContext).(UserInfo)
+	userInfo, ok := r.Context().Value(authContext).(sessions.UserInfo)
 	if !ok {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return
@@ -364,4 +361,14 @@ func validateOneTrue(b ...bool) bool {
 		}
 	}
 	return count == 1
+}
+
+func httpError(w http.ResponseWriter, err error) {
+	var hzErr *hz.Error
+	if errors.As(err, &hzErr) {
+		http.Error(w, hzErr.Message, hzErr.Status)
+		return
+	}
+
+	http.Error(w, err.Error(), http.StatusInternalServerError)
 }

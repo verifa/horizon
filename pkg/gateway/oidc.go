@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -17,7 +16,8 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/google/uuid"
-	"github.com/nats-io/nats.go/jetstream"
+	"github.com/nats-io/nats.go"
+	"github.com/verifa/horizon/pkg/sessions"
 	"golang.org/x/oauth2"
 )
 
@@ -36,7 +36,7 @@ const (
 
 func newOIDCHandler(
 	ctx context.Context,
-	kv jetstream.KeyValue,
+	conn *nats.Conn,
 	config OIDCConfig,
 ) (*oidcHandler, error) {
 	provider, err := oidc.NewProvider(ctx, config.Issuer)
@@ -61,18 +61,18 @@ func newOIDCHandler(
 	verifier := provider.Verifier(oidcConfig)
 
 	return &oidcHandler{
-		ctx:      ctx,
 		config:   &oauth2Config,
 		verifier: verifier,
-		bucket:   kv,
+		conn:     conn,
 	}, nil
 }
 
 type oidcHandler struct {
-	ctx      context.Context
+	// ctx      context.Context
 	config   *oauth2.Config
 	verifier *oidc.IDTokenVerifier
-	bucket   jetstream.KeyValue
+	conn     *nats.Conn
+	// bucket   jetstream.KeyValue
 }
 
 func (or *oidcHandler) authMiddleware(next http.Handler) http.Handler {
@@ -91,29 +91,20 @@ func (or *oidcHandler) authMiddleware(next http.Handler) http.Handler {
 			http.Redirect(w, r, loginReturnURL, http.StatusSeeOther)
 			return
 		}
-		kve, err := or.bucket.Get(or.ctx, sessionID.String())
+		userInfo, err := sessions.Get(
+			r.Context(),
+			or.conn,
+			sessions.WithSessionID(sessionID.String()),
+		)
 		if err != nil {
-			if errors.Is(err, jetstream.ErrKeyNotFound) {
+			if errors.Is(err, sessions.ErrInvalidCredentials) {
 				loginReturnURL := "/login?return_url=" + url.QueryEscape(
 					r.RequestURI,
 				)
 				http.Redirect(w, r, loginReturnURL, http.StatusSeeOther)
 				return
 			}
-			http.Error(
-				w,
-				"invalid session: "+err.Error(),
-				http.StatusUnauthorized,
-			)
-			return
-		}
-		var userInfo UserInfo
-		if err := json.Unmarshal(kve.Value(), &userInfo); err != nil {
-			http.Error(
-				w,
-				"unmarshalling claims: "+err.Error(),
-				http.StatusUnauthorized,
-			)
+			httpError(w, err)
 			return
 		}
 		ctx := context.WithValue(r.Context(), authContext, userInfo)
@@ -157,12 +148,12 @@ func (or *oidcHandler) logout(w http.ResponseWriter, req *http.Request) {
 		w.Header().Add("HX-Redirect", "/loggedout")
 		return
 	}
-	if err := or.bucket.Delete(or.ctx, sessionID.String()); err != nil {
-		http.Error(
-			w,
-			"Invalid session: "+err.Error(),
-			http.StatusUnauthorized,
-		)
+	if err := sessions.Delete(
+		req.Context(),
+		or.conn,
+		sessions.WithSessionID(sessionID.String()),
+	); err != nil {
+		httpError(w, err)
 		return
 	}
 	w.Header().Add("HX-Redirect", "/loggedout")
@@ -185,7 +176,10 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	oauth2Token, err := or.config.Exchange(or.ctx, req.URL.Query().Get("code"))
+	oauth2Token, err := or.config.Exchange(
+		req.Context(),
+		req.URL.Query().Get("code"),
+	)
 	if err != nil {
 		http.Error(w, "exchange: "+err.Error(), http.StatusUnauthorized)
 		return
@@ -199,7 +193,7 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Parse and verify ID Token payload.
-	idToken, err := or.verifier.Verify(or.ctx, rawIDToken)
+	idToken, err := or.verifier.Verify(req.Context(), rawIDToken)
 	if err != nil {
 		http.Error(
 			w,
@@ -223,7 +217,7 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var claims UserInfo
+	var claims sessions.UserInfo
 	if err := idToken.Claims(&claims); err != nil {
 		http.Error(
 			w,
@@ -232,22 +226,9 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		)
 		return
 	}
-	bClaims, err := json.Marshal(claims)
+	sessionID, err := sessions.New(req.Context(), or.conn, claims)
 	if err != nil {
-		http.Error(
-			w,
-			"marhsalling claims: "+err.Error(),
-			http.StatusUnauthorized,
-		)
-		return
-	}
-	sessionID := uuid.New()
-	if _, err := or.bucket.Put(or.ctx, sessionID.String(), bClaims); err != nil {
-		http.Error(
-			w,
-			"cannot create session: "+err.Error(),
-			http.StatusInternalServerError,
-		)
+		httpError(w, err)
 		return
 	}
 	writeSessionCookieHeader(w, sessionID)
@@ -355,11 +336,11 @@ func getSessionCookie(r *http.Request) (uuid.UUID, error) {
 	return uuid.Parse(sessionCookie.Value)
 }
 
-func writeSessionCookieHeader(w http.ResponseWriter, sessionID uuid.UUID) {
+func writeSessionCookieHeader(w http.ResponseWriter, sessionID string) {
 	// Create cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
-		Value:    sessionID.String(),
+		Value:    sessionID,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(time.Hour.Seconds() * 8),
