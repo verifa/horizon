@@ -3,6 +3,7 @@ package hz
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -43,6 +44,8 @@ type Watcher struct {
 	Conn *nats.Conn
 
 	consumeContext jetstream.ConsumeContext
+	isInit         bool
+	Init           chan struct{}
 }
 
 func StartWatcher(
@@ -62,6 +65,7 @@ func (w *Watcher) Close() {
 }
 
 func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
+	w.Init = make(chan struct{})
 	if w.consumeContext != nil {
 		return fmt.Errorf("watcher already started")
 	}
@@ -93,6 +97,20 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 		return fmt.Errorf("get stream %q: %w", "KV_"+kv.Bucket(), err)
 	}
 	subject := "$KV." + kv.Bucket() + "." + KeyForObject(opt.forObject)
+	// Get the last message for the subject because we want the message
+	// sequence.
+	// As we consume messages we can compare the message sequence with the
+	// latest message to find out when we have "caught up" with the stream.
+	// If no last message exists (i.e. there is no message for the subject) then
+	// there is nothing to catch up with.
+	lastMsg, err := stream.GetLastMsgForSubject(ctx, subject)
+	if err != nil {
+		if !errors.Is(err, jetstream.ErrMsgNotFound) {
+			return fmt.Errorf("get last msg for subject: %w", err)
+		}
+		w.isInit = true
+		close(w.Init)
+	}
 	con, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 		Description:    "Watcher for " + opt.forObject.ObjectKind(),
 		AckPolicy:      jetstream.AckExplicitPolicy,
@@ -109,6 +127,17 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 		return fmt.Errorf("create for consumer: %w", err)
 	}
 	cc, err := con.Consume(func(msg jetstream.Msg) {
+		msgMeta, err := msg.Metadata()
+		if err != nil {
+			slog.Error(
+				"getting msg metadata",
+				"subject",
+				msg.Subject(),
+				"error",
+				err,
+			)
+			_ = msg.Term()
+		}
 		kvop := opFromMsg(msg)
 		handleEvent := func(msg jetstream.Msg, event Event) {
 			result, err := opt.fn(ctx, event)
@@ -126,6 +155,10 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 			}
 			switch {
 			case result.IsZero():
+				if !w.isInit &&
+					msgMeta.Sequence.Stream == lastMsg.Sequence {
+					close(w.Init)
+				}
 				_ = msg.Ack()
 			case result.Requeue:
 				_ = msg.Nak()
@@ -145,7 +178,6 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 			handleEvent(msg, event)
 			return
 		}
-		// Check if the object is marked for deletion.
 		var gObj GenericObject
 		if err := json.Unmarshal(msg.Data(), &gObj); err != nil {
 			slog.Error(
@@ -158,6 +190,7 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 			_ = msg.Term()
 			return
 		}
+		// Check if the object is marked for deletion.
 		if gObj.DeletionTimestamp != nil {
 			event := Event{
 				Operation: EventOperationDelete,
@@ -179,6 +212,10 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 	}
 	w.consumeContext = cc
 	return nil
+}
+
+func (w *Watcher) WaitUntilInit() {
+	<-w.Init
 }
 
 type Event struct {

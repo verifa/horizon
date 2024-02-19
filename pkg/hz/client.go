@@ -24,10 +24,12 @@ const (
 )
 
 var (
-	ErrNoRevision           = errors.New("no revision")
-	ErrIncorrectRevision    = errors.New("incorrect revision")
-	ErrNotFound             = errors.New("not found")
-	ErrApplyManagerRequired = errors.New("apply: field manager required")
+	ErrNoRevision                = errors.New("no revision")
+	ErrIncorrectRevision         = errors.New("incorrect revision")
+	ErrNotFound                  = errors.New("not found")
+	ErrApplyManagerRequired      = errors.New("apply: field manager required")
+	ErrApplyObjectOrDataRequired = errors.New("apply: object or data required")
+	ErrApplyObjectOrKeyRequired  = errors.New("apply: object or key required")
 
 	ErrStoreNotResponding = errors.New("store not responding")
 
@@ -70,11 +72,8 @@ func (oc ObjectClient[T]) Apply(
 	object T,
 	opts ...ApplyOption,
 ) error {
-	data, err := json.Marshal(object)
-	if err != nil {
-		return fmt.Errorf("marshalling object: %w", err)
-	}
-	return oc.Client.Apply(ctx, KeyForObject(object), data, opts...)
+	opts = append(opts, WithApplyObject(object))
+	return oc.Client.Apply(ctx, opts...)
 }
 
 func (oc ObjectClient[T]) Get(ctx context.Context, key string) (*T, error) {
@@ -326,6 +325,9 @@ type ApplyOption func(*applyOptions)
 
 type applyOptions struct {
 	manager string
+	object  Objecter
+	data    []byte
+	key     string
 }
 
 func WithApplyManager(manager string) ApplyOption {
@@ -334,10 +336,26 @@ func WithApplyManager(manager string) ApplyOption {
 	}
 }
 
+func WithApplyObject(object Objecter) ApplyOption {
+	return func(ao *applyOptions) {
+		ao.object = object
+	}
+}
+
+func WithApplyData(data []byte) ApplyOption {
+	return func(ao *applyOptions) {
+		ao.data = data
+	}
+}
+
+func WithApplyKey(key string) ApplyOption {
+	return func(ao *applyOptions) {
+		ao.key = key
+	}
+}
+
 func (c Client) Apply(
 	ctx context.Context,
-	key string,
-	data []byte,
 	opts ...ApplyOption,
 ) error {
 	ao := applyOptions{}
@@ -347,10 +365,26 @@ func (c Client) Apply(
 	if ao.manager == "" {
 		return ErrApplyManagerRequired
 	}
+	if ao.object == nil && ao.data == nil {
+		return ErrApplyObjectOrDataRequired
+	}
+	if ao.object == nil && ao.key == "" {
+		return ErrApplyObjectOrKeyRequired
+	}
+	if ao.object != nil {
+		var err error
+		ao.data, err = json.Marshal(ao.object)
+		if err != nil {
+			return fmt.Errorf("marshalling object: %w", err)
+		}
+		if ao.key == "" {
+			ao.key = KeyForObject(ao.object)
+		}
+	}
 
-	msg := nats.NewMsg("STORE.apply." + key)
+	msg := nats.NewMsg("STORE.apply." + ao.key)
 	msg.Header.Set(HeaderFieldManager, ao.manager)
-	msg.Data = data
+	msg.Data = ao.data
 	reply, err := c.Conn.RequestMsg(msg, time.Second)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {

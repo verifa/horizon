@@ -25,8 +25,12 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 	slog.Info("apply", "req", req)
 	if err := s.validate(ctx, req.Kind, req.Data); err != nil {
 		return &hz.Error{
-			Status:  http.StatusBadRequest,
-			Message: fmt.Sprintf("validating object: %s", err.Error()),
+			Status: http.StatusBadRequest,
+			Message: fmt.Sprintf(
+				"validating object %q: %s",
+				req.Key,
+				err.Error(),
+			),
 		}
 	}
 

@@ -230,7 +230,9 @@ func (s *Server) start(
 
 	go func() {
 		if err := srv.Serve(opt.listener); err != nil {
-			slog.Error("http server", "error", err.Error())
+			if !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("http server", "error", err.Error())
+			}
 		}
 	}()
 

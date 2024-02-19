@@ -5,11 +5,28 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/verifa/horizon/pkg/extensions/accounts"
 	"github.com/verifa/horizon/pkg/hz"
 )
+
+func WithInitTimeout(timeout time.Duration) AuthorizerOption {
+	return func(o *authorizerOptions) {
+		o.timeout = timeout
+	}
+}
+
+type AuthorizerOption func(*authorizerOptions)
+
+type authorizerOptions struct {
+	timeout time.Duration
+}
+
+var defaultAuthorizerOptions = authorizerOptions{
+	timeout: 5 * time.Second,
+}
 
 type Authorizer struct {
 	Conn *nats.Conn
@@ -19,7 +36,14 @@ type Authorizer struct {
 	watchers []*hz.Watcher
 }
 
-func (a *Authorizer) Start(ctx context.Context) error {
+func (a *Authorizer) Start(
+	ctx context.Context,
+	opts ...AuthorizerOption,
+) error {
+	ao := defaultAuthorizerOptions
+	for _, opt := range opts {
+		opt(&ao)
+	}
 	store, err := NewStore(ctx)
 	if err != nil {
 		return fmt.Errorf("creating openfga store: %w", err)
@@ -65,6 +89,22 @@ func (a *Authorizer) Start(ctx context.Context) error {
 	}
 	a.watchers = append(a.watchers, objectWatcher)
 
+	// Wait for all watchers to initialize.
+	init := make(chan struct{})
+	go func() {
+		for _, w := range a.watchers {
+			<-w.Init
+		}
+		close(init)
+	}()
+
+	select {
+	case <-init:
+		// Do nothing and continue.
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("timed out waiting for watchers to initialize")
+	}
+
 	return nil
 }
 
@@ -73,6 +113,24 @@ func (a *Authorizer) Close() {
 		w.Close()
 	}
 }
+
+// type CheckRequest struct {
+// 	User      string
+// 	Operation string
+// 	Target
+// }
+
+// func (a *Authorizer) handleCheckRequest(
+// 	ctx context.Context,
+// 	req CheckRequest,
+// ) (bool, error) {
+// 	a.store.server.Check(ctx, &openfgav1.CheckRequest{
+// 		StoreId: a.store.storeID,
+// 		TupleKey: &openfgav1.CheckRequestTupleKey{
+// 			User: "user:" + req.User,
+// 		},
+// 	})
+// }
 
 func (a *Authorizer) handleUserEvent(
 	ctx context.Context,

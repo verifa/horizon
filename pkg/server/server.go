@@ -23,6 +23,7 @@ func WithDevMode() ServerOption {
 		o.runAccountsController = true
 		o.runUsersController = true
 		o.runUsersActor = true
+		o.runGroupsController = true
 	}
 }
 
@@ -125,6 +126,7 @@ type serverOptions struct {
 	runAccountsController bool
 	runUsersController    bool
 	runUsersActor         bool
+	runGroupsController   bool
 
 	natsOptions               []natsutil.ServerOption
 	storeOptions              []store.StoreOption
@@ -134,15 +136,15 @@ type serverOptions struct {
 }
 
 type Server struct {
-	conn *nats.Conn
+	Conn *nats.Conn
 
-	nats         *natsutil.Server
-	broker       *broker.Broker
-	store        *store.Store
-	gw           *gateway.Server
-	ctlrAccounts *hz.Controller
-	ctlrUsers    *hz.Controller
-	actorUsers   *hz.Actor[accounts.User]
+	NS           *natsutil.Server
+	Broker       *broker.Broker
+	Store        *store.Store
+	Gateway      *gateway.Server
+	CtlrAccounts *hz.Controller
+	CtlrUsers    *hz.Controller
+	ActorUsers   *hz.Actor[accounts.User]
 }
 
 func New(
@@ -163,7 +165,7 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		o(&opt)
 	}
 	if opt.conn != nil {
-		s.conn = opt.conn
+		s.Conn = opt.conn
 	}
 	if opt.runNATSServer {
 		ts, err := natsutil.NewServer(opt.natsOptions...)
@@ -180,29 +182,29 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		if err != nil {
 			return fmt.Errorf("connecting to nats: %w", err)
 		}
-		s.nats = &ts
-		s.conn = conn
+		s.NS = &ts
+		s.Conn = conn
 	}
 
-	if s.conn == nil {
+	if s.Conn == nil {
 		return errors.New("nats connection required")
 	}
 
 	if opt.runStore {
-		store, err := store.StartStore(ctx, s.conn, opt.storeOptions...)
+		store, err := store.StartStore(ctx, s.Conn, opt.storeOptions...)
 		if err != nil {
 			return fmt.Errorf("starting store: %w", err)
 		}
-		s.store = store
+		s.Store = store
 	}
 	if opt.runBroker {
 		broker := broker.Broker{
-			Conn: s.conn,
+			Conn: s.Conn,
 		}
 		if err := broker.Start(ctx); err != nil {
 			return fmt.Errorf("starting broker: %w", err)
 		}
-		s.broker = &broker
+		s.Broker = &broker
 	}
 	if opt.runGateway {
 		defaultOptions := []gateway.ServerOption{
@@ -211,62 +213,76 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		if opt.gatewayOptions == nil {
 			opt.gatewayOptions = defaultOptions
 		}
-		gw, err := gateway.Start(ctx, s.conn, opt.gatewayOptions...)
+		gw, err := gateway.Start(ctx, s.Conn, opt.gatewayOptions...)
 		if err != nil {
 			return fmt.Errorf("starting gateway: %w", err)
 		}
-		s.gw = gw
+		s.Gateway = gw
 	}
 	if opt.runAccountsController {
 		recon := accounts.AccountReconciler{
-			Client:            hz.Client{Conn: s.conn},
-			Conn:              s.conn,
-			OpKeyPair:         s.nats.Auth.Operator.SigningKey.KeyPair,
-			RootAccountPubKey: s.nats.Auth.RootAccount.PublicKey,
+			Client:            hz.Client{Conn: s.Conn},
+			Conn:              s.Conn,
+			OpKeyPair:         s.NS.Auth.Operator.SigningKey.KeyPair,
+			RootAccountPubKey: s.NS.Auth.RootAccount.PublicKey,
 		}
 		defaultOptions := []hz.ControllerOption{
 			hz.WithControllerFor(accounts.Account{}),
 			hz.WithControllerReconciler(&recon),
+			hz.WithControllerValidatorCUE(),
 		}
 
 		ctlr, err := hz.StartController(
 			ctx,
-			s.conn,
+			s.Conn,
 			append(defaultOptions, opt.accountsControllerOptions...)...,
 		)
 		if err != nil {
 			return fmt.Errorf("starting accounts controller: %w", err)
 		}
-		s.ctlrAccounts = ctlr
+		s.CtlrAccounts = ctlr
 	}
 
 	if opt.runUsersController {
 		defaultOptions := []hz.ControllerOption{
 			hz.WithControllerFor(accounts.User{}),
+			hz.WithControllerValidatorCUE(),
 		}
 		ctlr, err := hz.StartController(
 			ctx,
-			s.conn,
+			s.Conn,
 			append(defaultOptions, opt.usersControllerOptions...)...,
 		)
 		if err != nil {
 			return fmt.Errorf("starting users controller: %w", err)
 		}
-		s.ctlrUsers = ctlr
+		s.CtlrUsers = ctlr
 	}
 	if opt.runUsersActor {
 		userCreateAction := accounts.UserCreateAction{
-			Client: hz.Client{Conn: s.conn},
+			Client: hz.Client{Conn: s.Conn},
 		}
 		userActor, err := hz.StartActor(
 			ctx,
-			s.conn,
+			s.Conn,
 			hz.WithActorActioner(&userCreateAction),
 		)
 		if err != nil {
 			return fmt.Errorf("starting user actor: %w", err)
 		}
-		s.actorUsers = userActor
+		s.ActorUsers = userActor
+	}
+	if opt.runGroupsController {
+		ctlr, err := hz.StartController(
+			ctx,
+			s.Conn,
+			hz.WithControllerFor(accounts.Group{}),
+			hz.WithControllerValidatorCUE(),
+		)
+		if err != nil {
+			return fmt.Errorf("starting groups controller: %w", err)
+		}
+		s.CtlrUsers = ctlr
 	}
 
 	return nil
@@ -274,59 +290,59 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 
 func (s *Server) Close() error {
 	var errs error
-	if s.ctlrAccounts != nil {
-		if err := s.ctlrAccounts.Stop(); err != nil {
+	if s.CtlrAccounts != nil {
+		if err := s.CtlrAccounts.Stop(); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}
-	if s.ctlrUsers != nil {
-		if err := s.ctlrUsers.Stop(); err != nil {
+	if s.CtlrUsers != nil {
+		if err := s.CtlrUsers.Stop(); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}
-	if s.gw != nil {
-		if err := s.gw.Close(); err != nil {
+	if s.Gateway != nil {
+		if err := s.Gateway.Close(); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}
-	if s.broker != nil {
-		if err := s.broker.Stop(); err != nil {
+	if s.Broker != nil {
+		if err := s.Broker.Stop(); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}
-	if s.store != nil {
-		if err := s.store.Close(); err != nil {
+	if s.Store != nil {
+		if err := s.Store.Close(); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}
-	if s.nats != nil {
-		s.nats.NS.Shutdown()
-		s.nats.NS.WaitForShutdown()
+	if s.NS != nil {
+		s.NS.NS.Shutdown()
+		s.NS.NS.WaitForShutdown()
 	}
 	return errs
 }
 
 func (s *Server) Services() []string {
 	services := []string{}
-	if s.gw != nil {
+	if s.Gateway != nil {
 		services = append(services, "gateway")
 	}
-	if s.broker != nil {
+	if s.Broker != nil {
 		services = append(services, "broker")
 	}
-	if s.store != nil {
+	if s.Store != nil {
 		services = append(services, "store")
 	}
-	if s.nats != nil {
+	if s.NS != nil {
 		services = append(services, "nats")
 	}
-	if s.ctlrAccounts != nil {
+	if s.CtlrAccounts != nil {
 		services = append(services, "ctlr-accounts")
 	}
-	if s.ctlrUsers != nil {
+	if s.CtlrUsers != nil {
 		services = append(services, "ctlr-users")
 	}
-	if s.actorUsers != nil {
+	if s.ActorUsers != nil {
 		services = append(services, "actor-users")
 	}
 	return services

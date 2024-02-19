@@ -1,6 +1,8 @@
 package accounts
 
-import "github.com/verifa/horizon/pkg/hz"
+import (
+	"github.com/verifa/horizon/pkg/hz"
+)
 
 var _ hz.Objecter = (*Group)(nil)
 

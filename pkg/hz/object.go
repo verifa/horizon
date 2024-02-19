@@ -112,6 +112,9 @@ func (o Key) String() string {
 
 type EmptyObjectWithMeta struct {
 	ObjectMeta `json:"metadata"`
+
+	Spec   struct{} `json:"spec,omitempty"`
+	Status struct{} `json:"status,omitempty"`
 }
 
 func (o EmptyObjectWithMeta) ObjectKind() string {

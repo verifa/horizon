@@ -91,8 +91,8 @@ func TestApply(t *testing.T) {
 			tu.AssertNoError(t, err, "obj yaml to json")
 			err = client.Apply(
 				ctx,
-				key,
-				obj,
+				hz.WithApplyKey(key),
+				hz.WithApplyData(obj),
 				hz.WithApplyManager(ts.manager),
 			)
 			if ts.errStatus == nil {
