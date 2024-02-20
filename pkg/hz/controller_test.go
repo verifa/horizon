@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/server"
 	"github.com/verifa/horizon/pkg/store"
-	"github.com/verifa/horizon/pkg/testserver"
 	tu "github.com/verifa/horizon/pkg/testutil"
 )
 
@@ -37,7 +37,7 @@ func TestReconciler(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	ti := testserver.New(t, ctx, nil)
+	ti := server.Test(t, ctx)
 
 	client := hz.InternalClient(ti.Conn)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
@@ -108,7 +108,7 @@ func (r *PanicReconciler) Reconcile(
 func TestReconcilerPanic(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	ti := testserver.New(t, ctx, nil)
+	ti := server.Test(t, ctx)
 
 	client := hz.InternalClient(ti.Conn)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
@@ -173,11 +173,11 @@ func TestReconcilerSlow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	lockTTL := time.Second
-	ti := testserver.New(t, ctx, &testserver.Config{
-		StoreOptions: []store.StoreOption{
-			store.WithMutexTTL(lockTTL),
-		},
-	})
+	ti := server.Test(
+		t,
+		ctx,
+		server.WithStoreOptions(store.WithMutexTTL(lockTTL)),
+	)
 
 	client := hz.InternalClient(ti.Conn)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
@@ -250,7 +250,7 @@ func (r *ConcurrentReconciler) Reconcile(
 func TestReconcilerConcurrent(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	ti := testserver.New(t, ctx, nil)
+	ti := server.Test(t, ctx)
 
 	client := hz.InternalClient(ti.Conn)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}

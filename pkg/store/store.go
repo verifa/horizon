@@ -12,6 +12,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/tidwall/sjson"
 	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/hz"
 )
@@ -71,6 +72,10 @@ func WithMutexTTL(ttl time.Duration) StoreOption {
 	}
 }
 
+var defaultStoreOptions = storeOptions{
+	mutexTTL: time.Minute,
+}
+
 type storeOptions struct {
 	mutexTTL time.Duration
 }
@@ -81,9 +86,7 @@ func StartStore(
 	auth *auth.Auth,
 	opts ...StoreOption,
 ) (*Store, error) {
-	opt := storeOptions{
-		mutexTTL: time.Minute,
-	}
+	opt := defaultStoreOptions
 	for _, o := range opts {
 		o(&opt)
 	}
@@ -91,10 +94,6 @@ func StartStore(
 	store := Store{
 		Conn: conn,
 		Auth: auth,
-	}
-
-	if err := store.initKVBuckets(ctx, opt); err != nil {
-		return nil, fmt.Errorf("init kv buckets: %w", err)
 	}
 
 	js, err := jetstream.New(conn)
@@ -153,8 +152,17 @@ func StartStore(
 	return &store, nil
 }
 
-func (s Store) initKVBuckets(ctx context.Context, opt storeOptions) error {
-	js, err := jetstream.New(s.Conn)
+func InitKeyValue(
+	ctx context.Context,
+	conn *nats.Conn,
+	opts ...StoreOption,
+) error {
+	opt := defaultStoreOptions
+	for _, o := range opts {
+		o(&opt)
+	}
+
+	js, err := jetstream.New(conn)
 	if err != nil {
 		return fmt.Errorf("new jetstream: %w", err)
 	}
@@ -276,11 +284,20 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 	account := parts[subjectIndexAccount]
 	name := parts[subjectIndexName]
 
+	data, err := removeReadOnlyFields(msg.Data)
+	if err != nil {
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusInternalServerError,
+			Message: "deleting read-only fields: " + err.Error(),
+		})
+		return
+	}
+
 	switch cmd {
 	case StoreCommandCreate:
 		req := CreateRequest{
 			Key:  hz.KeyForObjectParams(kind, account, name),
-			Data: msg.Data,
+			Data: data,
 		}
 		if err := s.Create(ctx, req); err != nil {
 			_ = hz.RespondError(msg, err)
@@ -299,7 +316,7 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			return
 		}
 		req := ApplyRequest{
-			Data:    msg.Data,
+			Data:    data,
 			Manager: manager,
 			Kind:    kind,
 			Key:     hz.KeyForObjectParams(kind, account, name),
@@ -359,4 +376,15 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 	}
 
 	_ = hz.RespondOK(msg, nil)
+}
+
+func removeReadOnlyFields(data []byte) ([]byte, error) {
+	var errs error
+	var err error
+	data, err = sjson.DeleteBytes(data, "metadata.revision")
+	errs = errors.Join(errs, err)
+	data, err = sjson.DeleteBytes(data, "metadata.managedFields")
+	errs = errors.Join(errs, err)
+
+	return data, errs
 }

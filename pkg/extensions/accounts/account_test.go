@@ -1,4 +1,4 @@
-package accounts
+package accounts_test
 
 import (
 	"context"
@@ -7,40 +7,41 @@ import (
 	"testing"
 	"time"
 
+	"github.com/verifa/horizon/pkg/extensions/accounts"
 	"github.com/verifa/horizon/pkg/hz"
-	"github.com/verifa/horizon/pkg/testserver"
+	"github.com/verifa/horizon/pkg/server"
 	tu "github.com/verifa/horizon/pkg/testutil"
 )
 
 func TestAccount(t *testing.T) {
 	ctx := context.Background()
-	ti := testserver.New(t, ctx, nil)
+	ti := server.Test(t, ctx)
 
 	client := hz.InternalClient(ti.Conn)
-	recon := AccountReconciler{
-		Client:            client,
-		Conn:              ti.Conn,
-		OpKeyPair:         ti.Auth.Operator.SigningKey.KeyPair,
-		RootAccountPubKey: ti.Auth.RootAccount.PublicKey,
-	}
-	ctlr, err := hz.StartController(
-		ctx,
-		ti.Conn,
-		hz.WithControllerReconciler(&recon),
-		hz.WithControllerFor(&Account{}),
-	)
-	tu.AssertNoError(t, err)
-	defer ctlr.Stop()
+	// recon := accounts.AccountReconciler{
+	// 	Client:            client,
+	// 	Conn:              ti.Conn,
+	// 	OpKeyPair:         ti.NS.Auth.Operator.SigningKey.KeyPair,
+	// 	RootAccountPubKey: ti.NS.Auth.RootAccount.PublicKey,
+	// }
+	// ctlr, err := hz.StartController(
+	// 	ctx,
+	// 	ti.Conn,
+	// 	hz.WithControllerReconciler(&recon),
+	// 	hz.WithControllerFor(&accounts.Account{}),
+	// )
+	// tu.AssertNoError(t, err)
+	// defer ctlr.Stop()
 
-	account := Account{
+	account := accounts.Account{
 		ObjectMeta: hz.ObjectMeta{
 			Account: hz.RootAccount,
 			Name:    "test",
 		},
-		Spec: AccountSpec{},
+		Spec: accounts.AccountSpec{},
 	}
-	accClient := hz.ObjectClient[Account]{Client: client}
-	err = accClient.Create(ctx, account)
+	accClient := hz.ObjectClient[accounts.Account]{Client: client}
+	err := accClient.Create(ctx, account)
 	tu.AssertNoError(t, err)
 
 	// Create a timeout and a done channel.
@@ -54,7 +55,7 @@ func TestAccount(t *testing.T) {
 		hz.WithWatcherForObject(account),
 		hz.WithWatcherFn(
 			func(ctx context.Context, event hz.Event) (hz.Result, error) {
-				var acc Account
+				var acc accounts.Account
 				if err := json.Unmarshal(event.Data, &acc); err != nil {
 					return hz.Result{}, fmt.Errorf(
 						"unmarshalling account: %w",

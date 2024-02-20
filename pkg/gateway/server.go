@@ -61,6 +61,12 @@ func WithDummyAuthDefault(b bool) ServerOption {
 	}
 }
 
+func WithPort(port int) ServerOption {
+	return func(o *serverOptions) {
+		o.port = port
+	}
+}
+
 type ServerOption func(*serverOptions)
 
 type serverOptions struct {

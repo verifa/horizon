@@ -6,7 +6,7 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/verifa/horizon/pkg/hz"
-	"github.com/verifa/horizon/pkg/testserver"
+	"github.com/verifa/horizon/pkg/server"
 	tu "github.com/verifa/horizon/pkg/testutil"
 )
 
@@ -14,7 +14,7 @@ func TestMutex(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	ti := testserver.New(t, ctx, nil)
+	ti := server.Test(t, ctx)
 
 	js, err := jetstream.New(ti.Conn)
 	tu.AssertNoError(t, err)

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/verifa/horizon/pkg/hz"
-	"github.com/verifa/horizon/pkg/testserver"
+	"github.com/verifa/horizon/pkg/server"
 	tu "github.com/verifa/horizon/pkg/testutil"
 )
 
@@ -90,7 +90,7 @@ func (a returnIDAction) Do(
 func TestBroker(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	ti := testserver.New(t, ctx, nil)
+	ti := server.Test(t, ctx)
 
 	client := hz.InternalClient(ti.Conn)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}

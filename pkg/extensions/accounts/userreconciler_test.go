@@ -1,24 +1,25 @@
-package accounts
+package accounts_test
 
 import (
 	"context"
 	"testing"
 
+	"github.com/verifa/horizon/pkg/extensions/accounts"
 	"github.com/verifa/horizon/pkg/hz"
-	"github.com/verifa/horizon/pkg/testserver"
+	"github.com/verifa/horizon/pkg/server"
 	tu "github.com/verifa/horizon/pkg/testutil"
 )
 
 func TestUserReconciler(t *testing.T) {
 	ctx := context.Background()
 
-	ti := testserver.New(t, ctx, nil)
+	ti := server.Test(t, ctx)
 
 	userCtlr, err := hz.StartController(
 		ctx,
 		ti.Conn,
-		hz.WithControllerReconciler(&UserReconciler{}),
-		hz.WithControllerFor(User{}),
+		hz.WithControllerReconciler(&accounts.UserReconciler{}),
+		hz.WithControllerFor(accounts.User{}),
 		hz.WithControllerValidatorCUE(),
 	)
 	tu.AssertNoError(t, err)
@@ -30,7 +31,7 @@ func TestUserReconciler(t *testing.T) {
 		ctx,
 		ti.Conn,
 		// hz.WithControllerReconciler(&GroupReconciler{}),
-		hz.WithControllerFor(Group{}),
+		hz.WithControllerFor(accounts.Group{}),
 		hz.WithControllerValidatorCUE(),
 	)
 	tu.AssertNoError(t, err)
@@ -39,26 +40,30 @@ func TestUserReconciler(t *testing.T) {
 	})
 
 	// Create a group.
-	groupClient := hz.ObjectClient[Group]{Client: hz.InternalClient(ti.Conn)}
-	group := Group{
+	groupClient := hz.ObjectClient[accounts.Group]{
+		Client: hz.InternalClient(ti.Conn),
+	}
+	group := accounts.Group{
 		ObjectMeta: hz.ObjectMeta{
 			Name:    "group1",
 			Account: "test",
 		},
-		Spec: GroupSpec{},
+		Spec: accounts.GroupSpec{},
 	}
 	err = groupClient.Apply(ctx, group, hz.WithApplyManager("test"))
 	tu.AssertNoError(t, err)
 
 	// Create a user with membership to that group.
-	userClient := hz.ObjectClient[User]{Client: hz.InternalClient(ti.Conn)}
-	user := User{
+	userClient := hz.ObjectClient[accounts.User]{
+		Client: hz.InternalClient(ti.Conn),
+	}
+	user := accounts.User{
 		ObjectMeta: hz.ObjectMeta{
 			Name:    "user1",
 			Account: hz.RootAccount,
 		},
-		Spec: UserSpec{
-			Claims: &UserClaims{
+		Spec: accounts.UserSpec{
+			Claims: &accounts.UserClaims{
 				Sub:    hz.P("user1"),
 				Iss:    hz.P("test"),
 				Name:   hz.P("User 1"),

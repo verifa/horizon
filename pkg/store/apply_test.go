@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/server"
 	"github.com/verifa/horizon/pkg/store"
-	"github.com/verifa/horizon/pkg/testserver"
 	tu "github.com/verifa/horizon/pkg/testutil"
 	"golang.org/x/tools/txtar"
 	"sigs.k8s.io/yaml"
@@ -63,8 +63,8 @@ func parseTestFileName(t *testing.T, file string) testStep {
 
 func TestApply(t *testing.T) {
 	ctx := context.Background()
-	ti := testserver.New(t, ctx, nil)
 
+	ti := server.Test(t, ctx)
 	// SETUP DUMMY CONTROLLER
 	ctlr, err := hz.StartController(
 		ctx,

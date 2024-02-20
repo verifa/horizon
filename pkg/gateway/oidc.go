@@ -18,7 +18,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/verifa/horizon/pkg/auth"
-	"github.com/verifa/horizon/pkg/sessions"
 	"golang.org/x/oauth2"
 )
 
@@ -98,7 +97,7 @@ func (or *oidcHandler) authMiddleware(next http.Handler) http.Handler {
 			sessionID.String(),
 		)
 		if err != nil {
-			if errors.Is(err, sessions.ErrInvalidCredentials) {
+			if errors.Is(err, auth.ErrInvalidCredentials) {
 				loginReturnURL := "/login?return_url=" + url.QueryEscape(
 					r.RequestURI,
 				)

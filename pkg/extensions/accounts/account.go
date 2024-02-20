@@ -65,7 +65,7 @@ func (r *AccountReconciler) Reconcile(
 	}
 	if account.Status.ID == "" {
 		// If the ID is empty, we need to create the account.
-		status, err := r.createAccount(account.Name)
+		status, err := r.CreateAccount(account.Name)
 		if err != nil {
 			return hz.Result{}, fmt.Errorf("creating account spec: %w", err)
 		}
@@ -117,7 +117,7 @@ func (r *AccountReconciler) Reconcile(
 	return hz.Result{}, nil
 }
 
-func (r *AccountReconciler) createAccount(
+func (r *AccountReconciler) CreateAccount(
 	name string,
 ) (*AccountStatus, error) {
 	accNKey, err := natsutil.NewAccountNKey()

@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/verifa/horizon/pkg/hz"
-	"github.com/verifa/horizon/pkg/testserver"
+	"github.com/verifa/horizon/pkg/server"
 	tu "github.com/verifa/horizon/pkg/testutil"
 )
 
@@ -23,7 +23,7 @@ func TestList(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	ti := testserver.New(t, ctx, nil)
+	ti := server.Test(t, ctx)
 
 	// SETUP DUMMY CONTROLLER
 	ctlr, err := hz.StartController(

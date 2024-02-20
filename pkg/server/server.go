@@ -201,6 +201,10 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		return errors.New("nats connection required")
 	}
 
+	if err := store.InitKeyValue(ctx, s.Conn, opt.storeOptions...); err != nil {
+		return fmt.Errorf("initializing key value store: %w", err)
+	}
+
 	if opt.runAuth {
 		auth, err := auth.Start(ctx, s.Conn)
 		if err != nil {
