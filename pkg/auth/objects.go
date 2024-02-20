@@ -1,4 +1,4 @@
-package authz
+package auth
 
 import (
 	"context"
@@ -13,7 +13,7 @@ type SyncObjectRequest struct {
 	Object hz.ObjectKeyer
 }
 
-func (s *Store) SyncObject(ctx context.Context, req SyncObjectRequest) error {
+func (s *OpenFGA) SyncObject(ctx context.Context, req SyncObjectRequest) error {
 	objectID := objecterID(req.Object)
 	readResp, err := s.server.Read(ctx, &openfgav1.ReadRequest{
 		StoreId: s.storeID,
@@ -51,7 +51,7 @@ type DeleteObjectRequest struct {
 	Object hz.ObjectKeyer
 }
 
-func (s *Store) DeleteObject(
+func (s *OpenFGA) DeleteObject(
 	ctx context.Context,
 	req DeleteObjectRequest,
 ) error {

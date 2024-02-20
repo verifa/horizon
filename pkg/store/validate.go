@@ -21,7 +21,7 @@ func (s Store) Validate(ctx context.Context, req ValidateRequest) error {
 func (s Store) validate(ctx context.Context, kind string, data []byte) error {
 	subject := fmt.Sprintf("CTLR.validate.%s", kind)
 	slog.Info("validate", "subject", subject)
-	reply, err := s.conn.Request(subject, data, time.Second)
+	reply, err := s.Conn.Request(subject, data, time.Second)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
 			return errors.New("controller not responding")

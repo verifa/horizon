@@ -1,4 +1,4 @@
-package authz
+package auth
 
 import (
 	"context"
@@ -15,28 +15,30 @@ import (
 //go:embed model.fga
 var fgaModel string
 
-func NewStore(ctx context.Context) (*Store, error) {
+func (of *OpenFGA) Start(ctx context.Context) error {
 	datastore := memory.New()
 	ofgaServer, err := openfga.NewServerWithOpts(
 		openfga.WithDatastore(datastore),
 	)
 	ok, err := ofgaServer.IsReady(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("checking if openfga server is ready: %w", err)
+		return fmt.Errorf("checking if openfga server is ready: %w", err)
 	}
 	if !ok {
-		return nil, fmt.Errorf("openfga server is not ready")
+		return fmt.Errorf("openfga server is not ready")
 	}
+	of.server = ofgaServer
 
 	createStoreReq := &openfgav1.CreateStoreRequest{Name: "horizon"}
 	store, err := ofgaServer.CreateStore(ctx, createStoreReq)
 	if err != nil {
-		return nil, fmt.Errorf("creating store: %w", err)
+		return fmt.Errorf("creating store: %w", err)
 	}
+	of.storeID = store.Id
 
 	authorizationModel, err := transformer.TransformDSLToProto(fgaModel)
 	if err != nil {
-		return nil, fmt.Errorf("transforming DSL to proto: %w", err)
+		return fmt.Errorf("transforming DSL to proto: %w", err)
 	}
 	if _, err := ofgaServer.WriteAuthorizationModel(
 		ctx,
@@ -47,16 +49,13 @@ func NewStore(ctx context.Context) (*Store, error) {
 			Conditions:      authorizationModel.Conditions,
 		},
 	); err != nil {
-		return nil, fmt.Errorf("writing authorization model: %w", err)
+		return fmt.Errorf("writing authorization model: %w", err)
 	}
 
-	return &Store{
-		storeID: store.Id,
-		server:  ofgaServer,
-	}, nil
+	return nil
 }
 
-type Store struct {
+type OpenFGA struct {
 	server  *openfga.Server
 	storeID string
 }
@@ -100,7 +99,7 @@ type GroupAccountRelation struct {
 // SyncGroupAccounts updates the relations between a group and its accounts.
 // It adds and removes relations as necessary to match the provided state.
 // This includes removing relations that are no longer in the provided state.
-func (s *Store) SyncGroupAccounts(
+func (s *OpenFGA) SyncGroupAccounts(
 	ctx context.Context,
 	req SyncGroupAccountsRequest,
 ) error {
@@ -230,7 +229,7 @@ type SyncUserGroupMembersRequest struct {
 	Groups []string
 }
 
-func (s *Store) SyncUserGroupMembers(
+func (s *OpenFGA) SyncUserGroupMembers(
 	ctx context.Context,
 	req SyncUserGroupMembersRequest,
 ) error {

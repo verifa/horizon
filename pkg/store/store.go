@@ -12,8 +12,8 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/hz"
-	"github.com/verifa/horizon/pkg/sessions"
 )
 
 const (
@@ -44,7 +44,9 @@ func (c StoreCommand) String() string {
 }
 
 type Store struct {
-	conn  *nats.Conn
+	Conn *nats.Conn
+	Auth *auth.Auth
+
 	js    jetstream.JetStream
 	kv    jetstream.KeyValue
 	mutex jetstream.KeyValue
@@ -76,6 +78,7 @@ type storeOptions struct {
 func StartStore(
 	ctx context.Context,
 	conn *nats.Conn,
+	auth *auth.Auth,
 	opts ...StoreOption,
 ) (*Store, error) {
 	opt := storeOptions{
@@ -86,7 +89,8 @@ func StartStore(
 	}
 
 	store := Store{
-		conn: conn,
+		Conn: conn,
+		Auth: auth,
 	}
 
 	if err := store.initKVBuckets(ctx, opt); err != nil {
@@ -150,7 +154,7 @@ func StartStore(
 }
 
 func (s Store) initKVBuckets(ctx context.Context, opt storeOptions) error {
-	js, err := jetstream.New(s.conn)
+	js, err := jetstream.New(s.Conn)
 	if err != nil {
 		return fmt.Errorf("new jetstream: %w", err)
 	}
@@ -225,12 +229,13 @@ func (s Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
 	// name := parts[subjectIndexName]
 
 	// Authenticate request.
-	user, err := sessions.Get(ctx, s.conn, sessions.WithSessionFromMsg(msg))
-	if err != nil {
-		_ = hz.RespondError(msg, err)
-		return
-	}
-	fmt.Println("user", user)
+	// TODO: s.Auth.Authorizer
+	// user, err := sessions.Get(ctx, s.Conn, sessions.WithSessionFromMsg(msg))
+	// if err != nil {
+	// 	_ = hz.RespondError(msg, err)
+	// 	return
+	// }
+	// fmt.Println("user", user)
 
 	switch cmd {
 	case StoreCommandCreate:

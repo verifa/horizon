@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/nats-io/nats.go"
+	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/broker"
 	"github.com/verifa/horizon/pkg/extensions/accounts"
 	"github.com/verifa/horizon/pkg/gateway"
@@ -17,9 +18,11 @@ import (
 func WithDevMode() ServerOption {
 	return func(o *serverOptions) {
 		o.runNATSServer = true
+		o.runAuth = true
 		o.runBroker = true
 		o.runStore = true
 		o.runGateway = true
+
 		o.runAccountsController = true
 		o.runUsersController = true
 		o.runUsersActor = true
@@ -30,6 +33,12 @@ func WithDevMode() ServerOption {
 func WithNATSConn(conn *nats.Conn) ServerOption {
 	return func(o *serverOptions) {
 		o.conn = conn
+	}
+}
+
+func WithRunAuth(b bool) ServerOption {
+	return func(o *serverOptions) {
+		o.runAuth = b
 	}
 }
 
@@ -120,6 +129,7 @@ type serverOptions struct {
 	conn *nats.Conn
 
 	runNATSServer         bool
+	runAuth               bool
 	runBroker             bool
 	runStore              bool
 	runGateway            bool
@@ -139,6 +149,7 @@ type Server struct {
 	Conn *nats.Conn
 
 	NS           *natsutil.Server
+	Auth         *auth.Auth
 	Broker       *broker.Broker
 	Store        *store.Store
 	Gateway      *gateway.Server
@@ -190,8 +201,20 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		return errors.New("nats connection required")
 	}
 
+	if opt.runAuth {
+		auth, err := auth.Start(ctx, s.Conn)
+		if err != nil {
+			return fmt.Errorf("starting auth: %w", err)
+		}
+		s.Auth = auth
+	}
+
+	if s.Auth == nil {
+		return errors.New("auth service/component required")
+	}
+
 	if opt.runStore {
-		store, err := store.StartStore(ctx, s.Conn, opt.storeOptions...)
+		store, err := store.StartStore(ctx, s.Conn, s.Auth, opt.storeOptions...)
 		if err != nil {
 			return fmt.Errorf("starting store: %w", err)
 		}
@@ -213,7 +236,7 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		if opt.gatewayOptions == nil {
 			opt.gatewayOptions = defaultOptions
 		}
-		gw, err := gateway.Start(ctx, s.Conn, opt.gatewayOptions...)
+		gw, err := gateway.Start(ctx, s.Conn, s.Auth, opt.gatewayOptions...)
 		if err != nil {
 			return fmt.Errorf("starting gateway: %w", err)
 		}

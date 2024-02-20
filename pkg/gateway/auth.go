@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/verifa/horizon/pkg/sessions"
+	"github.com/verifa/horizon/pkg/auth"
 )
 
-var dummyAuthDefault = sessions.UserInfo{
+var dummyAuthDefault = auth.UserInfo{
 	Sub:    "123",
 	Iss:    "http://localhost:9998/",
 	Name:   "John Doe",
@@ -17,7 +17,7 @@ var dummyAuthDefault = sessions.UserInfo{
 
 func dummyAuthHandler(
 	next http.Handler,
-	userInfo sessions.UserInfo,
+	userInfo auth.UserInfo,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()

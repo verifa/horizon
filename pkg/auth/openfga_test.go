@@ -1,4 +1,4 @@
-package authz
+package auth
 
 import (
 	"context"
@@ -10,9 +10,10 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func TestStore(t *testing.T) {
+func TestOpenFGA(t *testing.T) {
 	ctx := context.Background()
-	s, err := NewStore(ctx)
+	s := OpenFGA{}
+	err := s.Start(ctx)
 	tu.AssertNoError(t, err)
 
 	userID := "testuser"

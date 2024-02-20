@@ -11,14 +11,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/nats-io/nats.go"
+	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/hz"
-	"github.com/verifa/horizon/pkg/sessions"
 )
 
 const HeaderAccount = "Hz-Account"
 
 func (s *Server) servePortal(w http.ResponseWriter, r *http.Request) {
-	userInfo, ok := r.Context().Value(authContext).(sessions.UserInfo)
+	userInfo, ok := r.Context().Value(authContext).(auth.UserInfo)
 	if !ok {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return
@@ -36,7 +36,7 @@ func (s *Server) servePortal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePortal(w http.ResponseWriter, r *http.Request) {
-	_, ok := r.Context().Value(authContext).(sessions.UserInfo)
+	_, ok := r.Context().Value(authContext).(auth.UserInfo)
 	if !ok {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return

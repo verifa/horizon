@@ -11,9 +11,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/extensions/accounts"
 	"github.com/verifa/horizon/pkg/hz"
-	"github.com/verifa/horizon/pkg/sessions"
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
@@ -49,7 +49,7 @@ func WithOIDCConfig(oidc OIDCConfig) ServerOption {
 	}
 }
 
-func WithDummyAuth(user sessions.UserInfo) ServerOption {
+func WithDummyAuth(user auth.UserInfo) ServerOption {
 	return func(o *serverOptions) {
 		o.dummyAuth = &user
 	}
@@ -67,7 +67,7 @@ type serverOptions struct {
 	Conn *nats.Conn
 	oidc *OIDCConfig
 
-	dummyAuth        *sessions.UserInfo
+	dummyAuth        *auth.UserInfo
 	dummyAuthDefault bool
 
 	listener net.Listener
@@ -81,11 +81,13 @@ var defaultServerOptions = serverOptions{
 func Start(
 	ctx context.Context,
 	conn *nats.Conn,
+	auth *auth.Auth,
 	opts ...ServerOption,
 ) (*Server, error) {
 	s := Server{
 		Conn:    conn,
 		Client:  hz.InternalClient(conn),
+		Auth:    auth,
 		portals: make(map[string]hz.Portal),
 	}
 
@@ -98,6 +100,7 @@ func Start(
 type Server struct {
 	Conn       *nats.Conn
 	Client     hz.Client
+	Auth       *auth.Auth
 	httpServer *http.Server
 
 	portals map[string]hz.Portal
@@ -143,7 +146,7 @@ func (s *Server) start(
 	// Auth
 	//
 	if opt.oidc != nil {
-		oidcHandler, err := newOIDCHandler(ctx, s.Conn, *opt.oidc)
+		oidcHandler, err := newOIDCHandler(ctx, s.Conn, s.Auth, *opt.oidc)
 		if err != nil {
 			return fmt.Errorf("oidc auth middleware: %w", err)
 		}
@@ -307,7 +310,7 @@ func (s *Server) handlePortalEvent(
 }
 
 func (s *Server) serveHome(w http.ResponseWriter, r *http.Request) {
-	userInfo, ok := r.Context().Value(authContext).(sessions.UserInfo)
+	userInfo, ok := r.Context().Value(authContext).(auth.UserInfo)
 	if !ok {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return
@@ -328,7 +331,7 @@ func (s *Server) serveLoggedOut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveAccountsNew(w http.ResponseWriter, r *http.Request) {
-	userInfo, ok := r.Context().Value(authContext).(sessions.UserInfo)
+	userInfo, ok := r.Context().Value(authContext).(auth.UserInfo)
 	if !ok {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return

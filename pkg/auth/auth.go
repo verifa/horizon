@@ -1,4 +1,4 @@
-package authz
+package auth
 
 import (
 	"context"
@@ -28,15 +28,27 @@ var defaultAuthorizerOptions = authorizerOptions{
 	timeout: 5 * time.Second,
 }
 
-type Authorizer struct {
+func Start(ctx context.Context, conn *nats.Conn) (*Auth, error) {
+	auth := Auth{
+		Conn: conn,
+	}
+	err := auth.Start(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("starting auth: %w", err)
+	}
+	return &auth, nil
+}
+
+type Auth struct {
 	Conn *nats.Conn
 
-	store *Store
+	Sessions   *Sessions
+	Authorizer *OpenFGA
 
 	watchers []*hz.Watcher
 }
 
-func (a *Authorizer) Start(
+func (a *Auth) Start(
 	ctx context.Context,
 	opts ...AuthorizerOption,
 ) error {
@@ -44,11 +56,29 @@ func (a *Authorizer) Start(
 	for _, opt := range opts {
 		opt(&ao)
 	}
-	store, err := NewStore(ctx)
+
+	//
+	// Start the session manager.
+	//
+	sessions := Sessions{
+		Conn: a.Conn,
+	}
+	err := sessions.Start(ctx)
+	if err != nil {
+		return fmt.Errorf("starting session manager: %w", err)
+	}
+	a.Sessions = &sessions
+
+	//
+	// Start the authorizer.
+	//
+	authz := OpenFGA{}
+	err = authz.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("creating openfga store: %w", err)
 	}
-	a.store = store
+	a.Authorizer = &authz
+
 	//
 	// Start user watcher
 	//
@@ -108,7 +138,7 @@ func (a *Authorizer) Start(
 	return nil
 }
 
-func (a *Authorizer) Close() {
+func (a *Auth) Close() {
 	for _, w := range a.watchers {
 		w.Close()
 	}
@@ -132,7 +162,7 @@ func (a *Authorizer) Close() {
 // 	})
 // }
 
-func (a *Authorizer) handleUserEvent(
+func (a *Auth) handleUserEvent(
 	ctx context.Context,
 	event hz.Event,
 ) (hz.Result, error) {
@@ -148,10 +178,13 @@ func (a *Authorizer) handleUserEvent(
 		if err := json.Unmarshal(event.Data, &user); err != nil {
 			return hz.Result{}, fmt.Errorf("unmarshalling user: %w", err)
 		}
-		err := a.store.SyncUserGroupMembers(ctx, SyncUserGroupMembersRequest{
-			User:   userID,
-			Groups: user.Spec.Claims.Groups,
-		})
+		err := a.Authorizer.SyncUserGroupMembers(
+			ctx,
+			SyncUserGroupMembersRequest{
+				User:   userID,
+				Groups: user.Spec.Claims.Groups,
+			},
+		)
 		if err != nil {
 			return hz.Result{}, fmt.Errorf(
 				"updating user group memberships: %w",
@@ -159,11 +192,14 @@ func (a *Authorizer) handleUserEvent(
 			)
 		}
 	case hz.EventOperationDelete, hz.EventOperationPurge:
-		err := a.store.SyncUserGroupMembers(ctx, SyncUserGroupMembersRequest{
-			User: userID,
-			// Empty groups to remove all user-->group relations.
-			Groups: []string{},
-		})
+		err := a.Authorizer.SyncUserGroupMembers(
+			ctx,
+			SyncUserGroupMembersRequest{
+				User: userID,
+				// Empty groups to remove all user-->group relations.
+				Groups: []string{},
+			},
+		)
 		if err != nil {
 			return hz.Result{}, fmt.Errorf(
 				"deleting user group memberships: %w",
@@ -179,7 +215,7 @@ func (a *Authorizer) handleUserEvent(
 	return hz.Result{}, nil
 }
 
-func (a *Authorizer) handleGroupEvent(
+func (a *Auth) handleGroupEvent(
 	ctx context.Context,
 	event hz.Event,
 ) (hz.Result, error) {
@@ -196,7 +232,7 @@ func (a *Authorizer) handleGroupEvent(
 			return hz.Result{}, fmt.Errorf("unmarshalling group: %w", err)
 		}
 		req := groupAccountsToRequest(group)
-		err := a.store.SyncGroupAccounts(ctx, req)
+		err := a.Authorizer.SyncGroupAccounts(ctx, req)
 		if err != nil {
 			return hz.Result{}, fmt.Errorf(
 				"updating group accounts: %w",
@@ -204,7 +240,7 @@ func (a *Authorizer) handleGroupEvent(
 			)
 		}
 	case hz.EventOperationDelete, hz.EventOperationPurge:
-		err := a.store.SyncGroupAccounts(ctx, SyncGroupAccountsRequest{
+		err := a.Authorizer.SyncGroupAccounts(ctx, SyncGroupAccountsRequest{
 			Group: groupID,
 			// Empty accounts to remove all group-->account relations.
 			Accounts: []GroupAccountRelations{},
@@ -225,7 +261,7 @@ func (a *Authorizer) handleGroupEvent(
 	return hz.Result{}, nil
 }
 
-func (a *Authorizer) handleObjectEvent(
+func (a *Auth) handleObjectEvent(
 	ctx context.Context,
 	event hz.Event,
 ) (hz.Result, error) {
@@ -235,13 +271,13 @@ func (a *Authorizer) handleObjectEvent(
 	}
 	switch event.Operation {
 	case hz.EventOperationPut:
-		if err := a.store.SyncObject(ctx, SyncObjectRequest{
+		if err := a.Authorizer.SyncObject(ctx, SyncObjectRequest{
 			Object: key,
 		}); err != nil {
 			return hz.Result{}, fmt.Errorf("syncing object: %w", err)
 		}
 	case hz.EventOperationDelete, hz.EventOperationPurge:
-		if err := a.store.DeleteObject(ctx, DeleteObjectRequest{
+		if err := a.Authorizer.DeleteObject(ctx, DeleteObjectRequest{
 			Object: key,
 		}); err != nil {
 			return hz.Result{}, fmt.Errorf("deleting object: %w", err)

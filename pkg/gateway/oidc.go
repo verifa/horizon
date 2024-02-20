@@ -17,6 +17,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
+	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/sessions"
 	"golang.org/x/oauth2"
 )
@@ -37,6 +38,7 @@ const (
 func newOIDCHandler(
 	ctx context.Context,
 	conn *nats.Conn,
+	auth *auth.Auth,
 	config OIDCConfig,
 ) (*oidcHandler, error) {
 	provider, err := oidc.NewProvider(ctx, config.Issuer)
@@ -61,6 +63,7 @@ func newOIDCHandler(
 	verifier := provider.Verifier(oidcConfig)
 
 	return &oidcHandler{
+		sessions: auth.Sessions,
 		config:   &oauth2Config,
 		verifier: verifier,
 		conn:     conn,
@@ -68,11 +71,10 @@ func newOIDCHandler(
 }
 
 type oidcHandler struct {
-	// ctx      context.Context
+	sessions *auth.Sessions
 	config   *oauth2.Config
 	verifier *oidc.IDTokenVerifier
 	conn     *nats.Conn
-	// bucket   jetstream.KeyValue
 }
 
 func (or *oidcHandler) authMiddleware(next http.Handler) http.Handler {
@@ -91,10 +93,9 @@ func (or *oidcHandler) authMiddleware(next http.Handler) http.Handler {
 			http.Redirect(w, r, loginReturnURL, http.StatusSeeOther)
 			return
 		}
-		userInfo, err := sessions.Get(
+		userInfo, err := or.sessions.Get(
 			r.Context(),
-			or.conn,
-			sessions.WithSessionID(sessionID.String()),
+			sessionID.String(),
 		)
 		if err != nil {
 			if errors.Is(err, sessions.ErrInvalidCredentials) {
@@ -148,10 +149,9 @@ func (or *oidcHandler) logout(w http.ResponseWriter, req *http.Request) {
 		w.Header().Add("HX-Redirect", "/loggedout")
 		return
 	}
-	if err := sessions.Delete(
+	if err := or.sessions.Delete(
 		req.Context(),
-		or.conn,
-		sessions.WithSessionID(sessionID.String()),
+		sessionID.String(),
 	); err != nil {
 		httpError(w, err)
 		return
@@ -217,7 +217,7 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var claims sessions.UserInfo
+	var claims auth.UserInfo
 	if err := idToken.Claims(&claims); err != nil {
 		http.Error(
 			w,
@@ -226,7 +226,7 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		)
 		return
 	}
-	sessionID, err := sessions.New(req.Context(), or.conn, claims)
+	sessionID, err := or.sessions.New(req.Context(), claims)
 	if err != nil {
 		httpError(w, err)
 		return
