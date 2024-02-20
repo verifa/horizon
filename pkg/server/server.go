@@ -227,6 +227,7 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 	if opt.runBroker {
 		broker := broker.Broker{
 			Conn: s.Conn,
+			Auth: s.Auth,
 		}
 		if err := broker.Start(ctx); err != nil {
 			return fmt.Errorf("starting broker: %w", err)

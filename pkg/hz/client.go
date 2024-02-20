@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -41,16 +42,24 @@ var (
 )
 
 const (
-	// format: BROKER.<kind>.<account>.<name>.<action>
-	SubjectBroker    = "BROKER.*.*.*.*"
-	SubjectBrokerFmt = "BROKER.%s.%s.%s.%s"
+	// format: HZ.api.broker.<kind>.<account>.<name>.<action>
+	SubjectAPIBroker                  = "HZ.api.broker.*.*.*.*"
+	SubjectAPIBrokerFmt               = "HZ.api.broker.%s.%s.%s.%s"
+	SubjectInternalBroker             = "HZ.internal.broker.*.*.*.*"
+	SubjectInternalBrokerFmt          = "HZ.internal.broker.%s.%s.%s.%s"
+	SubjectInternalBrokerIndexKind    = 3
+	SubjectInternalBrokerIndexAccount = 4
+	SubjectInternalBrokerIndexName    = 5
+	SubjectInternalBrokerIndexAction  = 6
+	SubjectInternalBrokerLength       = 7
 
-	// format: ACTOR.advertise.<kind>.<account>.<name>.<action>
-	SubjectActorAdvertise    = "ACTOR.advertise.%s.*.*.%s"
-	SubjectActorAdvertiseFmt = "ACTOR.advertise.%s.%s.%s.%s"
-	// format: ACTOR.run.<kind>.<account>.<name>.<action>.<actor_uuid>
-	SubjectActorRun    = "ACTOR.run.%s.*.*.%s.%s"
-	SubjectActorRunFmt = "ACTOR.run.%s.%s.%s.%s.%s"
+	// format: HZ.internal.actor.advertise.<kind>.<account>.<name>.<action>
+	SubjectActorAdvertise    = "HZ.internal.actor.advertise.%s.*.*.%s"
+	SubjectActorAdvertiseFmt = "HZ.internal.actor.advertise.%s.%s.%s.%s"
+	// format:
+	// HZ.internal.actor.run.<kind>.<account>.<name>.<action>.<actor_uuid>
+	SubjectActorRun    = "HZ.internal.actor.run.%s.*.*.%s.%s"
+	SubjectActorRunFmt = "HZ.internal.actor.run.%s.%s.%s.%s.%s"
 )
 
 const (
@@ -213,7 +222,7 @@ func (oc ObjectClient[T]) Run(
 	action := actioner.Action()
 
 	subject := fmt.Sprintf(
-		SubjectBrokerFmt,
+		SubjectAPIBrokerFmt,
 		kind,
 		account,
 		name,
@@ -233,6 +242,7 @@ func (oc ObjectClient[T]) Run(
 	if err != nil {
 		return newObj, fmt.Errorf("marshalling run message: %w", err)
 	}
+	slog.Info("run", "subject", subject)
 	ctx, cancel := context.WithTimeout(ctx, ro.timeout)
 	defer cancel()
 	reply, err := oc.Client.Conn.RequestWithContext(ctx, subject, bRunMsg)

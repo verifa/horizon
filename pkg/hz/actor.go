@@ -147,6 +147,7 @@ func (a *Actor[T]) startActioner(
 		return fmt.Errorf("subscribe advertiser: %w", err)
 	}
 	a.subscriptions = append(a.subscriptions, adSub)
+	slog.Info("subscribed to advertise", "subject", advertiseSubject)
 
 	doSub, err := a.nc.Subscribe(
 		runSubject,
@@ -202,6 +203,7 @@ func (a *Actor[T]) startActioner(
 		return fmt.Errorf("subscribe action handler: %w", err)
 	}
 	a.subscriptions = append(a.subscriptions, doSub)
+	slog.Info("subscribed to run", "subject", runSubject)
 
 	return nil
 }

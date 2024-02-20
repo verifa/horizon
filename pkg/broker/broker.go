@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
+	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/hz"
 )
 
@@ -22,9 +23,18 @@ const (
 	natsHeaderStatusNoResponders = "503"
 )
 
-func StartBroker(ctx context.Context, nc *nats.Conn) (*Broker, error) {
+// const (
+// 	subjectIndex?
+// )
+
+func Start(
+	ctx context.Context,
+	conn *nats.Conn,
+	auth *auth.Auth,
+) (*Broker, error) {
 	b := &Broker{
-		Conn: nc,
+		Conn: conn,
+		Auth: auth,
 	}
 	if err := b.Start(ctx); err != nil {
 		return nil, fmt.Errorf("starting broker: %w", err)
@@ -34,44 +44,77 @@ func StartBroker(ctx context.Context, nc *nats.Conn) (*Broker, error) {
 
 type Broker struct {
 	Conn *nats.Conn
+	Auth *auth.Auth
 
-	subscription *nats.Subscription
+	subscriptions []*nats.Subscription
 }
 
 func (b *Broker) Start(ctx context.Context) error {
-	sub, err := b.Conn.QueueSubscribe(
-		hz.SubjectBroker,
-		"broker",
-		func(msg *nats.Msg) {
-			if err := b.handleMessage(msg); err != nil {
-				slog.Error("handling message", "error", err)
-			}
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("subscribing to %q: %w", hz.SubjectBroker, err)
+	{
+		sub, err := b.Conn.QueueSubscribe(
+			hz.SubjectAPIBroker,
+			"broker",
+			b.handleAPIMessage,
+		)
+		if err != nil {
+			return fmt.Errorf("subscribing to %q: %w", hz.SubjectAPIBroker, err)
+		}
+		b.subscriptions = append(b.subscriptions, sub)
+		slog.Info("subscribed to", "subject", hz.SubjectAPIBroker)
 	}
-	b.subscription = sub
+	{
+		sub, err := b.Conn.QueueSubscribe(
+			hz.SubjectInternalBroker,
+			"broker",
+			b.handleInternalMessage,
+		)
+		if err != nil {
+			return fmt.Errorf("subscribing to %q: %w", hz.SubjectAPIBroker, err)
+		}
+		b.subscriptions = append(b.subscriptions, sub)
+		slog.Info("subscribed to", "subject", hz.SubjectAPIBroker)
+	}
 	return nil
 }
 
-func (b *Broker) handleMessage(msg *nats.Msg) error {
+func (b *Broker) handleAPIMessage(msg *nats.Msg) {
+	// TODO: authorize.
+	// b.Auth.Whatever()
+	b.handleInternalMessage(msg)
+}
+
+func (b *Broker) handleInternalMessage(msg *nats.Msg) {
 	var runMsg hz.RunMsg
 	if err := json.Unmarshal(msg.Data, &runMsg); err != nil {
-		return fmt.Errorf("unmarshal run message data: %w", err)
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusBadRequest,
+			Message: fmt.Sprintf("unmarshalling run message: %s", err.Error()),
+		})
+		return
 	}
 	adMsg := hz.AdvertiseMsg{
 		LabelSelector: runMsg.LabelSelector,
 	}
 	bAdMsg, err := json.Marshal(adMsg)
 	if err != nil {
-		return fmt.Errorf("marshal advertise message: %w", err)
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusInternalServerError,
+			Message: fmt.Sprintf("marshal advertise message: %s", err.Error()),
+		})
+		return
 	}
 	tokens := strings.Split(msg.Subject, ".")
-	kind := tokens[1]
-	account := tokens[2]
-	name := tokens[3]
-	action := tokens[4]
+	if len(tokens) != hz.SubjectInternalBrokerLength {
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusBadRequest,
+			Message: fmt.Sprintf("invalid subject: %s", msg.Subject),
+		})
+		return
+	}
+	kind := tokens[hz.SubjectInternalBrokerIndexKind]
+	account := tokens[hz.SubjectInternalBrokerIndexAccount]
+	name := tokens[hz.SubjectInternalBrokerIndexName]
+	action := tokens[hz.SubjectInternalBrokerIndexAction]
 
 	advertiseSubject := fmt.Sprintf(
 		hz.SubjectActorAdvertiseFmt,
@@ -85,7 +128,11 @@ func (b *Broker) handleMessage(msg *nats.Msg) error {
 	msgCh := make(chan *nats.Msg, 100)
 	sub, err := b.Conn.ChanSubscribe(inbox, msgCh)
 	if err != nil {
-		return fmt.Errorf("subscribing to %s: %w", inbox, err)
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusInternalServerError,
+			Message: fmt.Sprintf("subscribing to %s: %s", inbox, err.Error()),
+		})
+		return
 	}
 	defer func() {
 		_ = sub.Unsubscribe()
@@ -98,7 +145,15 @@ func (b *Broker) handleMessage(msg *nats.Msg) error {
 	// If there are no responders (i.e. subscribers) for the request,
 	// nats automatically adds one reply with a "Status" header of 503.
 	if err := b.Conn.PublishRequest(advertiseSubject, inbox, bAdMsg); err != nil {
-		return fmt.Errorf("publishing request to %s: %w", advertiseSubject, err)
+		_ = hz.RespondError(msg, &hz.Error{
+			Status: http.StatusInternalServerError,
+			Message: fmt.Sprintf(
+				"publishing request to %s: %s",
+				advertiseSubject,
+				err.Error(),
+			),
+		})
+		return
 	}
 	// processMessages waits for either the first message (from an actor) or a
 	// timeout, and then returns the reply.
@@ -114,48 +169,44 @@ func (b *Broker) handleMessage(msg *nats.Msg) error {
 	}
 	adReply := processMessages()
 	if adReply == nil {
-		return hz.RespondError(
-			msg,
-			&hz.Error{
-				Status:  http.StatusServiceUnavailable,
-				Message: "no actors responded to advertise request",
-			},
-		)
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusServiceUnavailable,
+			Message: "no actors responded to advertise request",
+		})
+		return
 	}
 	// Check for any headers added by nats.
 	if adReply.Header.Get(natsHeaderStatus) == natsHeaderStatusNoResponders {
-		return hz.RespondError(
-			msg,
-			&hz.Error{
-				Status:  http.StatusServiceUnavailable,
-				Message: "no actors responded to advertise request",
-			},
-		)
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusServiceUnavailable,
+			Message: "no actors responded to advertise request",
+		})
+		return
 	}
 
 	// Check the status header set/expected by horizon.
 	status, err := strconv.Atoi(adReply.Header.Get(hz.HeaderStatus))
 	if err != nil {
-		return hz.RespondError(msg, &hz.Error{
+		_ = hz.RespondError(msg, &hz.Error{
 			Status:  http.StatusInternalServerError,
 			Message: fmt.Sprintf("parsing status header: %s", err.Error()),
 		})
+		return
 	}
 	if status != http.StatusOK {
-		return hz.RespondError(msg, &hz.Error{
+		_ = hz.RespondError(msg, &hz.Error{
 			Status:  status,
 			Message: string(adReply.Data),
 		})
+		return
 	}
 	id, err := uuid.ParseBytes(adReply.Data)
 	if err != nil {
-		return hz.RespondError(
-			msg,
-			&hz.Error{
-				Status:  http.StatusInternalServerError,
-				Message: fmt.Sprintf("parsing actor uuid: %s", err.Error()),
-			},
-		)
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusInternalServerError,
+			Message: fmt.Sprintf("parsing actor uuid: %s", err.Error()),
+		})
+		return
 	}
 
 	runSubject := fmt.Sprintf(
@@ -174,38 +225,33 @@ func (b *Broker) handleMessage(msg *nats.Msg) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, nats.ErrNoResponders):
-			return hz.RespondError(
-				msg,
-				&hz.Error{
-					Status:  http.StatusServiceUnavailable,
-					Message: "actor id: " + id.String(),
-				},
-			)
+			_ = hz.RespondError(msg, &hz.Error{
+				Status:  http.StatusServiceUnavailable,
+				Message: "actor id: " + id.String(),
+			})
+			return
 		case errors.Is(err, nats.ErrTimeout):
-			return hz.RespondError(
-				msg,
-				&hz.Error{
-					Status:  http.StatusRequestTimeout,
-					Message: "actor id: " + id.String(),
-				},
-			)
+			_ = hz.RespondError(msg, &hz.Error{
+				Status:  http.StatusRequestTimeout,
+				Message: "actor id: " + id.String(),
+			})
+			return
 		default:
-			return hz.RespondError(
-				msg,
-				&hz.Error{
-					Status:  http.StatusInternalServerError,
-					Message: "actor id: " + id.String() + ": " + err.Error(),
-				},
-			)
+			_ = hz.RespondError(msg, &hz.Error{
+				Status:  http.StatusInternalServerError,
+				Message: "actor id: " + id.String() + ": " + err.Error(),
+			})
+			return
 		}
 	}
 	// Forward the reply message onto the original caller.
-	return msg.RespondMsg(runReply)
+	_ = msg.RespondMsg(runReply)
 }
 
 func (b *Broker) Stop() error {
-	if b.subscription == nil {
-		return nil
+	var errs error
+	for _, sub := range b.subscriptions {
+		errs = errors.Join(errs, sub.Unsubscribe())
 	}
-	return b.subscription.Unsubscribe()
+	return errs
 }
