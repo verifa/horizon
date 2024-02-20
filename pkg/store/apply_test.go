@@ -77,7 +77,7 @@ func TestApply(t *testing.T) {
 		_ = ctlr.Stop()
 	})
 
-	client := hz.Client{Conn: ti.Conn}
+	client := hz.InternalClient(ti.Conn)
 	tu.AssertNoError(t, err)
 	key := "DummyApplyObject.test.test"
 

@@ -38,7 +38,7 @@ func TestList(t *testing.T) {
 	})
 
 	client := hz.ObjectClient[DummyApplyObject]{
-		Client: hz.Client{Conn: ti.Conn},
+		Client: hz.InternalClient(ti.Conn),
 	}
 	// Create a dummy object
 	obj1 := DummyApplyObject{

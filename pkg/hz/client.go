@@ -53,6 +53,14 @@ const (
 	SubjectActorRunFmt = "ACTOR.run.%s.%s.%s.%s.%s"
 )
 
+const (
+	SubjectStoreValidate = "store.validate.%s"
+	SubjectStoreApply    = "store.apply.%s"
+	SubjectStoreCreate   = "store.create.%s"
+	SubjectStoreGet      = "store.get.%s"
+	SubjectStoreList     = "store.list.%s"
+)
+
 type ObjectClient[T Objecter] struct {
 	Client Client
 }
@@ -225,7 +233,9 @@ func (oc ObjectClient[T]) Run(
 	if err != nil {
 		return newObj, fmt.Errorf("marshalling run message: %w", err)
 	}
-	reply, err := oc.Client.Conn.Request(subject, bRunMsg, ro.timeout)
+	ctx, cancel := context.WithTimeout(ctx, ro.timeout)
+	defer cancel()
+	reply, err := oc.Client.Conn.RequestWithContext(ctx, subject, bRunMsg)
 	if err != nil {
 		switch {
 		case errors.Is(err, nats.ErrNoResponders):
@@ -270,8 +280,29 @@ func (oc ObjectClient[T]) Run(
 	return newObj, nil
 }
 
+func InternalClient(conn *nats.Conn) Client {
+	return Client{
+		Conn:     conn,
+		Internal: true,
+	}
+}
+
 type Client struct {
 	Conn *nats.Conn
+
+	// Internal is set to true to use the internal nats subjects.
+	// This is used for service accounts (controllers) that have nats
+	// credentials with permission to use the internal nats subjects.
+	// For clients such as hzctl, this should be false causing the client to use
+	// the `api` nats subjects (requiring authn/authz).
+	Internal bool
+}
+
+func (c Client) SubjectPrefix() string {
+	if c.Internal {
+		return "HZ.internal."
+	}
+	return "HZ.api."
 }
 
 func (c Client) Schema(
@@ -279,7 +310,9 @@ func (c Client) Schema(
 	kind string,
 ) (Schema, error) {
 	subject := fmt.Sprintf("CTLR.schema.%s", kind)
-	reply, err := c.Conn.Request(subject, nil, time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	reply, err := c.Conn.RequestWithContext(ctx, subject, nil)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
 			return Schema{}, errors.New("controller not responding")
@@ -303,8 +336,10 @@ func (c Client) Validate(
 	kind string,
 	data []byte,
 ) error {
-	subject := fmt.Sprintf("STORE.validate.%s", kind)
-	reply, err := c.Conn.Request(subject, data, time.Second)
+	subject := fmt.Sprintf(SubjectStoreValidate, kind)
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	reply, err := c.Conn.RequestWithContext(ctx, subject, data)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
 			return ErrStoreNotResponding
@@ -383,10 +418,14 @@ func (c Client) Apply(
 		}
 	}
 
-	msg := nats.NewMsg("STORE.apply." + ao.key)
+	msg := nats.NewMsg(
+		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreApply, ao.key),
+	)
 	msg.Header.Set(HeaderFieldManager, ao.manager)
 	msg.Data = ao.data
-	reply, err := c.Conn.RequestMsg(msg, time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	reply, err := c.Conn.RequestMsgWithContext(ctx, msg)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
 			return ErrStoreNotResponding
@@ -412,7 +451,13 @@ func (c *Client) Create(
 	key string,
 	data []byte,
 ) error {
-	reply, err := c.Conn.Request("STORE.create."+key, data, time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	reply, err := c.Conn.RequestWithContext(
+		ctx,
+		c.SubjectPrefix()+fmt.Sprintf(SubjectStoreCreate, key),
+		data,
+	)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
 			return ErrStoreNotResponding
@@ -436,7 +481,13 @@ func (c *Client) Get(
 	ctx context.Context,
 	key string,
 ) ([]byte, error) {
-	reply, err := c.Conn.Request("STORE.get."+key, nil, time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	reply, err := c.Conn.RequestWithContext(
+		ctx,
+		c.SubjectPrefix()+fmt.Sprintf(SubjectStoreGet, key),
+		nil,
+	)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
 			return nil, ErrStoreNotResponding
@@ -485,8 +536,12 @@ func (c *Client) List(
 	if lo.key == "" {
 		return nil, fmt.Errorf("list: key required")
 	}
-	msg := nats.NewMsg("STORE.list." + lo.key)
-	reply, err := c.Conn.RequestMsg(msg, time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	msg := nats.NewMsg(
+		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreList, lo.key),
+	)
+	reply, err := c.Conn.RequestMsgWithContext(ctx, msg)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
 			return nil, ErrStoreNotResponding

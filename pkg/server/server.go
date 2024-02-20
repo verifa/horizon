@@ -221,7 +221,7 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 	}
 	if opt.runAccountsController {
 		recon := accounts.AccountReconciler{
-			Client:            hz.Client{Conn: s.Conn},
+			Client:            hz.InternalClient(s.Conn),
 			Conn:              s.Conn,
 			OpKeyPair:         s.NS.Auth.Operator.SigningKey.KeyPair,
 			RootAccountPubKey: s.NS.Auth.RootAccount.PublicKey,
@@ -260,7 +260,7 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 	}
 	if opt.runUsersActor {
 		userCreateAction := accounts.UserCreateAction{
-			Client: hz.Client{Conn: s.Conn},
+			Client: hz.InternalClient(s.Conn),
 		}
 		userActor, err := hz.StartActor(
 			ctx,

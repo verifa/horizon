@@ -39,7 +39,7 @@ func TestReconciler(t *testing.T) {
 	ctx := context.Background()
 	ti := testserver.New(t, ctx, nil)
 
-	client := hz.Client{Conn: ti.Conn}
+	client := hz.InternalClient(ti.Conn)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
 	dr := DummyReconciler{
 		DummyClient: dummyClient,
@@ -110,9 +110,7 @@ func TestReconcilerPanic(t *testing.T) {
 	ctx := context.Background()
 	ti := testserver.New(t, ctx, nil)
 
-	client := hz.Client{
-		Conn: ti.Conn,
-	}
+	client := hz.InternalClient(ti.Conn)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
 	pr := PanicReconciler{}
 	pr.wg.Add(2)
@@ -181,7 +179,7 @@ func TestReconcilerSlow(t *testing.T) {
 		},
 	})
 
-	client := hz.Client{Conn: ti.Conn}
+	client := hz.InternalClient(ti.Conn)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
 
 	sr := SlowReconciler{}
@@ -254,7 +252,7 @@ func TestReconcilerConcurrent(t *testing.T) {
 	ctx := context.Background()
 	ti := testserver.New(t, ctx, nil)
 
-	client := hz.Client{Conn: ti.Conn}
+	client := hz.InternalClient(ti.Conn)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
 	childClient := hz.ObjectClient[ChildObject]{Client: client}
 

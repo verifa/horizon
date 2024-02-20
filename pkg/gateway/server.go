@@ -85,7 +85,7 @@ func Start(
 ) (*Server, error) {
 	s := Server{
 		Conn:    conn,
-		Client:  hz.Client{Conn: conn},
+		Client:  hz.InternalClient(conn),
 		portals: make(map[string]hz.Portal),
 	}
 
@@ -185,6 +185,7 @@ func (s *Server) start(
 		s.handlePortal,
 	)
 
+	// TODO: these /dist paths should not be protected...
 	r.Get("/dist/htmx.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "text/javascript")
 		w.Write(htmxJS)

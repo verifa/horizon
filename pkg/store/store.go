@@ -13,15 +13,19 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/sessions"
 )
 
 const (
-	// Format: STORE.<command>.<kind>.<account>.<name>
-	subjectStore        = "STORE.*.*.*.*"
-	subjectIndexCommand = 1
-	subjectIndexKind    = 2
-	subjectIndexAccount = 3
-	subjectIndexName    = 4
+	// Format: HZ.<internal/api>.store.<command>.<kind>.<account>.<name>
+
+	subjectInternalStore = "HZ.internal.store.*.*.*.*"
+	subjectAPIStore      = "HZ.api.store.*.*.*.*"
+	subjectIndexCommand  = 3
+	subjectIndexKind     = 4
+	subjectIndexAccount  = 5
+	subjectIndexName     = 6
+	subjectLength        = 7
 )
 
 type StoreCommand string
@@ -44,11 +48,17 @@ type Store struct {
 	js    jetstream.JetStream
 	kv    jetstream.KeyValue
 	mutex jetstream.KeyValue
-	sub   *nats.Subscription
+	subs  []*nats.Subscription
 }
 
 func (s Store) Close() error {
-	return s.sub.Unsubscribe()
+	var errs error
+	for _, sub := range s.subs {
+		if err := sub.Unsubscribe(); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+	return errs
 }
 
 type StoreOption func(*storeOptions)
@@ -107,18 +117,35 @@ func StartStore(
 	}
 	store.mutex = mutex
 
-	sub, err := conn.QueueSubscribe(
-		subjectStore,
-		"store",
-		func(msg *nats.Msg) {
-			slog.Info("received store message", "msg", msg)
-			store.handleStoreMsg(ctx, msg)
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("subscribing store: %w", err)
+	{
+		sub, err := conn.QueueSubscribe(
+			subjectInternalStore,
+			"store",
+			func(msg *nats.Msg) {
+				slog.Info("received store message", "subject", msg.Subject)
+				store.handleInternalMsg(ctx, msg)
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("subscribing store: %w", err)
+		}
+		store.subs = append(store.subs, sub)
 	}
-	store.sub = sub
+	{
+		sub, err := conn.QueueSubscribe(
+			subjectAPIStore,
+			"store",
+			func(msg *nats.Msg) {
+				slog.Info("received store message", "subject", msg.Subject)
+				store.handleAPIMsg(ctx, msg)
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("subscribing store: %w", err)
+		}
+		store.subs = append(store.subs, sub)
+	}
+
 	return &store, nil
 }
 
@@ -182,14 +209,62 @@ func (s Store) initKVBuckets(ctx context.Context, opt storeOptions) error {
 	return nil
 }
 
-func (s Store) handleStoreMsg(ctx context.Context, msg *nats.Msg) {
+func (s Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
 	// Parse subject to get details.
 	parts := strings.Split(msg.Subject, ".")
-	if len(parts) != 5 {
+	if len(parts) != subjectLength {
 		_ = hz.RespondError(msg, &hz.Error{
 			Status:  http.StatusBadRequest,
-			Message: "invalid subject",
+			Message: fmt.Sprintf("invalid subject: %q", msg.Subject),
 		})
+		return
+	}
+	cmd := StoreCommand(parts[subjectIndexCommand])
+	// kind := parts[subjectIndexKind]
+	// account := parts[subjectIndexAccount]
+	// name := parts[subjectIndexName]
+
+	// Authenticate request.
+	user, err := sessions.Get(ctx, s.conn, sessions.WithSessionFromMsg(msg))
+	if err != nil {
+		_ = hz.RespondError(msg, err)
+		return
+	}
+	fmt.Println("user", user)
+
+	switch cmd {
+	case StoreCommandCreate:
+		// TODO: Check if user has permission to create object.
+		// authz.CheckCreate(ctx, obj, authz.WithUser(user))
+		s.handleInternalMsg(ctx, msg)
+	case StoreCommandApply:
+		// TODO: Check if user has permission to apply object.
+		// This requires checking if it's a create or edit operation.
+		s.handleInternalMsg(ctx, msg)
+	case StoreCommandList:
+		// List requires user authn/authz to figure out which objects can be
+		// read.
+		s.handleInternalMsg(ctx, msg)
+	default:
+		// TODO: handle other commands and don't default to the internal API
+		// (unprotected).
+		s.handleInternalMsg(ctx, msg)
+
+	}
+}
+
+// handleInternalMsg handles messages for the internal (unprotected) nats
+// subjects.
+// TODO: internal messages still honour the user's authorization (if present).
+func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
+	// Parse subject to get details.
+	parts := strings.Split(msg.Subject, ".")
+	if len(parts) != subjectLength {
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusBadRequest,
+			Message: fmt.Sprintf("invalid subject: %q", msg.Subject),
+		})
+		return
 	}
 	cmd := StoreCommand(parts[subjectIndexCommand])
 	kind := parts[subjectIndexKind]

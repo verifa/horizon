@@ -39,7 +39,7 @@ func TestUserReconciler(t *testing.T) {
 	})
 
 	// Create a group.
-	groupClient := hz.ObjectClient[Group]{Client: hz.Client{Conn: ti.Conn}}
+	groupClient := hz.ObjectClient[Group]{Client: hz.InternalClient(ti.Conn)}
 	group := Group{
 		ObjectMeta: hz.ObjectMeta{
 			Name:    "group1",
@@ -51,7 +51,7 @@ func TestUserReconciler(t *testing.T) {
 	tu.AssertNoError(t, err)
 
 	// Create a user with membership to that group.
-	userClient := hz.ObjectClient[User]{Client: hz.Client{Conn: ti.Conn}}
+	userClient := hz.ObjectClient[User]{Client: hz.InternalClient(ti.Conn)}
 	user := User{
 		ObjectMeta: hz.ObjectMeta{
 			Name:    "user1",

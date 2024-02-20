@@ -92,7 +92,7 @@ func TestBroker(t *testing.T) {
 	ctx := context.Background()
 	ti := testserver.New(t, ctx, nil)
 
-	client := hz.Client{Conn: ti.Conn}
+	client := hz.InternalClient(ti.Conn)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
 	dObj := DummyObject{
 		ObjectMeta: hz.ObjectMeta{

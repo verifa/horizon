@@ -14,7 +14,7 @@ import (
 func TestUser(t *testing.T) {
 	ctx := context.Background()
 	ti := testserver.New(t, ctx, nil)
-	client := hz.Client{Conn: ti.Conn}
+	client := hz.InternalClient(ti.Conn)
 	createAction := UserCreateAction{
 		Client: client,
 	}

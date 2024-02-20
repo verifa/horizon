@@ -17,7 +17,7 @@ func ExampleGreeting() {
 		slog.Error("connecting to nats", "error", err)
 		os.Exit(1)
 	}
-	client := hz.Client{Conn: nc}
+	client := hz.InternalClient(nc)
 	greetClient := hz.ObjectClient[greetings.Greeting]{Client: client}
 
 	validr := greetings.GreetingValidator{}
