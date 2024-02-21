@@ -232,21 +232,14 @@ func (s Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
 		return
 	}
 	cmd := StoreCommand(parts[subjectIndexCommand])
-	// kind := parts[subjectIndexKind]
-	// account := parts[subjectIndexAccount]
-	// name := parts[subjectIndexName]
+	kind := parts[subjectIndexKind]
+	account := parts[subjectIndexAccount]
+	name := parts[subjectIndexName]
 
-	// Authenticate request.
-	// TODO: s.Auth.Authorizer
-	// user, err := sessions.Get(ctx, s.Conn, sessions.WithSessionFromMsg(msg))
-	// if err != nil {
-	// 	_ = hz.RespondError(msg, err)
-	// 	return
-	// }
-	// fmt.Println("user", user)
-
+	authRequest := auth.Request{}
 	switch cmd {
 	case StoreCommandCreate:
+		s.Auth.CheckObject()
 		// TODO: Check if user has permission to create object.
 		// authz.CheckCreate(ctx, obj, authz.WithUser(user))
 		s.handleInternalMsg(ctx, msg)

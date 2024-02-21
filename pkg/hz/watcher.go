@@ -21,7 +21,7 @@ func WithWatcherForObject(obj ObjectKeyer) WatcherOption {
 }
 
 func WithWatcherFn(
-	fn func(ctx context.Context, event Event) (Result, error),
+	fn func(event Event) (Result, error),
 ) WatcherOption {
 	return func(o *watcherOptions) {
 		o.fn = fn
@@ -31,7 +31,7 @@ func WithWatcherFn(
 type watcherOptions struct {
 	forObject ObjectKeyer
 	ackWait   time.Duration
-	fn        func(ctx context.Context, event Event) (Result, error)
+	fn        func(event Event) (Result, error)
 	backoff   time.Duration
 }
 
@@ -140,7 +140,7 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 		}
 		kvop := opFromMsg(msg)
 		handleEvent := func(msg jetstream.Msg, event Event) {
-			result, err := opt.fn(ctx, event)
+			result, err := opt.fn(event)
 			if err != nil {
 				slog.Error(
 					"handling event",

@@ -298,7 +298,6 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) handlePortalEvent(
-	ctx context.Context,
 	event hz.Event,
 ) (hz.Result, error) {
 	switch event.Operation {

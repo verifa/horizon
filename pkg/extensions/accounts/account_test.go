@@ -54,7 +54,7 @@ func TestAccount(t *testing.T) {
 		ti.Conn,
 		hz.WithWatcherForObject(account),
 		hz.WithWatcherFn(
-			func(ctx context.Context, event hz.Event) (hz.Result, error) {
+			func(event hz.Event) (hz.Result, error) {
 				var acc accounts.Account
 				if err := json.Unmarshal(event.Data, &acc); err != nil {
 					return hz.Result{}, fmt.Errorf(

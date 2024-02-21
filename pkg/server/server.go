@@ -24,9 +24,7 @@ func WithDevMode() ServerOption {
 		o.runGateway = true
 
 		o.runAccountsController = true
-		o.runUsersController = true
 		o.runUsersActor = true
-		o.runGroupsController = true
 	}
 }
 
@@ -102,21 +100,6 @@ func WithAccountsControllerOptions(opts ...hz.ControllerOption) ServerOption {
 	}
 }
 
-func WithRunUsersController(b bool) ServerOption {
-	return func(o *serverOptions) {
-		o.runUsersController = b
-	}
-}
-
-func WithUsersControllerOptions(opts ...hz.ControllerOption) ServerOption {
-	return func(o *serverOptions) {
-		o.runUsersController = true
-		o.usersControllerOptions = append(
-			o.usersControllerOptions,
-			opts...)
-	}
-}
-
 func WithRunUsersActor(b bool) ServerOption {
 	return func(o *serverOptions) {
 		o.runUsersActor = b
@@ -134,15 +117,12 @@ type serverOptions struct {
 	runStore              bool
 	runGateway            bool
 	runAccountsController bool
-	runUsersController    bool
 	runUsersActor         bool
-	runGroupsController   bool
 
 	natsOptions               []natsutil.ServerOption
 	storeOptions              []store.StoreOption
 	gatewayOptions            []gateway.ServerOption
 	accountsControllerOptions []hz.ControllerOption
-	usersControllerOptions    []hz.ControllerOption
 }
 
 type Server struct {
@@ -154,7 +134,6 @@ type Server struct {
 	Store        *store.Store
 	Gateway      *gateway.Server
 	CtlrAccounts *hz.Controller
-	CtlrUsers    *hz.Controller
 	ActorUsers   *hz.Actor[accounts.User]
 }
 
@@ -271,21 +250,6 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		s.CtlrAccounts = ctlr
 	}
 
-	if opt.runUsersController {
-		defaultOptions := []hz.ControllerOption{
-			hz.WithControllerFor(accounts.User{}),
-			hz.WithControllerValidatorCUE(),
-		}
-		ctlr, err := hz.StartController(
-			ctx,
-			s.Conn,
-			append(defaultOptions, opt.usersControllerOptions...)...,
-		)
-		if err != nil {
-			return fmt.Errorf("starting users controller: %w", err)
-		}
-		s.CtlrUsers = ctlr
-	}
 	if opt.runUsersActor {
 		userCreateAction := accounts.UserCreateAction{
 			Client: hz.InternalClient(s.Conn),
@@ -300,18 +264,6 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		}
 		s.ActorUsers = userActor
 	}
-	if opt.runGroupsController {
-		ctlr, err := hz.StartController(
-			ctx,
-			s.Conn,
-			hz.WithControllerFor(accounts.Group{}),
-			hz.WithControllerValidatorCUE(),
-		)
-		if err != nil {
-			return fmt.Errorf("starting groups controller: %w", err)
-		}
-		s.CtlrUsers = ctlr
-	}
 
 	return nil
 }
@@ -320,11 +272,6 @@ func (s *Server) Close() error {
 	var errs error
 	if s.CtlrAccounts != nil {
 		if err := s.CtlrAccounts.Stop(); err != nil {
-			errs = errors.Join(errs, err)
-		}
-	}
-	if s.CtlrUsers != nil {
-		if err := s.CtlrUsers.Stop(); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}
@@ -340,6 +287,11 @@ func (s *Server) Close() error {
 	}
 	if s.Store != nil {
 		if err := s.Store.Close(); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+	if s.Auth != nil {
+		if err := s.Auth.Close(); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}
@@ -366,9 +318,6 @@ func (s *Server) Services() []string {
 	}
 	if s.CtlrAccounts != nil {
 		services = append(services, "ctlr-accounts")
-	}
-	if s.CtlrUsers != nil {
-		services = append(services, "ctlr-users")
 	}
 	if s.ActorUsers != nil {
 		services = append(services, "actor-users")
