@@ -36,7 +36,6 @@ const (
 	StoreCommandApply  StoreCommand = "apply"
 	StoreCommandGet    StoreCommand = "get"
 	StoreCommandList   StoreCommand = "list"
-	StoreCommandUpdate StoreCommand = "update"
 	StoreCommandDelete StoreCommand = "delete"
 )
 
@@ -236,27 +235,66 @@ func (s Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
 	account := parts[subjectIndexAccount]
 	name := parts[subjectIndexName]
 
-	authRequest := auth.Request{}
+	req := auth.CheckRequest{
+		Session: msg.Header.Get(hz.HeaderAuthorization),
+		Object: hz.Key{
+			Name:    name,
+			Kind:    kind,
+			Account: account,
+		},
+	}
 	switch cmd {
-	case StoreCommandCreate:
-		s.Auth.CheckObject()
-		// TODO: Check if user has permission to create object.
-		// authz.CheckCreate(ctx, obj, authz.WithUser(user))
-		s.handleInternalMsg(ctx, msg)
-	case StoreCommandApply:
-		// TODO: Check if user has permission to apply object.
-		// This requires checking if it's a create or edit operation.
-		s.handleInternalMsg(ctx, msg)
 	case StoreCommandList:
-		// List requires user authn/authz to figure out which objects can be
-		// read.
+		// List is a bit special. We do not check for permissions to a specific
+		// object, instead we want to list the objects which we can access.
+		// The internal msg handler will do the actual listing and honour the
+		// session.
+		// Just forward it there...
+		// Check session is valid, at the very least.
+		session := msg.Header.Get(hz.HeaderAuthorization)
+		_, err := s.Auth.Sessions.Get(ctx, session)
+		if err != nil {
+			_ = hz.RespondError(msg, err)
+			return
+		}
+
 		s.handleInternalMsg(ctx, msg)
+		return
+	case StoreCommandGet:
+		req.Verb = auth.VerbRead
+	case StoreCommandCreate:
+		req.Verb = auth.VerbCreate
+	case StoreCommandApply:
+		// This requires checking if it's a create or edit operation.
+		_, err := s.get(ctx, hz.KeyForObjectParams(kind, account, name))
+		if errors.Is(err, hz.ErrNotFound) {
+			req.Verb = auth.VerbCreate
+		} else {
+			req.Verb = auth.VerbUpdate
+		}
+	case StoreCommandDelete:
+		req.Verb = auth.VerbDelete
 	default:
-		// TODO: handle other commands and don't default to the internal API
-		// (unprotected).
-		s.handleInternalMsg(ctx, msg)
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusBadRequest,
+			Message: fmt.Sprintf("invalid command: %q", cmd),
+		})
+		return
 
 	}
+	ok, err := s.Auth.Check(ctx, req)
+	if err != nil {
+		_ = hz.RespondError(msg, err)
+		return
+	}
+	if !ok {
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusForbidden,
+			Message: "forbidden",
+		})
+		return
+	}
+	s.handleInternalMsg(ctx, msg)
 }
 
 // handleInternalMsg handles messages for the internal (unprotected) nats
@@ -319,12 +357,6 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			_ = hz.RespondError(msg, err)
 			return
 		}
-	case StoreCommandUpdate:
-		_ = hz.RespondError(msg, &hz.Error{
-			Status:  http.StatusNotImplemented,
-			Message: "todo: not implemented",
-		})
-		return
 	case StoreCommandGet:
 		req := GetRequest{
 			Key: hz.KeyForObjectParams(kind, account, name),
@@ -336,6 +368,10 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 		}
 		_ = hz.RespondOK(msg, resp)
 	case StoreCommandList:
+		// Logic: the auth rbac does not know which objects exist.
+		// Therefore, we cannot ask it which objects we can list.
+		// Therefore, list all the actual objects that match the supplied key,
+		// and then filter them with rbac.
 		req := ListRequest{
 			Key: hz.KeyForObjectParams(kind, account, name),
 		}
@@ -344,6 +380,20 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			_ = hz.RespondError(msg, err)
 			return
 		}
+		session := msg.Header.Get(hz.HeaderAuthorization)
+		if session != "" {
+			// Filter the response with the rbac.
+			filterList, err := s.Auth.List(ctx, auth.ListRequest{
+				Session: msg.Header.Get(hz.HeaderAuthorization),
+				Objects: resp.Data,
+			})
+			if err != nil {
+				_ = hz.RespondError(msg, err)
+				return
+			}
+			resp.Data = filterList.Objects
+		}
+
 		data, err := json.Marshal(resp)
 		if err != nil {
 			_ = hz.RespondError(msg, &hz.Error{

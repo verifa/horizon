@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -117,20 +118,62 @@ func (a *Auth) Close() error {
 	return errs
 }
 
-func (a *Auth) CheckObject(
+type CheckRequest struct {
+	Session string
+	Verb    Verb
+	Object  hz.ObjectKeyer
+}
+
+func (a *Auth) Check(
 	ctx context.Context,
-	sessionID string,
+	req CheckRequest,
 ) (bool, error) {
-	// user, err := a.Sessions.Get(ctx, sessionID)
-	// if err != nil {
-	// 	return false, err
-	// }
-	// req := ObjectRequest{
-	// 	User:   user.Name,
-	// 	Groups: user.Groups,
-	// 	Verb:   "",
-	// 	Object: hz.Key{},
-	// }
-	// return a.RBAC.CheckObject(req)
-	return true, nil
+	user, err := a.Sessions.Get(ctx, req.Session)
+	if err != nil {
+		return false, err
+	}
+	checkRequest := RBACRequest{
+		Groups: user.Groups,
+		Verb:   req.Verb,
+		Object: req.Object,
+	}
+	return a.RBAC.Check(ctx, checkRequest), nil
+}
+
+// Verb is implied (read).
+type ListRequest struct {
+	Session string
+	Objects []json.RawMessage
+}
+
+type ListResponse struct {
+	Objects []json.RawMessage
+}
+
+func (a *Auth) List(
+	ctx context.Context,
+	req ListRequest,
+) (*ListResponse, error) {
+	user, err := a.Sessions.Get(ctx, req.Session)
+	if err != nil {
+		return nil, err
+	}
+	resp := ListResponse{
+		Objects: []json.RawMessage{},
+	}
+	for _, rawObj := range req.Objects {
+		var obj hz.EmptyObjectWithMeta
+		if err := json.Unmarshal(rawObj, &obj); err != nil {
+			return nil, fmt.Errorf("unmarshaling object: %w", err)
+		}
+		ok := a.RBAC.Check(ctx, RBACRequest{
+			Groups: user.Groups,
+			Verb:   VerbRead,
+			Object: obj,
+		})
+		if ok {
+			resp.Objects = append(resp.Objects, rawObj)
+		}
+	}
+	return &resp, nil
 }

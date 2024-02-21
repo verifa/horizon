@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/nats-io/nats.go"
 	"github.com/verifa/horizon/pkg/hz"
 )
@@ -98,13 +97,6 @@ type AccountRequest struct {
 	Account string
 }
 
-// CheckAccount checks if a user has any permissions/relation to a given
-// account.
-// If not, the user should not be able to know the account even exists.
-func (r *RBAC) CheckAccount(req AccountRequest) bool {
-	return false
-}
-
 type Verb string
 
 const (
@@ -123,14 +115,13 @@ const (
 	VerbDelete Verb = "delete"
 )
 
-type ObjectRequest struct {
-	User   string
+type RBACRequest struct {
 	Groups []string
 	Verb   Verb
 	Object hz.ObjectKeyer
 }
 
-func (r *RBAC) CheckObject(req ObjectRequest) bool {
+func (r *RBAC) Check(ctx context.Context, req RBACRequest) bool {
 	r.mx.RLock()
 	defer r.mx.RUnlock()
 
@@ -154,6 +145,7 @@ func (r *RBAC) CheckObject(req ObjectRequest) bool {
 						checkVerbFilter(allow.Update, req.Object) ||
 						checkVerbFilter(allow.Create, req.Object) ||
 						checkVerbFilter(allow.Delete, req.Object)
+
 				case VerbUpdate:
 					isAllow = checkVerbFilter(allow.Update, req.Object)
 				case VerbCreate:
@@ -206,6 +198,7 @@ func checkVerbFilter(vf *VerbFilter, obj hz.ObjectKeyer) bool {
 	if !checkStringPattern(vf.Kind, obj.ObjectKind()) {
 		return false
 	}
+
 	// TODO: when group is available.
 	// if !checkStringPattern(vf.Group, obj.ObjectGroup()) {
 	// 	return false
@@ -341,6 +334,7 @@ func (r *RBAC) refresh() {
 			if accountName == hz.RootAccount {
 				continue
 			}
+			localAccount := accountName
 
 			if len(permissions.Allow) > 0 {
 				rootAccount, ok := group.Accounts[hz.RootAccount]
@@ -352,19 +346,9 @@ func (r *RBAC) refresh() {
 					group.Accounts[hz.RootAccount] = rootAccount
 				}
 
-				fmt.Println(
-					"creating permissions for group <--> account: ",
-					group.Name,
-					accountName,
-				)
-				spew.Dump(&VerbFilter{
-					Name: &accountName,
-					Kind: hz.P("Account"),
-					// Group: hz.P("TODO"),
-				})
 				rootAccount.Allow = append(rootAccount.Allow, Verbs{
 					Read: &VerbFilter{
-						Name: &accountName,
+						Name: &localAccount,
 						Kind: hz.P("Account"),
 						// Group: hz.P("TODO"),
 					},

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -11,8 +12,9 @@ import (
 // and rolebdings change.
 
 func TestRBAC(t *testing.T) {
+	ctx := context.Background()
 	type testcase struct {
-		req    ObjectRequest
+		req    RBACRequest
 		expect bool
 	}
 
@@ -65,8 +67,7 @@ func TestRBAC(t *testing.T) {
 		},
 		cases: []testcase{
 			{
-				req: ObjectRequest{
-					User:   "Margarine",
+				req: RBACRequest{
 					Groups: []string{"group-creator"},
 					Verb:   "read",
 					Object: hz.Key{
@@ -77,71 +78,66 @@ func TestRBAC(t *testing.T) {
 				},
 				expect: true,
 			},
-			// {
-			// 	req: ObjectRequest{
-			// 		User:   "Margarine",
-			// 		Groups: []string{"group-creator"},
-			// 		Verb:   "read",
-			// 		Object: hz.Key{
-			// 			Name:    "account-another",
-			// 			Account: hz.RootAccount,
-			// 			Kind:    "Account",
-			// 		},
-			// 	},
-			// 	expect: false,
-			// },
-			// {
-			// 	req: ObjectRequest{
-			// 		User:   "Margarine",
-			// 		Groups: []string{"group-creator"},
-			// 		Verb:   "read",
-			// 		Object: hz.Key{
-			// 			Name:    "superfluous",
-			// 			Account: "account-test",
-			// 			Kind:    "object-test",
-			// 		},
-			// 	},
-			// 	expect: true,
-			// },
-			// {
-			// 	req: ObjectRequest{
-			// 		User:   "Margarine",
-			// 		Groups: []string{"group-creator"},
-			// 		Verb:   "create",
-			// 		Object: hz.Key{
-			// 			Name:    "superfluous",
-			// 			Account: "account-test",
-			// 			Kind:    "object-test",
-			// 		},
-			// 	},
-			// 	expect: true,
-			// },
-			// {
-			// 	req: ObjectRequest{
-			// 		User:   "Margarine",
-			// 		Groups: []string{"group-creator"},
-			// 		Verb:   "delete",
-			// 		Object: hz.Key{
-			// 			Name:    "superfluous",
-			// 			Account: "account-test",
-			// 			Kind:    "object-test",
-			// 		},
-			// 	},
-			// 	expect: false,
-			// },
-			// {
-			// 	req: ObjectRequest{
-			// 		User:   "Margarine",
-			// 		Groups: []string{"group-unknown"},
-			// 		Verb:   "read",
-			// 		Object: hz.Key{
-			// 			Name:    "superfluous",
-			// 			Account: "account-test",
-			// 			Kind:    "object-test",
-			// 		},
-			// 	},
-			// 	expect: false,
-			// },
+			{
+				req: RBACRequest{
+					Groups: []string{"group-creator"},
+					Verb:   "read",
+					Object: hz.Key{
+						Name:    "account-another",
+						Account: hz.RootAccount,
+						Kind:    "Account",
+					},
+				},
+				expect: false,
+			},
+			{
+				req: RBACRequest{
+					Groups: []string{"group-creator"},
+					Verb:   "read",
+					Object: hz.Key{
+						Name:    "superfluous",
+						Account: "account-test",
+						Kind:    "object-test",
+					},
+				},
+				expect: true,
+			},
+			{
+				req: RBACRequest{
+					Groups: []string{"group-creator"},
+					Verb:   "create",
+					Object: hz.Key{
+						Name:    "superfluous",
+						Account: "account-test",
+						Kind:    "object-test",
+					},
+				},
+				expect: true,
+			},
+			{
+				req: RBACRequest{
+					Groups: []string{"group-creator"},
+					Verb:   "delete",
+					Object: hz.Key{
+						Name:    "superfluous",
+						Account: "account-test",
+						Kind:    "object-test",
+					},
+				},
+				expect: false,
+			},
+			{
+				req: RBACRequest{
+					Groups: []string{"group-unknown"},
+					Verb:   "read",
+					Object: hz.Key{
+						Name:    "superfluous",
+						Account: "account-test",
+						Kind:    "object-test",
+					},
+				},
+				expect: false,
+			},
 		},
 	}
 
@@ -160,7 +156,7 @@ func TestRBAC(t *testing.T) {
 				rbac.HandleRoleBindingEvent(event(t, binding))
 			}
 			for index, tc := range test.cases {
-				ok := rbac.CheckObject(tc.req)
+				ok := rbac.Check(ctx, tc.req)
 				if ok != tc.expect {
 					t.Fatal("test case failed: ", index)
 				}
