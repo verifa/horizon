@@ -77,6 +77,9 @@ func (s *Sessions) New(ctx context.Context, user UserInfo) (string, error) {
 }
 
 func (s *Sessions) Get(ctx context.Context, session string) (UserInfo, error) {
+	if session == "" {
+		return UserInfo{}, ErrAuthenticationMissing
+	}
 	kve, err := s.kv.Get(ctx, session)
 	if err != nil {
 		if errors.Is(err, jetstream.ErrKeyNotFound) {

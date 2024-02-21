@@ -8,9 +8,6 @@ import (
 	"github.com/verifa/horizon/pkg/hz"
 )
 
-// TODO: the real trick is how to sync the groups-->account relations when roles
-// and rolebdings change.
-
 func TestRBAC(t *testing.T) {
 	ctx := context.Background()
 	type testcase struct {

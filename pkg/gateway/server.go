@@ -13,7 +13,10 @@ import (
 
 	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/extensions/accounts"
+	"github.com/verifa/horizon/pkg/gateway/dummyoidc"
+	"github.com/verifa/horizon/pkg/gateway/dummyoidc/storage"
 	"github.com/verifa/horizon/pkg/hz"
+	"golang.org/x/text/language"
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
@@ -49,9 +52,14 @@ func WithOIDCConfig(oidc OIDCConfig) ServerOption {
 	}
 }
 
-func WithDummyAuth(user auth.UserInfo) ServerOption {
+func WithDummyAuthUsers(users ...storage.User) ServerOption {
 	return func(o *serverOptions) {
-		o.dummyAuth = &user
+		if o.dummyAuthUsers == nil {
+			o.dummyAuthUsers = make(map[string]*storage.User)
+		}
+		for _, user := range users {
+			o.dummyAuthUsers[user.ID] = &user
+		}
 	}
 }
 
@@ -73,7 +81,7 @@ type serverOptions struct {
 	Conn *nats.Conn
 	oidc *OIDCConfig
 
-	dummyAuth        *auth.UserInfo
+	dummyAuthUsers   map[string]*storage.User
 	dummyAuthDefault bool
 
 	listener net.Listener
@@ -92,7 +100,6 @@ func Start(
 ) (*Server, error) {
 	s := Server{
 		Conn:    conn,
-		Client:  hz.InternalClient(conn),
 		Auth:    auth,
 		portals: make(map[string]hz.Portal),
 	}
@@ -105,9 +112,9 @@ func Start(
 
 type Server struct {
 	Conn       *nats.Conn
-	Client     hz.Client
 	Auth       *auth.Auth
 	httpServer *http.Server
+	dummyOIDC  *dummyoidc.Server
 
 	portals map[string]hz.Portal
 	watcher *hz.Watcher
@@ -143,34 +150,54 @@ func (s *Server) start(
 
 	if !validateOneTrue(
 		opt.oidc != nil,
-		opt.dummyAuth != nil,
+		opt.dummyAuthUsers != nil,
 		opt.dummyAuthDefault,
 	) {
-		return errors.New("one auth method is required/allowed")
+		opt.dummyAuthDefault = true
 	}
 	//
 	// Auth
 	//
-	if opt.oidc != nil {
-		oidcHandler, err := newOIDCHandler(ctx, s.Conn, s.Auth, *opt.oidc)
-		if err != nil {
-			return fmt.Errorf("oidc auth middleware: %w", err)
+	if opt.oidc == nil {
+		if opt.dummyAuthDefault {
+			opt.dummyAuthUsers = map[string]*storage.User{
+				"admin": {
+					ID:                "admin",
+					Username:          "admin",
+					Password:          "admin",
+					Groups:            []string{"admin"},
+					FirstName:         "Admin",
+					LastName:          "Admin",
+					Email:             "admin@localhost",
+					EmailVerified:     true,
+					PreferredLanguage: language.BritishEnglish,
+				},
+			}
 		}
-		r.Use(oidcHandler.authMiddleware)
-		r.Get("/login", oidcHandler.login)
-		r.Get("/logout", oidcHandler.logout)
-		r.Get("/auth/callback", oidcHandler.authCallback)
-	}
-	if opt.dummyAuth != nil {
-		r.Use(func(h http.Handler) http.Handler {
-			return dummyAuthHandler(h, *opt.dummyAuth)
+		// Configure the dummyoidc server.
+		dummyServer, err := dummyoidc.Start(ctx, dummyoidc.Config{
+			Port:  9998,
+			Users: opt.dummyAuthUsers,
 		})
+		if err != nil {
+			return fmt.Errorf("starting dummyoidc server: %w", err)
+		}
+		s.dummyOIDC = dummyServer
+		opt.oidc = &OIDCConfig{
+			Issuer:       "http://localhost:9998/",
+			ClientID:     "web",
+			ClientSecret: "secret",
+			RedirectURL:  "http://localhost:9999/auth/callback",
+		}
 	}
-	if opt.dummyAuthDefault {
-		r.Use(func(h http.Handler) http.Handler {
-			return dummyAuthHandler(h, dummyAuthDefault)
-		})
+	oidcHandler, err := newOIDCHandler(ctx, s.Conn, s.Auth, *opt.oidc)
+	if err != nil {
+		return fmt.Errorf("oidc auth middleware: %w", err)
 	}
+	r.Use(oidcHandler.authMiddleware)
+	r.Get("/login", oidcHandler.login)
+	r.Get("/logout", oidcHandler.logout)
+	r.Get("/auth/callback", oidcHandler.authCallback)
 
 	r.Get("/", s.serveHome)
 	r.Get("/loggedout", s.serveLoggedOut)
@@ -291,6 +318,14 @@ func (s *Server) Close() error {
 			)
 		}
 	}
+	if s.dummyOIDC != nil {
+		if err := s.dummyOIDC.Close(); err != nil {
+			errs = errors.Join(
+				errs,
+				fmt.Errorf("closing dummyoidc server: %w", err),
+			)
+		}
+	}
 	if s.watcher != nil {
 		s.watcher.Close()
 	}
@@ -320,7 +355,11 @@ func (s *Server) serveHome(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return
 	}
-	accClient := hz.ObjectClient[accounts.Account]{Client: s.Client}
+	client := hz.Client{
+		Conn:    s.Conn,
+		Session: hz.SessionFromRequest(r),
+	}
+	accClient := hz.ObjectClient[accounts.Account]{Client: client}
 	accounts, err := accClient.List(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -347,7 +386,11 @@ func (s *Server) serveAccountsNew(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) postAccounts(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("account-name")
-	accClient := hz.ObjectClient[accounts.Account]{Client: s.Client}
+	client := hz.Client{
+		Conn:    s.Conn,
+		Session: hz.SessionFromRequest(r),
+	}
+	accClient := hz.ObjectClient[accounts.Account]{Client: client}
 	account := accounts.Account{
 		ObjectMeta: hz.ObjectMeta{
 			Name:    name,

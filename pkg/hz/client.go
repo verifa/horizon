@@ -25,6 +25,10 @@ const (
 	HeaderFieldManager  = "Hz-Field-Manager"
 )
 
+const (
+	CookieSession = "hz_session"
+)
+
 var (
 	ErrNoRevision                = errors.New("no revision")
 	ErrIncorrectRevision         = errors.New("incorrect revision")
@@ -290,11 +294,20 @@ func (oc ObjectClient[T]) Run(
 	return newObj, nil
 }
 
+// TODO: remove this after all... skip all these fluffy functions...
+// Just create the client yourself.
 func InternalClient(conn *nats.Conn) Client {
 	return Client{
 		Conn:     conn,
 		Internal: true,
 	}
+}
+
+func SessionFromRequest(req *http.Request) string {
+	if sessionCookie, err := req.Cookie(CookieSession); err == nil {
+		return sessionCookie.Value
+	}
+	return ""
 }
 
 type Client struct {
@@ -306,6 +319,8 @@ type Client struct {
 	// For clients such as hzctl, this should be false causing the client to use
 	// the `api` nats subjects (requiring authn/authz).
 	Internal bool
+
+	Session string
 }
 
 func (c Client) SubjectPrefix() string {
@@ -432,6 +447,7 @@ func (c Client) Apply(
 		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreApply, ao.key),
 	)
 	msg.Header.Set(HeaderFieldManager, ao.manager)
+	msg.Header.Set(HeaderAuthorization, c.Session)
 	msg.Data = ao.data
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
@@ -461,12 +477,13 @@ func (c *Client) Create(
 	key string,
 	data []byte,
 ) error {
+	msg := nats.NewMsg(c.SubjectPrefix() + fmt.Sprintf(SubjectStoreCreate, key))
+	msg.Header.Set(HeaderAuthorization, c.Session)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
-	reply, err := c.Conn.RequestWithContext(
+	reply, err := c.Conn.RequestMsgWithContext(
 		ctx,
-		c.SubjectPrefix()+fmt.Sprintf(SubjectStoreCreate, key),
-		data,
+		msg,
 	)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
@@ -491,12 +508,13 @@ func (c *Client) Get(
 	ctx context.Context,
 	key string,
 ) ([]byte, error) {
+	msg := nats.NewMsg(c.SubjectPrefix() + fmt.Sprintf(SubjectStoreGet, key))
+	msg.Header.Set(HeaderAuthorization, c.Session)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
-	reply, err := c.Conn.RequestWithContext(
+	reply, err := c.Conn.RequestMsgWithContext(
 		ctx,
-		c.SubjectPrefix()+fmt.Sprintf(SubjectStoreGet, key),
-		nil,
+		msg,
 	)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
@@ -551,6 +569,7 @@ func (c *Client) List(
 	msg := nats.NewMsg(
 		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreList, lo.key),
 	)
+	msg.Header.Set(HeaderAuthorization, c.Session)
 	reply, err := c.Conn.RequestMsgWithContext(ctx, msg)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {

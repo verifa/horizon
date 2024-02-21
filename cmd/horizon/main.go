@@ -15,6 +15,16 @@ func main() {
 	s, err := server.New(
 		ctx,
 		server.WithDevMode(),
+		// server.WithGatewayOptions(
+		// 	gateway.WithOIDCConfig(
+		// 		gateway.OIDCConfig{
+		// 			Issuer:       "http://localhost:9998/",
+		// 			ClientID:     "web",
+		// 			ClientSecret: "secret",
+		// 			RedirectURL:  "http://localhost:9999/auth/callback",
+		// 		},
+		// 	),
+		// ),
 	)
 	if err != nil {
 		slog.Error("failed to start horizon", "error", err)

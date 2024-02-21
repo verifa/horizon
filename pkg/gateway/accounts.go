@@ -50,7 +50,11 @@ func (s *Server) postAccountUsers(
 			Account: account,
 		},
 	}
-	userClient := hz.ObjectClient[accounts.User]{Client: s.Client}
+	client := hz.Client{
+		Conn:    s.Conn,
+		Session: hz.SessionFromRequest(r),
+	}
+	userClient := hz.ObjectClient[accounts.User]{Client: client}
 	reply, err := userClient.Run(
 		r.Context(),
 		&accounts.UserCreateAction{},
@@ -86,7 +90,11 @@ func (s *Server) postAccountUserConfig(
 	fmt.Println("user: ", user)
 	fmt.Println("")
 	fmt.Println("")
-	userClient := hz.ObjectClient[accounts.User]{Client: s.Client}
+	client := hz.Client{
+		Conn:    s.Conn,
+		Session: hz.SessionFromRequest(r),
+	}
+	userClient := hz.ObjectClient[accounts.User]{Client: client}
 	reply, err := userClient.Run(
 		r.Context(),
 		&accounts.UserCreateAction{},

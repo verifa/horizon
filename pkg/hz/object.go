@@ -2,8 +2,6 @@ package hz
 
 import (
 	"encoding/json"
-	"fmt"
-	"strings"
 	"time"
 )
 
@@ -65,17 +63,17 @@ var KeyAllObjects = Key{
 	Kind:    "*",
 }
 
-func KeyFromString(s string) (Key, error) {
-	parts := strings.Split(s, ".")
-	if len(parts) != 3 {
-		return Key{}, fmt.Errorf("invalid key: %q", s)
-	}
-	return Key{
-		Kind:    parts[0],
-		Account: parts[1],
-		Name:    parts[2],
-	}, nil
-}
+// func KeyFromString(s string) (Key, error) {
+// 	parts := strings.Split(s, ".")
+// 	if len(parts) != 3 {
+// 		return Key{}, fmt.Errorf("invalid key: %q", s)
+// 	}
+// 	return Key{
+// 		Kind:    parts[0],
+// 		Account: parts[1],
+// 		Name:    parts[2],
+// 	}, nil
+// }
 
 var _ ObjectKeyer = (*Key)(nil)
 

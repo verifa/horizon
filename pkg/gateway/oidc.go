@@ -15,9 +15,11 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/verifa/horizon/pkg/auth"
+	"github.com/verifa/horizon/pkg/hz"
 	"golang.org/x/oauth2"
 )
 
@@ -54,7 +56,7 @@ func newOIDCHandler(
 		Endpoint: provider.Endpoint(),
 
 		// "openid" is a required scope for OpenID Connect flows.
-		Scopes: []string{oidc.ScopeOpenID, "profile"},
+		Scopes: []string{oidc.ScopeOpenID, "profile", "email", "groups"},
 	}
 	oidcConfig := &oidc.Config{
 		ClientID: oauth2Config.ClientID,
@@ -65,6 +67,7 @@ func newOIDCHandler(
 		sessions: auth.Sessions,
 		config:   &oauth2Config,
 		verifier: verifier,
+		provider: provider,
 		conn:     conn,
 	}, nil
 }
@@ -73,6 +76,7 @@ type oidcHandler struct {
 	sessions *auth.Sessions
 	config   *oauth2.Config
 	verifier *oidc.IDTokenVerifier
+	provider *oidc.Provider
 	conn     *nats.Conn
 }
 
@@ -215,6 +219,30 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		)
 		return
 	}
+	// Some OIDC providers require querying the UserInfo endpoint to get claims.
+	// Make this configurable via the OIDC configs.
+	userInfo, err := or.provider.UserInfo(
+		req.Context(),
+		oauth2.StaticTokenSource(oauth2Token),
+	)
+	if err != nil {
+		http.Error(
+			w,
+			"failed to get user info: "+err.Error(),
+			http.StatusUnauthorized,
+		)
+		return
+	}
+	var i interface{}
+	if err := userInfo.Claims(&i); err != nil {
+		http.Error(
+			w,
+			"unmarshalling user info: "+err.Error(),
+			http.StatusUnauthorized,
+		)
+		return
+	}
+	spew.Dump(i)
 
 	var claims auth.UserInfo
 	if err := idToken.Claims(&claims); err != nil {
@@ -225,6 +253,7 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		)
 		return
 	}
+
 	sessionID, err := or.sessions.New(req.Context(), claims)
 	if err != nil {
 		httpError(w, err)
@@ -325,10 +354,8 @@ func (or *oidcHandler) verifyState(
 	return returnURL, nil
 }
 
-const cookieName = "hz_session"
-
 func getSessionCookie(r *http.Request) (uuid.UUID, error) {
-	sessionCookie, err := r.Cookie(cookieName)
+	sessionCookie, err := r.Cookie(hz.CookieSession)
 	if err != nil {
 		return uuid.UUID{}, err
 	}
@@ -338,7 +365,7 @@ func getSessionCookie(r *http.Request) (uuid.UUID, error) {
 func writeSessionCookieHeader(w http.ResponseWriter, sessionID string) {
 	// Create cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     cookieName,
+		Name:     hz.CookieSession,
 		Value:    sessionID,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,

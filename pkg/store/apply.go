@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 
 	"github.com/tidwall/sjson"
@@ -22,7 +21,6 @@ type ApplyRequest struct {
 }
 
 func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
-	slog.Info("apply", "req", req)
 	if err := s.validate(ctx, req.Kind, req.Data); err != nil {
 		return &hz.Error{
 			Status: http.StatusBadRequest,
