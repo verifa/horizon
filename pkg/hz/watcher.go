@@ -166,13 +166,26 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 				_ = msg.NakWithDelay(result.RequeueAfter)
 			}
 		}
+		rawKey := keyFromMsgSubject(kv, msg)
+		key, err := objectKeyFromKey(rawKey)
+		if err != nil {
+			slog.Error(
+				"parsing key from subject",
+				"error",
+				err,
+				"subject",
+				msg.Subject(),
+			)
+			_ = msg.Term()
+			return
+		}
 		if kvop == jetstream.KeyValueDelete {
 			// If the operation is a KV delete, then the value has been
 			// deleted from the key value store.
 			// For watcher, this is the purge operation.
 			event := Event{
 				Operation: EventOperationPurge,
-				Key:       keyFromMsgSubject(kv, msg),
+				Key:       key,
 				Data:      nil,
 			}
 			handleEvent(msg, event)
@@ -194,7 +207,7 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 		if gObj.DeletionTimestamp != nil {
 			event := Event{
 				Operation: EventOperationDelete,
-				Key:       keyFromMsgSubject(kv, msg),
+				Key:       key,
 				Data:      msg.Data(),
 			}
 			handleEvent(msg, event)
@@ -202,7 +215,7 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 		}
 		event := Event{
 			Operation: EventOperationPut,
-			Key:       keyFromMsgSubject(kv, msg),
+			Key:       key,
 			Data:      msg.Data(),
 		}
 		handleEvent(msg, event)
@@ -221,7 +234,7 @@ func (w *Watcher) WaitUntilInit() {
 type Event struct {
 	Operation EventOperation
 	Data      []byte
-	Key       string
+	Key       ObjectKeyer
 }
 
 type EventOperation int

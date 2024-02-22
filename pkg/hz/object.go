@@ -3,6 +3,7 @@ package hz
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -51,6 +52,19 @@ func KeyFromObject(obj ObjectKeyer) string {
 		account,
 		name,
 	)
+}
+
+func objectKeyFromKey(key string) (ObjectKey, error) {
+	parts := strings.Split(key, ".")
+	if len(parts) != 4 {
+		return ObjectKey{}, fmt.Errorf("invalid key: %q", key)
+	}
+	return ObjectKey{
+		Group:   parts[0],
+		Kind:    parts[1],
+		Account: parts[2],
+		Name:    parts[3],
+	}, nil
 }
 
 // TODO: remove

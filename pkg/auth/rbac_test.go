@@ -347,7 +347,7 @@ func event[T hz.Objecter](t *testing.T, obj T) hz.Event {
 	return hz.Event{
 		Operation: hz.EventOperationPut,
 		Data:      data,
-		Key:       hz.KeyFromObject(obj),
+		Key:       obj,
 	}
 }
 

@@ -341,10 +341,10 @@ func (s *Server) handlePortalEvent(
 		if err := json.Unmarshal(event.Data, &portal); err != nil {
 			return hz.Result{}, fmt.Errorf("unmarshalling portal: %w", err)
 		}
-		s.portals[event.Key] = portal
+		s.portals[hz.KeyFromObject(event.Key)] = portal
 		return hz.Result{}, nil
 	case hz.EventOperationDelete, hz.EventOperationPurge:
-		delete(s.portals, event.Key)
+		delete(s.portals, hz.KeyFromObject(event.Key))
 	}
 	return hz.Result{}, nil
 }
