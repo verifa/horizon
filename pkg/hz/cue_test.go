@@ -64,6 +64,7 @@ func TestCueDefinition(t *testing.T) {
 {
 	_#def
 	_#def: {
+		group: "CueGroup"
 		kind: "CueObj"
 		metadata: {
 			name:    =~"^[a-zA-Z0-9-_]+$"

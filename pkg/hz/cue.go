@@ -15,8 +15,6 @@ import (
 )
 
 func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
-	reflect.TypeOf(obj)
-
 	t := reflect.TypeOf(obj)
 	metaType, ok := cueJSONStructField(t, "metadata")
 	if !ok {
@@ -28,15 +26,18 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 	}
 
 	kindPath := cue.ParsePath("kind")
+	groupPath := cue.ParsePath("group")
 	metaPath := cue.ParsePath("metadata")
 	specPath := cue.ParsePath("spec")
 	statusPath := cue.ParsePath("status").Optional()
 
-	// kindExpr := cCtx.CompileString("=~\"^[a-zA-Z0-9-_]+$\"")
-	// TODO: should be the object kind specifically.
 	kindExpr := cCtx.CompileString(fmt.Sprintf("%q", obj.ObjectKind()))
 	if err := kindExpr.Err(); err != nil {
 		return cue.Value{}, fmt.Errorf("compiling kind expression: %w", err)
+	}
+	groupExpr := cCtx.CompileString(fmt.Sprintf("%q", obj.ObjectGroup()))
+	if err := groupExpr.Err(); err != nil {
+		return cue.Value{}, fmt.Errorf("compiling group expression: %w", err)
 	}
 
 	metaVal, err := cueEncodeStruct(cCtx, metaType)
@@ -55,6 +56,7 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 
 	defPath := cue.MakePath(cue.Def(obj.ObjectKind()))
 	objDef := cCtx.CompileString("{}").
+		FillPath(groupPath, groupExpr).
 		FillPath(kindPath, kindExpr).
 		FillPath(metaPath, metaVal).
 		FillPath(specPath, specVal).
@@ -279,6 +281,7 @@ func cueEncodeField(
 	}
 }
 
+// cueJSONStructField returns the type of a field in a struct
 func cueJSONStructField(t reflect.Type, name string) (reflect.Type, bool) {
 	if t.Kind() == reflect.Ptr {
 		return cueJSONStructField(t.Elem(), name)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/tidwall/sjson"
 )
 
 const (
@@ -30,12 +31,16 @@ const (
 )
 
 var (
-	ErrNoRevision                = errors.New("no revision")
-	ErrIncorrectRevision         = errors.New("incorrect revision")
-	ErrNotFound                  = errors.New("not found")
-	ErrApplyManagerRequired      = errors.New("apply: field manager required")
-	ErrApplyObjectOrDataRequired = errors.New("apply: object or data required")
-	ErrApplyObjectOrKeyRequired  = errors.New("apply: object or key required")
+	ErrNoRevision                 = errors.New("no revision")
+	ErrIncorrectRevision          = errors.New("incorrect revision")
+	ErrNotFound                   = errors.New("not found")
+	ErrApplyManagerRequired       = errors.New("apply: field manager required")
+	ErrApplyObjectOrDataRequired  = errors.New("apply: object or data required")
+	ErrApplyObjectOrKeyRequired   = errors.New("apply: object or key required")
+	ErrCreateObjectOrDataRequired = errors.New(
+		"create: object or data required",
+	)
+	ErrCreateObjectOrKeyRequired = errors.New("create: object or key required")
 
 	ErrClientNoSession = errors.New("client: no session")
 
@@ -86,11 +91,7 @@ func (oc ObjectClient[T]) Create(
 	ctx context.Context,
 	object T,
 ) error {
-	data, err := json.Marshal(object)
-	if err != nil {
-		return fmt.Errorf("marshalling object: %w", err)
-	}
-	return oc.Client.Create(ctx, KeyFromObject(object), data)
+	return oc.Client.Create(ctx, WithCreateObject(object))
 }
 
 func (oc ObjectClient[T]) Apply(
@@ -183,15 +184,9 @@ func (oc ObjectClient[T]) Validate(
 	ctx context.Context,
 	object T,
 ) error {
-	bObject, err := json.Marshal(object)
-	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
-	}
 	return oc.Client.Validate(
 		ctx,
-		object.ObjectGroup(),
-		object.ObjectKind(),
-		bObject,
+		WithValidateObject(object),
 	)
 }
 
@@ -294,6 +289,22 @@ type Client struct {
 	Manager string
 }
 
+func (c Client) marshalObjectWithTypeFields(obj Objecter) ([]byte, error) {
+	data, err := json.Marshal(obj)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling object: %w", err)
+	}
+	data, err = sjson.SetBytes(data, "kind", obj.ObjectKind())
+	if err != nil {
+		return nil, fmt.Errorf("setting kind: %w", err)
+	}
+	data, err = sjson.SetBytes(data, "group", obj.ObjectGroup())
+	if err != nil {
+		return nil, fmt.Errorf("setting group: %w", err)
+	}
+	return data, nil
+}
+
 func (c Client) checkSession() error {
 	if !c.Internal && c.Session == "" {
 		return ErrClientNoSession
@@ -310,13 +321,12 @@ func (c Client) SubjectPrefix() string {
 
 func (c Client) Schema(
 	ctx context.Context,
-	group string,
-	kind string,
+	key ObjectKeyer,
 ) (Schema, error) {
 	subject := c.SubjectPrefix() + fmt.Sprintf(
 		SubjectStoreSchema,
-		group,
-		kind,
+		key.ObjectGroup(),
+		key.ObjectKind(),
 	)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
@@ -339,20 +349,61 @@ func (c Client) Schema(
 	return schema, nil
 }
 
+type ValidateOption func(*validateOptions)
+
+func WithValidateObject(obj Objecter) ValidateOption {
+	return func(vo *validateOptions) {
+		vo.obj = obj
+	}
+}
+
+func WithValidateData(data []byte) ValidateOption {
+	return func(vo *validateOptions) {
+		vo.data = data
+	}
+}
+
+type validateOptions struct {
+	obj  Objecter
+	data []byte
+}
+
 func (c Client) Validate(
 	ctx context.Context,
-	group string,
-	kind string,
-	data []byte,
+	opts ...ValidateOption,
 ) error {
+	vo := validateOptions{}
+	for _, opt := range opts {
+		opt(&vo)
+	}
+	var key ObjectKeyer
+	if vo.obj != nil {
+		var err error
+		vo.data, err = c.marshalObjectWithTypeFields(vo.obj)
+		if err != nil {
+			return fmt.Errorf("marshalling object: %w", err)
+		}
+		key = vo.obj
+	}
+	if vo.data == nil {
+		return fmt.Errorf("validate: data required")
+	}
+	// Get key from data if it is not set.
+	if key == nil {
+		var metaObj MetaOnlyObject
+		if err := json.Unmarshal(vo.data, &metaObj); err != nil {
+			return fmt.Errorf("unmarshalling meta only object: %w", err)
+		}
+		key = metaObj
+	}
 	subject := c.SubjectPrefix() + fmt.Sprintf(
 		SubjectStoreValidate,
-		group,
-		kind,
+		key.ObjectGroup(),
+		key.ObjectKind(),
 	)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
-	reply, err := c.Conn.RequestWithContext(ctx, subject, data)
+	reply, err := c.Conn.RequestWithContext(ctx, subject, vo.data)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
 			return ErrStoreNotResponding
@@ -408,6 +459,7 @@ func (c Client) Apply(
 	for _, opt := range opts {
 		opt(&ao)
 	}
+
 	if c.Manager == "" {
 		return ErrApplyManagerRequired
 	}
@@ -417,9 +469,10 @@ func (c Client) Apply(
 	if ao.object == nil && ao.objectKey == nil {
 		return ErrApplyObjectOrKeyRequired
 	}
+
 	if ao.object != nil {
 		var err error
-		ao.data, err = json.Marshal(ao.object)
+		ao.data, err = c.marshalObjectWithTypeFields(ao.object)
 		if err != nil {
 			return fmt.Errorf("marshalling object: %w", err)
 		}
@@ -465,16 +518,68 @@ func (c Client) Apply(
 	}
 }
 
+type CreateOption func(*createOptions)
+
+type createOptions struct {
+	object    Objecter
+	data      []byte
+	objectKey *ObjectKey
+	key       string
+}
+
+func WithCreateObject(object Objecter) CreateOption {
+	return func(ao *createOptions) {
+		ao.object = object
+	}
+}
+
+func WithCreateData(data []byte) CreateOption {
+	return func(ao *createOptions) {
+		ao.data = data
+	}
+}
+
+func WithCreateObjectKey(objectKey ObjectKey) CreateOption {
+	return func(ao *createOptions) {
+		ao.objectKey = &objectKey
+	}
+}
+
 func (c *Client) Create(
 	ctx context.Context,
-	key string,
-	data []byte,
+	opts ...CreateOption,
 ) error {
 	if err := c.checkSession(); err != nil {
 		return err
 	}
-	msg := nats.NewMsg(c.SubjectPrefix() + fmt.Sprintf(SubjectStoreCreate, key))
-	msg.Data = data
+	co := createOptions{}
+	for _, opt := range opts {
+		opt(&co)
+	}
+
+	if co.object == nil && co.data == nil {
+		return ErrCreateObjectOrDataRequired
+	}
+	if co.object == nil && co.objectKey == nil {
+		return ErrCreateObjectOrKeyRequired
+	}
+
+	if co.object != nil {
+		var err error
+		co.data, err = c.marshalObjectWithTypeFields(co.object)
+		if err != nil {
+			return fmt.Errorf("marshalling object: %w", err)
+		}
+		co.key = KeyFromObject(co.object)
+	}
+	if co.objectKey != nil {
+		co.key = KeyFromObject(co.objectKey)
+	}
+
+	msg := nats.NewMsg(
+		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreCreate, co.key),
+	)
+	msg.Data = co.data
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
