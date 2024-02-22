@@ -11,7 +11,7 @@ import (
 )
 
 type ListRequest struct {
-	Key string `json:"key,omitempty"`
+	Key hz.ObjectKey `json:"key,omitempty"`
 }
 
 type ListResponse struct {
@@ -23,7 +23,7 @@ func (s Store) List(
 	req ListRequest,
 ) (*ListResponse, error) {
 	wOpts := []jetstream.WatchOpt{jetstream.IgnoreDeletes()}
-	watcher, err := s.kv.Watch(ctx, req.Key, wOpts...)
+	watcher, err := s.kv.Watch(ctx, hz.KeyFromObject(req.Key), wOpts...)
 	if err != nil {
 		return nil, &hz.Error{
 			Status:  http.StatusInternalServerError,

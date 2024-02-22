@@ -24,6 +24,10 @@ func (o DummyObject) ObjectKind() string {
 	return "DummyObject"
 }
 
+func (o DummyObject) ObjectGroup() string {
+	return "DummyGroup"
+}
+
 var _ (hz.Action[DummyObject]) = (*DummyAction)(nil)
 
 type DummyAction struct{}
@@ -63,6 +67,10 @@ type returnIDObject struct {
 
 func (n returnIDObject) ObjectKind() string {
 	return "returnID"
+}
+
+func (n returnIDObject) ObjectGroup() string {
+	return "test"
 }
 
 type returnIDSpec struct{}

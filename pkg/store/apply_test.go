@@ -25,6 +25,10 @@ func (r DummyApplyObject) ObjectKind() string {
 	return "DummyApplyObject"
 }
 
+func (r DummyApplyObject) ObjectGroup() string {
+	return "DummyApplyGroup"
+}
+
 type testStepCommand string
 
 const (
@@ -78,7 +82,12 @@ func TestApply(t *testing.T) {
 	})
 
 	tu.AssertNoError(t, err)
-	key := "DummyApplyObject.test.test"
+	key := hz.ObjectKey{
+		Group:   "DummyApplyGroup",
+		Kind:    "DummyApplyObject",
+		Name:    "test",
+		Account: "test",
+	}
 
 	ar, err := txtar.ParseFile("./testdata/apply/1.txtar")
 	tu.AssertNoError(t, err)
@@ -95,7 +104,7 @@ func TestApply(t *testing.T) {
 			tu.AssertNoError(t, err, "obj yaml to json")
 			err = client.Apply(
 				ctx,
-				hz.WithApplyKey(key),
+				hz.WithApplyObjectKey(key),
 				hz.WithApplyData(obj),
 			)
 			if ts.errStatus == nil {

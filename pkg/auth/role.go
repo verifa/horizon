@@ -14,6 +14,10 @@ func (Role) ObjectKind() string {
 	return "Role"
 }
 
+func (Role) ObjectGroup() string {
+	return "hz-internal"
+}
+
 type RoleSpec struct {
 	Allow []Verbs `json:"allow,omitempty"`
 	Deny  []Verbs `json:"deny,omitempty"`

@@ -18,8 +18,12 @@ func (s Store) Validate(ctx context.Context, req ValidateRequest) error {
 	return errors.New("TODO")
 }
 
-func (s Store) validate(ctx context.Context, kind string, data []byte) error {
-	subject := fmt.Sprintf("CTLR.validate.%s", kind)
+func (s Store) validate(
+	ctx context.Context,
+	key hz.ObjectKey,
+	data []byte,
+) error {
+	subject := fmt.Sprintf("CTLR.validate.%s.%s", key.Group, key.Kind)
 	slog.Info("validate", "subject", subject)
 	reply, err := s.Conn.Request(subject, data, time.Second)
 	if err != nil {

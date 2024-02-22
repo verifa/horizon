@@ -14,6 +14,10 @@ func (RoleBinding) ObjectKind() string {
 	return "RoleBinding"
 }
 
+func (RoleBinding) ObjectGroup() string {
+	return "hz-internal"
+}
+
 type RoleBindingSpec struct {
 	// RoleRef is the reference to the Role which the RoleBinding will bind.
 	RoleRef RoleRef `json:"roleRef" cue:""`

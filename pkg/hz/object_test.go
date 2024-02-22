@@ -17,6 +17,10 @@ func (o DummyObject) ObjectKind() string {
 	return "DummyObject"
 }
 
+func (o DummyObject) ObjectGroup() string {
+	return "DummyGroup"
+}
+
 type ChildObject struct {
 	hz.ObjectMeta `json:"metadata,omitempty"`
 
@@ -25,4 +29,8 @@ type ChildObject struct {
 
 func (o ChildObject) ObjectKind() string {
 	return "ChildObject"
+}
+
+func (o ChildObject) ObjectGroup() string {
+	return "ChildGroup"
 }

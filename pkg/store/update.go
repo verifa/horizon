@@ -17,11 +17,11 @@ func (s Store) Update(ctx context.Context, req UpdateRequest) error {
 
 func (s Store) update(
 	ctx context.Context,
-	key string,
+	key hz.ObjectKey,
 	data []byte,
 	revision uint64,
 ) (uint64, error) {
-	revision, err := s.kv.Update(ctx, key, data, revision)
+	revision, err := s.kv.Update(ctx, hz.KeyFromObject(key), data, revision)
 	if err != nil {
 		if isErrWrongLastSequence(err) {
 			return 0, hz.ErrIncorrectRevision

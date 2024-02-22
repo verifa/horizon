@@ -11,7 +11,7 @@ import (
 )
 
 type DeleteRequest struct {
-	Key     string
+	Key     hz.ObjectKey
 	Manager string
 }
 

@@ -12,7 +12,7 @@ import (
 )
 
 type GetRequest struct {
-	Key string
+	Key hz.ObjectKey
 }
 
 func (s Store) Get(ctx context.Context, req GetRequest) ([]byte, error) {
@@ -32,8 +32,8 @@ func (s Store) Get(ctx context.Context, req GetRequest) ([]byte, error) {
 	return data, err
 }
 
-func (s Store) get(ctx context.Context, key string) ([]byte, error) {
-	kve, err := s.kv.Get(ctx, key)
+func (s Store) get(ctx context.Context, key hz.ObjectKey) ([]byte, error) {
+	kve, err := s.kv.Get(ctx, hz.KeyFromObject(key))
 	if err != nil {
 		if errors.Is(err, jetstream.ErrKeyNotFound) {
 			return nil, hz.ErrNotFound

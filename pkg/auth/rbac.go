@@ -199,11 +199,9 @@ func checkVerbFilter(vf *VerbFilter, obj hz.ObjectKeyer) bool {
 	if !checkStringPattern(vf.Kind, obj.ObjectKind()) {
 		return false
 	}
-
-	// TODO: when group is available.
-	// if !checkStringPattern(vf.Group, obj.ObjectGroup()) {
-	// 	return false
-	// }
+	if !checkStringPattern(vf.Group, obj.ObjectGroup()) {
+		return false
+	}
 
 	return true
 }
@@ -244,9 +242,9 @@ func (r *RBAC) HandleRoleBindingEvent(event hz.Event) (hz.Result, error) {
 
 	switch event.Operation {
 	case hz.EventOperationPut:
-		r.RoleBindings[hz.KeyForObject(rb)] = rb
+		r.RoleBindings[hz.KeyFromObject(rb)] = rb
 	case hz.EventOperationDelete, hz.EventOperationPurge:
-		delete(r.RoleBindings, hz.KeyForObject(rb))
+		delete(r.RoleBindings, hz.KeyFromObject(rb))
 	default:
 		return hz.Result{}, fmt.Errorf(
 			"unexpected event operation: %v",
@@ -266,9 +264,9 @@ func (r *RBAC) HandleRoleEvent(event hz.Event) (hz.Result, error) {
 
 	switch event.Operation {
 	case hz.EventOperationPut:
-		r.Roles[hz.KeyForObject(role)] = role
+		r.Roles[hz.KeyFromObject(role)] = role
 	case hz.EventOperationDelete, hz.EventOperationPurge:
-		delete(r.Roles, hz.KeyForObject(role))
+		delete(r.Roles, hz.KeyFromObject(role))
 	default:
 		return hz.Result{}, fmt.Errorf(
 			"unexpected event operation: %v",
@@ -308,8 +306,9 @@ func (r *RBAC) refresh() {
 				group.Accounts[roleBinding.Account] = permissions
 			}
 
-			roleKey := hz.KeyForObject(hz.Key{
+			roleKey := hz.KeyFromObject(hz.ObjectKey{
 				Name:    roleBinding.Spec.RoleRef.Name,
+				Group:   "hz-internal",
 				Kind:    "Role",
 				Account: roleBinding.Account,
 			})
@@ -324,7 +323,7 @@ func (r *RBAC) refresh() {
 					"role",
 					roleKey,
 					"roleBinding",
-					hz.KeyForObject(roleBinding),
+					hz.KeyFromObject(roleBinding),
 				)
 				return
 			}

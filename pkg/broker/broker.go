@@ -86,18 +86,17 @@ func (b *Broker) handleAPIMessage(ctx context.Context, msg *nats.Msg) {
 		})
 		return
 	}
-	kind := tokens[hz.SubjectInternalBrokerIndexKind]
-	account := tokens[hz.SubjectInternalBrokerIndexAccount]
-	name := tokens[hz.SubjectInternalBrokerIndexName]
+	key := hz.ObjectKey{
+		Kind:    tokens[hz.SubjectInternalBrokerIndexKind],
+		Group:   tokens[hz.SubjectInternalBrokerIndexGroup],
+		Account: tokens[hz.SubjectInternalBrokerIndexAccount],
+		Name:    tokens[hz.SubjectInternalBrokerIndexName],
+	}
 
 	ok, err := b.Auth.Check(ctx, auth.CheckRequest{
 		Session: msg.Header.Get(hz.HeaderAuthorization),
 		Verb:    auth.VerbRun,
-		Object: hz.Key{
-			Name:    name,
-			Account: account,
-			Kind:    kind,
-		},
+		Object:  key,
 	})
 	if err != nil {
 		_ = hz.RespondError(msg, err)
@@ -142,16 +141,21 @@ func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
 		})
 		return
 	}
-	kind := tokens[hz.SubjectInternalBrokerIndexKind]
-	account := tokens[hz.SubjectInternalBrokerIndexAccount]
-	name := tokens[hz.SubjectInternalBrokerIndexName]
+
+	key := hz.ObjectKey{
+		Kind:    tokens[hz.SubjectInternalBrokerIndexKind],
+		Group:   tokens[hz.SubjectInternalBrokerIndexGroup],
+		Account: tokens[hz.SubjectInternalBrokerIndexAccount],
+		Name:    tokens[hz.SubjectInternalBrokerIndexName],
+	}
 	action := tokens[hz.SubjectInternalBrokerIndexAction]
 
 	advertiseSubject := fmt.Sprintf(
 		hz.SubjectActorAdvertiseFmt,
-		kind,
-		account,
-		name,
+		key.Group,
+		key.Kind,
+		key.Account,
+		key.Name,
 		action,
 	)
 	inbox := nats.NewInbox()
@@ -242,9 +246,10 @@ func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
 
 	runSubject := fmt.Sprintf(
 		hz.SubjectActorRunFmt,
-		kind,
-		account,
-		name,
+		key.Group,
+		key.Kind,
+		key.Account,
+		key.Name,
 		action,
 		id,
 	)

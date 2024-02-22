@@ -96,7 +96,7 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 	if err != nil {
 		return fmt.Errorf("get stream %q: %w", "KV_"+kv.Bucket(), err)
 	}
-	subject := "$KV." + kv.Bucket() + "." + KeyForObject(opt.forObject)
+	subject := "$KV." + kv.Bucket() + "." + KeyFromObject(opt.forObject)
 	// Get the last message for the subject because we want the message
 	// sequence.
 	// As we consume messages we can compare the message sequence with the

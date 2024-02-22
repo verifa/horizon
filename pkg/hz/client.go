@@ -48,27 +48,30 @@ var (
 )
 
 const (
-	// format: HZ.api.broker.<kind>.<account>.<name>.<action>
-	SubjectAPIBroker                  = "HZ.api.broker.*.*.*.*"
-	SubjectInternalBroker             = "HZ.internal.broker.*.*.*.*"
-	SubjectInternalBrokerIndexKind    = 3
-	SubjectInternalBrokerIndexAccount = 4
-	SubjectInternalBrokerIndexName    = 5
-	SubjectInternalBrokerIndexAction  = 6
-	SubjectInternalBrokerLength       = 7
-	SubjectBrokeRun                   = "broker.%s.%s.%s.%s"
+	// format: HZ.api.broker.<group><kind>.<account>.<name>.<action>
+	SubjectAPIBroker                  = "HZ.api.broker.*.*.*.*.*"
+	SubjectInternalBroker             = "HZ.internal.broker.*.*.*.*.*"
+	SubjectInternalBrokerIndexGroup   = 3
+	SubjectInternalBrokerIndexKind    = 4
+	SubjectInternalBrokerIndexAccount = 5
+	SubjectInternalBrokerIndexName    = 6
+	SubjectInternalBrokerIndexAction  = 7
+	SubjectInternalBrokerLength       = 8
+	SubjectBrokeRun                   = "broker.%s.%s.%s.%s.%s"
 
-	// format: HZ.internal.actor.advertise.<kind>.<account>.<name>.<action>
-	SubjectActorAdvertise    = "HZ.internal.actor.advertise.%s.*.*.%s"
-	SubjectActorAdvertiseFmt = "HZ.internal.actor.advertise.%s.%s.%s.%s"
 	// format:
-	// HZ.internal.actor.run.<kind>.<account>.<name>.<action>.<actor_uuid>
-	SubjectActorRun    = "HZ.internal.actor.run.%s.*.*.%s.%s"
-	SubjectActorRunFmt = "HZ.internal.actor.run.%s.%s.%s.%s.%s"
+	// HZ.internal.actor.advertise.<group><kind>.<account>.<name>.<action>
+	SubjectActorAdvertise    = "HZ.internal.actor.advertise.%s.%s.*.*.%s"
+	SubjectActorAdvertiseFmt = "HZ.internal.actor.advertise.%s.%s.%s.%s.%s"
+	// format:
+	// HZ.internal.actor.run.<group>.<kind>.<account>.<name>.<action>.<actor_uuid>
+	SubjectActorRun    = "HZ.internal.actor.run.%s.%s.*.*.%s.%s"
+	SubjectActorRunFmt = "HZ.internal.actor.run.%s.%s.%s.%s.%s.%s"
 )
 
 const (
-	SubjectStoreValidate = "store.validate.%s"
+	SubjectStoreSchema   = "store.schema.%s.%s"
+	SubjectStoreValidate = "store.validate.%s.%s"
 	SubjectStoreApply    = "store.apply.%s"
 	SubjectStoreCreate   = "store.create.%s"
 	SubjectStoreGet      = "store.get.%s"
@@ -87,7 +90,7 @@ func (oc ObjectClient[T]) Create(
 	if err != nil {
 		return fmt.Errorf("marshalling object: %w", err)
 	}
-	return oc.Client.Create(ctx, KeyForObject(object), data)
+	return oc.Client.Create(ctx, KeyFromObject(object), data)
 }
 
 func (oc ObjectClient[T]) Apply(
@@ -122,7 +125,7 @@ func (oc ObjectClient[T]) List(
 
 	if opt.key == "" {
 		var t T
-		key := KeyForObject(t)
+		key := KeyFromObject(t)
 		opts = append(opts, WithListKey(key))
 	}
 	data, err := oc.Client.List(ctx, opts...)
@@ -184,7 +187,12 @@ func (oc ObjectClient[T]) Validate(
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
-	return oc.Client.Validate(ctx, object.ObjectKind(), bObject)
+	return oc.Client.Validate(
+		ctx,
+		object.ObjectGroup(),
+		object.ObjectKind(),
+		bObject,
+	)
 }
 
 func (oc ObjectClient[T]) Run(
@@ -302,9 +310,14 @@ func (c Client) SubjectPrefix() string {
 
 func (c Client) Schema(
 	ctx context.Context,
+	group string,
 	kind string,
 ) (Schema, error) {
-	subject := fmt.Sprintf("CTLR.schema.%s", kind)
+	subject := c.SubjectPrefix() + fmt.Sprintf(
+		SubjectStoreSchema,
+		group,
+		kind,
+	)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	reply, err := c.Conn.RequestWithContext(ctx, subject, nil)
@@ -328,10 +341,15 @@ func (c Client) Schema(
 
 func (c Client) Validate(
 	ctx context.Context,
+	group string,
 	kind string,
 	data []byte,
 ) error {
-	subject := fmt.Sprintf(SubjectStoreValidate, kind)
+	subject := c.SubjectPrefix() + fmt.Sprintf(
+		SubjectStoreValidate,
+		group,
+		kind,
+	)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	reply, err := c.Conn.RequestWithContext(ctx, subject, data)
@@ -355,9 +373,10 @@ func (c Client) Validate(
 type ApplyOption func(*applyOptions)
 
 type applyOptions struct {
-	object Objecter
-	data   []byte
-	key    string
+	object    Objecter
+	data      []byte
+	objectKey *ObjectKey
+	key       string
 }
 
 func WithApplyObject(object Objecter) ApplyOption {
@@ -372,9 +391,9 @@ func WithApplyData(data []byte) ApplyOption {
 	}
 }
 
-func WithApplyKey(key string) ApplyOption {
+func WithApplyObjectKey(objectKey ObjectKey) ApplyOption {
 	return func(ao *applyOptions) {
-		ao.key = key
+		ao.objectKey = &objectKey
 	}
 }
 
@@ -395,7 +414,7 @@ func (c Client) Apply(
 	if ao.object == nil && ao.data == nil {
 		return ErrApplyObjectOrDataRequired
 	}
-	if ao.object == nil && ao.key == "" {
+	if ao.object == nil && ao.objectKey == nil {
 		return ErrApplyObjectOrKeyRequired
 	}
 	if ao.object != nil {
@@ -404,13 +423,17 @@ func (c Client) Apply(
 		if err != nil {
 			return fmt.Errorf("marshalling object: %w", err)
 		}
-		if ao.key == "" {
-			ao.key = KeyForObject(ao.object)
-		}
+		ao.key = KeyFromObject(ao.object)
+	}
+	if ao.objectKey != nil {
+		ao.key = KeyFromObject(ao.objectKey)
 	}
 
 	msg := nats.NewMsg(
-		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreApply, ao.key),
+		c.SubjectPrefix() + fmt.Sprintf(
+			SubjectStoreApply,
+			ao.key,
+		),
 	)
 	msg.Header.Set(HeaderFieldManager, c.Manager)
 	msg.Header.Set(HeaderAuthorization, c.Session)
@@ -420,7 +443,11 @@ func (c Client) Apply(
 	reply, err := c.Conn.RequestMsgWithContext(ctx, msg)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
-			return ErrStoreNotResponding
+			return fmt.Errorf(
+				"subject %q: %w",
+				msg.Subject,
+				ErrStoreNotResponding,
+			)
 		}
 		return fmt.Errorf("applying object: %w", err)
 	}
@@ -516,7 +543,7 @@ func WithListKey(key string) ListOption {
 
 func WithListKeyFromObject(obj ObjectKeyer) ListOption {
 	return func(lo *listOption) {
-		lo.key = KeyForObject(obj)
+		lo.key = KeyFromObject(obj)
 	}
 }
 
@@ -580,6 +607,12 @@ func WithRunLabelSelector(ls LabelSelector) RunOption {
 	}
 }
 
+func WithRunGroup(group string) RunOption {
+	return func(ro *runOption) {
+		ro.group = group
+	}
+}
+
 func WithRunKind(kind string) RunOption {
 	return func(ro *runOption) {
 		ro.kind = kind
@@ -600,6 +633,7 @@ func WithRunName(name string) RunOption {
 
 func WithRunObjecter(object ObjectKeyer) RunOption {
 	return func(ro *runOption) {
+		ro.group = object.ObjectGroup()
 		ro.kind = object.ObjectKind()
 		ro.account = object.ObjectAccount()
 		ro.name = object.ObjectName()
@@ -625,6 +659,7 @@ var runOptionDefault = runOption{
 type runOption struct {
 	timeout       time.Duration
 	labelSelector LabelSelector
+	group         string
 	kind          string
 	account       string
 	name          string
@@ -645,6 +680,7 @@ func (c *Client) Run(
 	}
 	subject := c.SubjectPrefix() + fmt.Sprintf(
 		SubjectBrokeRun,
+		ro.group,
 		ro.kind,
 		ro.account,
 		ro.name,
@@ -696,35 +732,6 @@ func (c *Client) Run(
 	}
 
 	return reply.Data, nil
-}
-
-func KeyForObject(obj ObjectKeyer) string {
-	account := "*"
-	if obj.ObjectAccount() != "" {
-		account = obj.ObjectAccount()
-	}
-	name := "*"
-	if obj.ObjectName() != "" {
-		name = obj.ObjectName()
-	}
-	return KeyForObjectParams(
-		obj.ObjectKind(),
-		account,
-		name,
-	)
-}
-
-func KeyForObjectParams(
-	kind string,
-	account string,
-	name string,
-) string {
-	return fmt.Sprintf(
-		"%s.%s.%s",
-		kind,
-		account,
-		name,
-	)
 }
 
 // isErrWrongLastSequence returns true if the error is caused by a write

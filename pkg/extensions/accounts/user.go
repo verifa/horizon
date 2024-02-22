@@ -22,6 +22,10 @@ func (u User) ObjectKind() string {
 	return "User"
 }
 
+func (u User) ObjectGroup() string {
+	return "hz-internal"
+}
+
 type UserSpec struct {
 	Claims *UserClaims `json:"claims,omitempty" cue:""`
 }
@@ -77,7 +81,7 @@ func (a *UserCreateAction) Do(ctx context.Context, user User) (User, error) {
 
 func (a *UserCreateAction) userCreate(ctx context.Context, user *User) error {
 	accClient := hz.ObjectClient[Account]{Client: a.Client}
-	accKey := hz.KeyForObject(
+	accKey := hz.KeyFromObject(
 		Account{
 			ObjectMeta: hz.ObjectMeta{
 				Name:    user.Account,

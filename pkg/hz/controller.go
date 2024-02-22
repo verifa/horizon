@@ -173,7 +173,11 @@ func (c *Controller) startSchema(
 	if err != nil {
 		return fmt.Errorf("marshalling schema: %w", err)
 	}
-	subject := fmt.Sprintf("CTLR.schema.%s", obj.ObjectKind())
+	subject := fmt.Sprintf(
+		"CTLR.schema.%s.%s",
+		obj.ObjectGroup(),
+		obj.ObjectKind(),
+	)
 	sub, err := c.Conn.QueueSubscribe(subject, "schema", func(msg *nats.Msg) {
 		_ = msg.Respond(bSchema)
 	})
@@ -189,7 +193,11 @@ func (c *Controller) startValidators(
 	opt controllerOption,
 ) error {
 	obj := opt.forObject
-	subject := fmt.Sprintf("CTLR.validate.%s", obj.ObjectKind())
+	subject := fmt.Sprintf(
+		"CTLR.validate.%s.%s",
+		obj.ObjectGroup(),
+		obj.ObjectKind(),
+	)
 	sub, err := c.Conn.QueueSubscribe(
 		subject,
 		"validator",
@@ -206,8 +214,8 @@ func (c *Controller) startValidators(
 					// Break once the first validator finishes.
 					// Reason: custom validators can depend on something like
 					// the default CUE validator and don't need to re-validate
-					// all the
-					// basic values before doing something more advanced.
+					// all the basic values before doing something
+					// more advanced.
 					break
 				}
 			}
@@ -221,6 +229,7 @@ func (c *Controller) startValidators(
 	if err != nil {
 		return fmt.Errorf("subscribing validator: %w", err)
 	}
+	slog.Info("controller validator subscribed", "subject", subject)
 	c.subscriptions = append(c.subscriptions, sub)
 	return nil
 }
@@ -253,7 +262,7 @@ func (c *Controller) startReconciler(
 	if err != nil {
 		return fmt.Errorf("stream: %w", err)
 	}
-	subject := "$KV." + kv.Bucket() + "." + KeyForObject(forObj)
+	subject := "$KV." + kv.Bucket() + "." + KeyFromObject(forObj)
 	con, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 		Name:           "rc_" + forObj.ObjectKind(),
 		Durable:        "rc_" + forObj.ObjectKind(),
@@ -304,7 +313,7 @@ func (c *Controller) startReconciler(
 	c.consumeContexts = append(c.consumeContexts, cc)
 
 	for _, obj := range opt.reconOwns {
-		subject := "$KV." + kv.Bucket() + "." + KeyForObject(obj)
+		subject := "$KV." + kv.Bucket() + "." + KeyFromObject(obj)
 		con, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 			Name:           "rc_" + forObj.ObjectKind() + "_o_" + obj.ObjectKind(),
 			Description:    "Reconciler for " + forObj.ObjectKind() + " owns " + obj.ObjectKind(),
@@ -348,7 +357,8 @@ func (c *Controller) startReconciler(
 				return
 			}
 			// Key for the owner (parent) object.
-			key := KeyForObjectParams(
+			key := KeyFromObjectParams(
+				ownerRef.Group,
 				ownerRef.Kind,
 				ownerRef.Account,
 				ownerRef.Name,

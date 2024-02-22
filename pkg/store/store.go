@@ -18,15 +18,16 @@ import (
 )
 
 const (
-	// Format: HZ.<internal/api>.store.<command>.<kind>.<account>.<name>
+	// Format: HZ.<internal/api>.store.<command>.<group>.<kind>.<account>.<name>
 
-	subjectInternalStore = "HZ.internal.store.*.*.*.*"
-	subjectAPIStore      = "HZ.api.store.*.*.*.*"
+	subjectInternalStore = "HZ.internal.store.*.*.*.*.*"
+	subjectAPIStore      = "HZ.api.store.*.*.*.*.*"
 	subjectIndexCommand  = 3
-	subjectIndexKind     = 4
-	subjectIndexAccount  = 5
-	subjectIndexName     = 6
-	subjectLength        = 7
+	subjectIndexGroup    = 4
+	subjectIndexKind     = 5
+	subjectIndexAccount  = 6
+	subjectIndexName     = 7
+	subjectLength        = 8
 )
 
 type StoreCommand string
@@ -231,17 +232,17 @@ func (s Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
 		return
 	}
 	cmd := StoreCommand(parts[subjectIndexCommand])
-	kind := parts[subjectIndexKind]
-	account := parts[subjectIndexAccount]
-	name := parts[subjectIndexName]
+
+	key := hz.ObjectKey{
+		Name:    parts[subjectIndexName],
+		Account: parts[subjectIndexAccount],
+		Kind:    parts[subjectIndexKind],
+		Group:   parts[subjectIndexGroup],
+	}
 
 	req := auth.CheckRequest{
 		Session: msg.Header.Get(hz.HeaderAuthorization),
-		Object: hz.Key{
-			Name:    name,
-			Kind:    kind,
-			Account: account,
-		},
+		Object:  key,
 	}
 	switch cmd {
 	case StoreCommandList:
@@ -266,7 +267,7 @@ func (s Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
 		req.Verb = auth.VerbCreate
 	case StoreCommandApply:
 		// This requires checking if it's a create or edit operation.
-		_, err := s.get(ctx, hz.KeyForObjectParams(kind, account, name))
+		_, err := s.get(ctx, key)
 		if errors.Is(err, hz.ErrNotFound) {
 			req.Verb = auth.VerbCreate
 		} else {
@@ -311,9 +312,13 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 		return
 	}
 	cmd := StoreCommand(parts[subjectIndexCommand])
-	kind := parts[subjectIndexKind]
-	account := parts[subjectIndexAccount]
-	name := parts[subjectIndexName]
+
+	key := hz.ObjectKey{
+		Name:    parts[subjectIndexName],
+		Account: parts[subjectIndexAccount],
+		Kind:    parts[subjectIndexKind],
+		Group:   parts[subjectIndexGroup],
+	}
 
 	data, err := removeReadOnlyFields(msg.Data)
 	if err != nil {
@@ -327,8 +332,7 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 	switch cmd {
 	case StoreCommandCreate:
 		req := CreateRequest{
-			Key:  hz.KeyForObjectParams(kind, account, name),
-			Kind: kind,
+			Key:  key,
 			Data: data,
 		}
 		if err := s.Create(ctx, req); err != nil {
@@ -350,8 +354,7 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 		req := ApplyRequest{
 			Data:    data,
 			Manager: manager,
-			Kind:    kind,
-			Key:     hz.KeyForObjectParams(kind, account, name),
+			Key:     key,
 		}
 
 		if err := s.Apply(ctx, req); err != nil {
@@ -360,7 +363,7 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 		}
 	case StoreCommandGet:
 		req := GetRequest{
-			Key: hz.KeyForObjectParams(kind, account, name),
+			Key: key,
 		}
 		resp, err := s.Get(ctx, req)
 		if err != nil {
@@ -374,7 +377,7 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 		// Therefore, list all the actual objects that match the supplied key,
 		// and then filter them with rbac.
 		req := ListRequest{
-			Key: hz.KeyForObjectParams(kind, account, name),
+			Key: key,
 		}
 		resp, err := s.List(ctx, req)
 		if err != nil {

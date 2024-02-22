@@ -21,6 +21,10 @@ func (s cueObj) ObjectKind() string {
 	return "CueObj"
 }
 
+func (s cueObj) ObjectGroup() string {
+	return "CueGroup"
+}
+
 type cueSpec struct {
 	CueEmbed
 

@@ -23,6 +23,10 @@ func (e Portal) ObjectKind() string {
 	return "Portal"
 }
 
+func (e Portal) ObjectGroup() string {
+	return "hz-internal"
+}
+
 type PortalSpec struct {
 	DisplayName string `json:"displayName,omitempty"`
 	Icon        string `json:"icon,omitempty"`

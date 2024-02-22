@@ -2,6 +2,7 @@ package hz
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -9,58 +10,17 @@ type Objecter interface {
 	ObjectKeyer
 	ObjectRevision() *uint64
 	ObjectDeletionTimestamp() *Time
-	// ObjectDeleteAt(Time)
 	ObjectOwnerReferences() []OwnerReference
 	ObjectOwnerReference(Objecter) (OwnerReference, bool)
+	// ObjectAPIVersion() string
 }
 
 // ObjectKeyer is an interface that can produce a unique key for an object.
 type ObjectKeyer interface {
 	ObjectName() string
 	ObjectAccount() string
-	Kinder
-}
-
-type Kinder interface {
 	ObjectKind() string
-	// ObjectAPIVersion() string
-	// ObjectGroup() string
-}
-
-var _ ObjectKeyer = (*ObjectKey[EmptyObjectWithMeta])(nil)
-
-type ObjectKey[T Objecter] struct {
-	Name    string `json:"name,omitempty"`
-	Account string `json:"account,omitempty"`
-}
-
-func (o ObjectKey[T]) ObjectAccount() string {
-	if o.Account == "" {
-		return "*"
-	}
-	return o.Account
-}
-
-func (o ObjectKey[T]) ObjectKind() string {
-	var t T
-	return t.ObjectKind()
-}
-
-func (o ObjectKey[T]) ObjectName() string {
-	if o.Name == "" {
-		return "*"
-	}
-	return o.Name
-}
-
-func (o ObjectKey[T]) String() string {
-	return o.ObjectKind() + "/" + o.Account + "/" + o.Name
-}
-
-var KeyAllObjects = Key{
-	Name:    "*",
-	Account: "*",
-	Kind:    "*",
+	ObjectGroup() string
 }
 
 // func KeyFromString(s string) (Key, error) {
@@ -75,37 +35,88 @@ var KeyAllObjects = Key{
 // 	}, nil
 // }
 
-var _ ObjectKeyer = (*Key)(nil)
+func KeyFromObject(obj ObjectKeyer) string {
+	account := "*"
+	if obj.ObjectAccount() != "" {
+		account = obj.ObjectAccount()
+	}
+	name := "*"
+	if obj.ObjectName() != "" {
+		name = obj.ObjectName()
+	}
+	return fmt.Sprintf(
+		"%s.%s.%s.%s",
+		obj.ObjectGroup(),
+		obj.ObjectKind(),
+		account,
+		name,
+	)
+}
 
-type Key struct {
+// TODO: remove
+func KeyFromObjectParams(
+	group string,
+	kind string,
+	account string,
+	name string,
+) string {
+	return fmt.Sprintf(
+		"%s.%s.%s.%s",
+		group,
+		kind,
+		account,
+		name,
+	)
+}
+
+func ObjectKeyFromObject(object Objecter) ObjectKey {
+	return ObjectKey{
+		Name:    object.ObjectName(),
+		Account: object.ObjectAccount(),
+		Kind:    object.ObjectKind(),
+		Group:   object.ObjectGroup(),
+	}
+}
+
+var _ ObjectKeyer = (*ObjectKey)(nil)
+
+type ObjectKey struct {
 	Name    string
 	Account string
 	Kind    string
+	Group   string
 }
 
-func (o Key) ObjectAccount() string {
+func (o ObjectKey) ObjectAccount() string {
 	if o.Account == "" {
 		return "*"
 	}
 	return o.Account
 }
 
-func (o Key) ObjectKind() string {
-	if o.Kind == "" {
-		return "*"
-	}
-	return o.Kind
-}
-
-func (o Key) ObjectName() string {
+func (o ObjectKey) ObjectName() string {
 	if o.Name == "" {
 		return "*"
 	}
 	return o.Name
 }
 
-func (o Key) String() string {
-	return o.Kind + "/" + o.Account + "/" + o.Name
+func (o ObjectKey) ObjectKind() string {
+	if o.Kind == "" {
+		return "*"
+	}
+	return o.Kind
+}
+
+func (o ObjectKey) ObjectGroup() string {
+	if o.Group == "" {
+		return "*"
+	}
+	return o.Group
+}
+
+func (o ObjectKey) String() string {
+	return o.ObjectGroup() + "." + o.ObjectKind() + "." + o.ObjectAccount() + "." + o.ObjectName()
 }
 
 type EmptyObjectWithMeta struct {
@@ -117,6 +128,10 @@ type EmptyObjectWithMeta struct {
 
 func (o EmptyObjectWithMeta) ObjectKind() string {
 	return "EmptyObjectWithMeta"
+}
+
+func (o EmptyObjectWithMeta) ObjectGroup() string {
+	return "hz-internal"
 }
 
 type ObjectMeta struct {
@@ -174,6 +189,7 @@ func (o ObjectMeta) ObjectOwnerReference(
 
 func OwnerReferenceFromObject(object Objecter) *OwnerReference {
 	return &OwnerReference{
+		Group:   object.ObjectGroup(),
 		Kind:    object.ObjectKind(),
 		Name:    object.ObjectName(),
 		Account: object.ObjectAccount(),
@@ -181,9 +197,14 @@ func OwnerReferenceFromObject(object Objecter) *OwnerReference {
 }
 
 type OwnerReference struct {
+	Group   string
 	Kind    string
 	Name    string
 	Account string
+}
+
+func (o OwnerReference) ObjectGroup() string {
+	return o.Group
 }
 
 func (o OwnerReference) ObjectKind() string {
@@ -216,12 +237,17 @@ var _ Objecter = (*GenericObject)(nil)
 type GenericObject struct {
 	ObjectMeta `json:"metadata,omitempty"`
 
-	Kind string          `json:"kind,omitempty"`
-	Spec json.RawMessage `json:"spec,omitempty"`
+	Kind  string          `json:"kind,omitempty"`
+	Group string          `json:"group,omitempty"`
+	Spec  json.RawMessage `json:"spec,omitempty"`
 }
 
 func (r GenericObject) ObjectKind() string {
 	return r.Kind
+}
+
+func (r GenericObject) ObjectGroup() string {
+	return r.Group
 }
 
 var _ Objecter = (*MetaOnlyObject)(nil)
@@ -231,8 +257,13 @@ var _ Objecter = (*MetaOnlyObject)(nil)
 type MetaOnlyObject struct {
 	ObjectMeta `json:"metadata,omitempty"`
 	Kind       string `json:"kind,omitempty"`
+	Group      string `json:"group,omitempty"`
 }
 
 func (r MetaOnlyObject) ObjectKind() string {
 	return r.Kind
+}
+
+func (r MetaOnlyObject) ObjectGroup() string {
+	return r.Group
 }

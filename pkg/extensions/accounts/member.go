@@ -14,6 +14,10 @@ func (Member) ObjectKind() string {
 	return "Member"
 }
 
+func (Member) ObjectGroup() string {
+	return "hz-internal"
+}
+
 type MemberSpec struct {
 	GroupRef *GroupRef `json:"groupRef,omitempty" cue:""`
 	UserRef  *UserRef  `json:"userRef,omitempty" cue:""`

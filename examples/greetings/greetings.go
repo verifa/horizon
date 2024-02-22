@@ -13,6 +13,10 @@ func (s Greeting) ObjectKind() string {
 	return "Greeting"
 }
 
+func (s Greeting) ObjectGroup() string {
+	return "hz-examples"
+}
+
 type GreetingSpec struct {
 	// Name of the person to greet.
 	Name *string `json:"name,omitempty" cue:""`

@@ -25,6 +25,10 @@ func (a Account) ObjectKind() string {
 	return "Account"
 }
 
+func (a Account) ObjectGroup() string {
+	return "hz-internal"
+}
+
 type AccountSpec struct{}
 
 type AccountStatus struct {

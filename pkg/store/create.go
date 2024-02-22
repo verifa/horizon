@@ -11,14 +11,13 @@ import (
 )
 
 type CreateRequest struct {
-	Key  string
-	Kind string
+	Key  hz.ObjectKey
 	Data []byte
 }
 
 func (s Store) Create(ctx context.Context, req CreateRequest) error {
 	// Check if the object already exists and return a meaningful error.
-	if _, err := s.kv.Get(ctx, req.Key); err != nil {
+	if _, err := s.kv.Get(ctx, hz.KeyFromObject(req.Key)); err != nil {
 		if !errors.Is(err, jetstream.ErrKeyNotFound) {
 			return &hz.Error{
 				Status: http.StatusInternalServerError,
@@ -28,7 +27,7 @@ func (s Store) Create(ctx context.Context, req CreateRequest) error {
 				),
 			}
 		}
-		if err := s.validate(ctx, req.Kind, req.Data); err != nil {
+		if err := s.validate(ctx, req.Key, req.Data); err != nil {
 			return &hz.Error{
 				Status: http.StatusBadRequest,
 				Message: fmt.Sprintf(
@@ -49,8 +48,12 @@ func (s Store) Create(ctx context.Context, req CreateRequest) error {
 	}
 }
 
-func (s Store) create(ctx context.Context, key string, data []byte) error {
-	_, err := s.kv.Create(ctx, key, data)
+func (s Store) create(
+	ctx context.Context,
+	key hz.ObjectKey,
+	data []byte,
+) error {
+	_, err := s.kv.Create(ctx, hz.KeyFromObject(key), data)
 	if err != nil {
 		return fmt.Errorf("creating object: %w", err)
 	}

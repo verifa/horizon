@@ -16,12 +16,11 @@ type ApplyRequest struct {
 	Data []byte
 	// Manager is the name of the field manager for this request.
 	Manager string
-	Kind    string
-	Key     string
+	Key     hz.ObjectKey
 }
 
 func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
-	if err := s.validate(ctx, req.Kind, req.Data); err != nil {
+	if err := s.validate(ctx, req.Key, req.Data); err != nil {
 		return &hz.Error{
 			Status: http.StatusBadRequest,
 			Message: fmt.Sprintf(
@@ -82,7 +81,8 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 			}
 		}
 		// Set the kind as this might not exist in the JSON payload.
-		generic.Kind = req.Kind
+		generic.Kind = req.Key.Kind
+		generic.Group = req.Key.Group
 		generic.ManagedFields = b
 		bGeneric, err := json.Marshal(generic)
 		if err != nil {

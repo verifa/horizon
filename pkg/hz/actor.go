@@ -109,10 +109,11 @@ func (a *Actor[T]) startActioner(
 	opt actorOption[T],
 	id uuid.UUID,
 ) error {
+	group := opt.forObject.ObjectGroup()
 	kind := opt.forObject.ObjectKind()
 	action := actioner.Action()
-	advertiseSubject := fmt.Sprintf(SubjectActorAdvertise, kind, action)
-	runSubject := fmt.Sprintf(SubjectActorRun, kind, action, id)
+	advertiseSubject := fmt.Sprintf(SubjectActorAdvertise, group, kind, action)
+	runSubject := fmt.Sprintf(SubjectActorRun, group, kind, action, id)
 
 	adSub, err := a.nc.Subscribe(
 		advertiseSubject,
