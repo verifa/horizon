@@ -48,14 +48,13 @@ var (
 const (
 	// format: HZ.api.broker.<kind>.<account>.<name>.<action>
 	SubjectAPIBroker                  = "HZ.api.broker.*.*.*.*"
-	SubjectAPIBrokerFmt               = "HZ.api.broker.%s.%s.%s.%s"
 	SubjectInternalBroker             = "HZ.internal.broker.*.*.*.*"
-	SubjectInternalBrokerFmt          = "HZ.internal.broker.%s.%s.%s.%s"
 	SubjectInternalBrokerIndexKind    = 3
 	SubjectInternalBrokerIndexAccount = 4
 	SubjectInternalBrokerIndexName    = 5
 	SubjectInternalBrokerIndexAction  = 6
 	SubjectInternalBrokerLength       = 7
+	SubjectBrokeRun                   = "broker.%s.%s.%s.%s"
 
 	// format: HZ.internal.actor.advertise.<kind>.<account>.<name>.<action>
 	SubjectActorAdvertise    = "HZ.internal.actor.advertise.%s.*.*.%s"
@@ -186,29 +185,6 @@ func (oc ObjectClient[T]) Validate(
 	return oc.Client.Validate(ctx, object.ObjectKind(), bObject)
 }
 
-type RunOption func(*runOption)
-
-func WithRunTimeout(timeout time.Duration) RunOption {
-	return func(ro *runOption) {
-		ro.timeout = timeout
-	}
-}
-
-func WithRunLabelSelector(ls LabelSelector) RunOption {
-	return func(ro *runOption) {
-		ro.labelSelector = ls
-	}
-}
-
-var runOptionDefault = runOption{
-	timeout: time.Second * 5,
-}
-
-type runOption struct {
-	timeout       time.Duration
-	labelSelector LabelSelector
-}
-
 func (oc ObjectClient[T]) Run(
 	ctx context.Context,
 	actioner Actioner,
@@ -219,76 +195,22 @@ func (oc ObjectClient[T]) Run(
 	for _, opt := range opts {
 		opt(&ro)
 	}
-	var t T
-	kind := t.ObjectKind()
-	account := object.ObjectAccount()
-	name := object.ObjectName()
-	action := actioner.Action()
 
-	subject := fmt.Sprintf(
-		SubjectAPIBrokerFmt,
-		kind,
-		account,
-		name,
-		action,
-	)
 	var newObj T
-	b, err := json.Marshal(object)
+	data, err := json.Marshal(object)
 	if err != nil {
-		return newObj, fmt.Errorf("marshalling request object: %w", err)
+		return newObj, fmt.Errorf("marshalling object: %w", err)
 	}
-	runMsg := RunMsg{
-		Timeout:       ro.timeout,
-		LabelSelector: ro.labelSelector,
-		Data:          b,
-	}
-	bRunMsg, err := json.Marshal(runMsg)
+
+	runOpts := append([]RunOption{
+		WithRunObjecter(object),
+		WithRunActioner(actioner),
+	}, opts...)
+	reply, err := oc.Client.Run(ctx, data, runOpts...)
 	if err != nil {
-		return newObj, fmt.Errorf("marshalling run message: %w", err)
+		return newObj, fmt.Errorf("running: %w", err)
 	}
-	slog.Info("run", "subject", subject)
-	ctx, cancel := context.WithTimeout(ctx, ro.timeout)
-	defer cancel()
-	reply, err := oc.Client.Conn.RequestWithContext(ctx, subject, bRunMsg)
-	if err != nil {
-		switch {
-		case errors.Is(err, nats.ErrNoResponders):
-			return newObj, ErrRunNoResponders
-		case errors.Is(err, nats.ErrTimeout):
-			return newObj, ErrRunTimeout
-		default:
-			return newObj, fmt.Errorf("request: %w", err)
-		}
-	}
-	status, err := strconv.Atoi(reply.Header.Get(HeaderStatus))
-	if err != nil {
-		return newObj, &Error{
-			Status:  http.StatusInternalServerError,
-			Message: fmt.Sprintf("invalid status header: %s", err),
-		}
-	}
-	if status != http.StatusOK {
-		switch status {
-		case http.StatusServiceUnavailable:
-			return newObj, ErrBrokerNoActorResponders
-		case http.StatusRequestTimeout:
-			return newObj, ErrBrokerActorTimeout
-		default:
-			return newObj, &Error{
-				Status:  status,
-				Message: string(reply.Data),
-			}
-		}
-	}
-	fmt.Println("")
-	fmt.Println("")
-	fmt.Println("reply.Data", string(reply.Data))
-	fmt.Println("")
-	fmt.Println("")
-	fmt.Println("reply.Status", status)
-	fmt.Println("")
-	fmt.Println("")
-	if err := json.Unmarshal(reply.Data, &newObj); err != nil {
+	if err := json.Unmarshal(reply, &newObj); err != nil {
 		return newObj, fmt.Errorf("unmarshalling reply: %w", err)
 	}
 	return newObj, nil
@@ -478,6 +400,7 @@ func (c *Client) Create(
 	data []byte,
 ) error {
 	msg := nats.NewMsg(c.SubjectPrefix() + fmt.Sprintf(SubjectStoreCreate, key))
+	msg.Data = data
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
@@ -588,6 +511,135 @@ func (c *Client) List(
 		Status:  status,
 		Message: string(reply.Data),
 	}
+}
+
+type RunOption func(*runOption)
+
+func WithRunTimeout(timeout time.Duration) RunOption {
+	return func(ro *runOption) {
+		ro.timeout = timeout
+	}
+}
+
+func WithRunLabelSelector(ls LabelSelector) RunOption {
+	return func(ro *runOption) {
+		ro.labelSelector = ls
+	}
+}
+
+func WithRunKind(kind string) RunOption {
+	return func(ro *runOption) {
+		ro.kind = kind
+	}
+}
+
+func WithRunAccount(account string) RunOption {
+	return func(ro *runOption) {
+		ro.account = account
+	}
+}
+
+func WithRunName(name string) RunOption {
+	return func(ro *runOption) {
+		ro.name = name
+	}
+}
+
+func WithRunObjecter(object ObjectKeyer) RunOption {
+	return func(ro *runOption) {
+		ro.kind = object.ObjectKind()
+		ro.account = object.ObjectAccount()
+		ro.name = object.ObjectName()
+	}
+}
+
+func WithRunAction(action string) RunOption {
+	return func(ro *runOption) {
+		ro.action = action
+	}
+}
+
+func WithRunActioner(action Actioner) RunOption {
+	return func(ro *runOption) {
+		ro.action = action.Action()
+	}
+}
+
+var runOptionDefault = runOption{
+	timeout: time.Second * 5,
+}
+
+type runOption struct {
+	timeout       time.Duration
+	labelSelector LabelSelector
+	kind          string
+	account       string
+	name          string
+	action        string
+}
+
+func (c *Client) Run(
+	ctx context.Context,
+	data []byte,
+	opts ...RunOption,
+) ([]byte, error) {
+	ro := runOptionDefault
+	for _, opt := range opts {
+		opt(&ro)
+	}
+	subject := c.SubjectPrefix() + fmt.Sprintf(
+		SubjectBrokeRun,
+		ro.kind,
+		ro.account,
+		ro.name,
+		ro.action,
+	)
+
+	runMsg := RunMsg{
+		Timeout:       ro.timeout,
+		LabelSelector: ro.labelSelector,
+		Data:          data,
+	}
+	bRunMsg, err := json.Marshal(runMsg)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling run message: %w", err)
+	}
+	slog.Info("run", "subject", subject)
+	ctx, cancel := context.WithTimeout(ctx, ro.timeout)
+	defer cancel()
+	reply, err := c.Conn.RequestWithContext(ctx, subject, bRunMsg)
+	if err != nil {
+		switch {
+		case errors.Is(err, nats.ErrNoResponders):
+			return nil, ErrRunNoResponders
+		case errors.Is(err, nats.ErrTimeout):
+			return nil, ErrRunTimeout
+		default:
+			return nil, fmt.Errorf("request: %w", err)
+		}
+	}
+	status, err := strconv.Atoi(reply.Header.Get(HeaderStatus))
+	if err != nil {
+		return nil, &Error{
+			Status:  http.StatusInternalServerError,
+			Message: fmt.Sprintf("invalid status header: %s", err),
+		}
+	}
+	if status != http.StatusOK {
+		switch status {
+		case http.StatusServiceUnavailable:
+			return nil, ErrBrokerNoActorResponders
+		case http.StatusRequestTimeout:
+			return nil, ErrBrokerActorTimeout
+		default:
+			return nil, &Error{
+				Status:  status,
+				Message: string(reply.Data),
+			}
+		}
+	}
+
+	return reply.Data, nil
 }
 
 func KeyForObject(obj ObjectKeyer) string {

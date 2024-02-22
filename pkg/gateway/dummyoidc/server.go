@@ -36,6 +36,13 @@ type Server struct {
 }
 
 func (s *Server) Start(ctx context.Context, config Config) error {
+	// If port is 0, this will find an available random port.
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Port))
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+	// If we used a random port, assign it back to config.
+	config.Port = l.Addr().(*net.TCPAddr).Port
 	issuer := fmt.Sprintf("http://localhost:%d/", config.Port)
 	s.Issuer = issuer
 	// The OpenIDProvider interface needs a Storage interface handling various
@@ -63,14 +70,11 @@ func (s *Server) Start(ctx context.Context, config Config) error {
 		Handler: router,
 	}
 	s.http = server
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Port))
-	if err != nil {
-		return fmt.Errorf("listen: %w", err)
-	}
+
 	logger.Info(
-		"server listening, press ctrl+c to stop",
+		"dummyoidc server listening, press ctrl+c to stop",
 		"addr",
-		fmt.Sprintf("http://localhost:%d/", config.Port),
+		issuer,
 	)
 	go func() {
 		if err := server.Serve(l); err != nil {

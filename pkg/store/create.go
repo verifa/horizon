@@ -12,6 +12,7 @@ import (
 
 type CreateRequest struct {
 	Key  string
+	Kind string
 	Data []byte
 }
 
@@ -23,6 +24,16 @@ func (s Store) Create(ctx context.Context, req CreateRequest) error {
 				Status: http.StatusInternalServerError,
 				Message: fmt.Sprintf(
 					"checking existing object: %s",
+					err.Error(),
+				),
+			}
+		}
+		if err := s.validate(ctx, req.Kind, req.Data); err != nil {
+			return &hz.Error{
+				Status: http.StatusBadRequest,
+				Message: fmt.Sprintf(
+					"validating object %q: %s",
+					req.Key,
 					err.Error(),
 				),
 			}

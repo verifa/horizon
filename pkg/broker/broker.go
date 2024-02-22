@@ -263,7 +263,8 @@ func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
 				Message: "actor id: " + id.String(),
 			})
 			return
-		case errors.Is(err, nats.ErrTimeout):
+		case errors.Is(err, context.DeadlineExceeded),
+			errors.Is(err, nats.ErrTimeout):
 			_ = hz.RespondError(msg, &hz.Error{
 				Status:  http.StatusRequestTimeout,
 				Message: "actor id: " + id.String(),

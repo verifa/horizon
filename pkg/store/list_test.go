@@ -30,7 +30,7 @@ func TestList(t *testing.T) {
 		ctx,
 		ti.Conn,
 		hz.WithControllerFor(DummyApplyObject{}),
-		hz.WithControllerValidatorForceNone(),
+		hz.WithControllerValidatorCUE(),
 	)
 	tu.AssertNoError(t, err)
 	t.Cleanup(func() {

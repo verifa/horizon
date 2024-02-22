@@ -162,21 +162,21 @@ func (s *Server) start(
 		if opt.dummyAuthDefault {
 			opt.dummyAuthUsers = map[string]*storage.User{
 				"admin": {
-					ID:                "admin",
-					Username:          "admin",
-					Password:          "admin",
-					Groups:            []string{"admin"},
-					FirstName:         "Admin",
-					LastName:          "Admin",
-					Email:             "admin@localhost",
-					EmailVerified:     true,
+					ID:            "admin",
+					Username:      "admin",
+					Password:      "admin",
+					Groups:        []string{"admin"},
+					FirstName:     "Admin",
+					LastName:      "Admin",
+					Email:         "admin@localhost",
+					EmailVerified: true,
+					// How posh of you, admin!
 					PreferredLanguage: language.BritishEnglish,
 				},
 			}
 		}
 		// Configure the dummyoidc server.
 		dummyServer, err := dummyoidc.Start(ctx, dummyoidc.Config{
-			Port:  9998,
 			Users: opt.dummyAuthUsers,
 		})
 		if err != nil {
@@ -184,7 +184,7 @@ func (s *Server) start(
 		}
 		s.dummyOIDC = dummyServer
 		opt.oidc = &OIDCConfig{
-			Issuer:       "http://localhost:9998/",
+			Issuer:       dummyServer.Issuer,
 			ClientID:     "web",
 			ClientSecret: "secret",
 			RedirectURL:  "http://localhost:9999/auth/callback",

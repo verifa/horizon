@@ -328,6 +328,7 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 	case StoreCommandCreate:
 		req := CreateRequest{
 			Key:  hz.KeyForObjectParams(kind, account, name),
+			Kind: kind,
 			Data: data,
 		}
 		if err := s.Create(ctx, req); err != nil {
