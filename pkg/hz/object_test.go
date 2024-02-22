@@ -21,6 +21,10 @@ func (o DummyObject) ObjectGroup() string {
 	return "DummyGroup"
 }
 
+func (o DummyObject) ObjectAPIVersion() string {
+	return "v1"
+}
+
 type ChildObject struct {
 	hz.ObjectMeta `json:"metadata,omitempty"`
 
@@ -33,4 +37,8 @@ func (o ChildObject) ObjectKind() string {
 
 func (o ChildObject) ObjectGroup() string {
 	return "ChildGroup"
+}
+
+func (o ChildObject) ObjectAPIVersion() string {
+	return "v1"
 }

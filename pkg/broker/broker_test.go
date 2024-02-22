@@ -20,12 +20,16 @@ type DummyObject struct {
 	Status struct{} `json:"status,omitempty"`
 }
 
-func (o DummyObject) ObjectKind() string {
-	return "DummyObject"
+func (o DummyObject) ObjectAPIVersion() string {
+	return "v1"
 }
 
 func (o DummyObject) ObjectGroup() string {
 	return "DummyGroup"
+}
+
+func (o DummyObject) ObjectKind() string {
+	return "DummyObject"
 }
 
 var _ (hz.Action[DummyObject]) = (*DummyAction)(nil)
@@ -65,12 +69,16 @@ type returnIDObject struct {
 	Status returnIDStatus `json:"status"`
 }
 
-func (n returnIDObject) ObjectKind() string {
-	return "returnID"
+func (n returnIDObject) ObjectAPIVersion() string {
+	return "v1"
 }
 
 func (n returnIDObject) ObjectGroup() string {
 	return "test"
+}
+
+func (n returnIDObject) ObjectKind() string {
+	return "returnID"
 }
 
 type returnIDSpec struct{}

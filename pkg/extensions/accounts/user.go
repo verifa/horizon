@@ -18,12 +18,16 @@ type User struct {
 	Status UserStatus `json:"status"`
 }
 
-func (u User) ObjectKind() string {
-	return "User"
+func (u User) ObjectAPIVersion() string {
+	return "v1"
 }
 
 func (u User) ObjectGroup() string {
 	return "hz-internal"
+}
+
+func (u User) ObjectKind() string {
+	return "User"
 }
 
 type UserSpec struct {

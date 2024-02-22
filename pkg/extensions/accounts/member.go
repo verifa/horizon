@@ -10,12 +10,16 @@ type Member struct {
 	Spec MemberSpec `json:"spec,omitempty" cue:""`
 }
 
-func (Member) ObjectKind() string {
-	return "Member"
+func (Member) ObjectAPIVersion() string {
+	return "v1"
 }
 
 func (Member) ObjectGroup() string {
 	return "hz-internal"
+}
+
+func (Member) ObjectKind() string {
+	return "Member"
 }
 
 type MemberSpec struct {

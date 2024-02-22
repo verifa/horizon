@@ -21,12 +21,16 @@ type DummyApplyObject struct {
 	Spec          struct{} `json:"spec"`
 }
 
-func (r DummyApplyObject) ObjectKind() string {
-	return "DummyApplyObject"
+func (r DummyApplyObject) ObjectAPIVersion() string {
+	return "v1"
 }
 
 func (r DummyApplyObject) ObjectGroup() string {
 	return "DummyApplyGroup"
+}
+
+func (r DummyApplyObject) ObjectKind() string {
+	return "DummyApplyObject"
 }
 
 type testStepCommand string

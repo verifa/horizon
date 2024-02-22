@@ -18,11 +18,15 @@ type cueObj struct {
 }
 
 func (s cueObj) ObjectKind() string {
-	return "CueObj"
+	return "CueObject"
 }
 
 func (s cueObj) ObjectGroup() string {
 	return "CueGroup"
+}
+
+func (s cueObj) ObjectAPIVersion() string {
+	return "v1"
 }
 
 type cueSpec struct {
@@ -64,8 +68,9 @@ func TestCueDefinition(t *testing.T) {
 {
 	_#def
 	_#def: {
-		group: "CueGroup"
-		kind: "CueObj"
+		apiVersion: =~"^v1$"
+		group: =~"^CueGroup$"
+		kind: =~"^CueObject$"
 		metadata: {
 			name:    =~"^[a-zA-Z0-9-_]+$"
 			account: =~"^[a-zA-Z0-9-_]+$"

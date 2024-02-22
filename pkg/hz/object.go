@@ -13,7 +13,7 @@ type Objecter interface {
 	ObjectDeletionTimestamp() *Time
 	ObjectOwnerReferences() []OwnerReference
 	ObjectOwnerReference(Objecter) (OwnerReference, bool)
-	// ObjectAPIVersion() string
+	ObjectAPIVersion() string
 }
 
 // ObjectKeyer is an interface that can produce a unique key for an object.
@@ -23,18 +23,6 @@ type ObjectKeyer interface {
 	ObjectKind() string
 	ObjectGroup() string
 }
-
-// func KeyFromString(s string) (Key, error) {
-// 	parts := strings.Split(s, ".")
-// 	if len(parts) != 3 {
-// 		return Key{}, fmt.Errorf("invalid key: %q", s)
-// 	}
-// 	return Key{
-// 		Kind:    parts[0],
-// 		Account: parts[1],
-// 		Name:    parts[2],
-// 	}, nil
-// }
 
 func KeyFromObject(obj ObjectKeyer) string {
 	account := "*"
@@ -235,9 +223,10 @@ var _ Objecter = (*GenericObject)(nil)
 type GenericObject struct {
 	ObjectMeta `json:"metadata,omitempty"`
 
-	Kind  string          `json:"kind,omitempty"`
-	Group string          `json:"group,omitempty"`
-	Spec  json.RawMessage `json:"spec,omitempty"`
+	Kind       string          `json:"kind,omitempty"`
+	Group      string          `json:"group,omitempty"`
+	APIVersion string          `json:"apiVersion,omitempty"`
+	Spec       json.RawMessage `json:"spec,omitempty"`
 }
 
 func (r GenericObject) ObjectKind() string {
@@ -248,6 +237,10 @@ func (r GenericObject) ObjectGroup() string {
 	return r.Group
 }
 
+func (r GenericObject) ObjectAPIVersion() string {
+	return r.APIVersion
+}
+
 var _ Objecter = (*MetaOnlyObject)(nil)
 
 // MetaOnlyObject is an object that has no spec or status.
@@ -256,6 +249,7 @@ type MetaOnlyObject struct {
 	ObjectMeta `json:"metadata,omitempty"`
 	Kind       string `json:"kind,omitempty"`
 	Group      string `json:"group,omitempty"`
+	APIVersion string `json:"apiVersion,omitempty"`
 }
 
 func (r MetaOnlyObject) ObjectKind() string {
@@ -264,4 +258,8 @@ func (r MetaOnlyObject) ObjectKind() string {
 
 func (r MetaOnlyObject) ObjectGroup() string {
 	return r.Group
+}
+
+func (r MetaOnlyObject) ObjectAPIVersion() string {
+	return r.ObjectAPIVersion()
 }

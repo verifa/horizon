@@ -10,12 +10,16 @@ type Role struct {
 	Spec RoleSpec `json:"spec,omitempty" cue:""`
 }
 
-func (Role) ObjectKind() string {
-	return "Role"
+func (Role) ObjectAPIVersion() string {
+	return "v1"
 }
 
 func (Role) ObjectGroup() string {
 	return "hz-internal"
+}
+
+func (Role) ObjectKind() string {
+	return "Role"
 }
 
 type RoleSpec struct {

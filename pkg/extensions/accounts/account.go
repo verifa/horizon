@@ -20,12 +20,16 @@ type Account struct {
 	Status AccountStatus `json:"status"`
 }
 
-func (a Account) ObjectKind() string {
-	return "Account"
+func (a Account) ObjectAPIVersion() string {
+	return "v1"
 }
 
 func (a Account) ObjectGroup() string {
 	return "hz-internal"
+}
+
+func (a Account) ObjectKind() string {
+	return "Account"
 }
 
 type AccountSpec struct{}

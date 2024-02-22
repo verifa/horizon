@@ -27,17 +27,33 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 
 	kindPath := cue.ParsePath("kind")
 	groupPath := cue.ParsePath("group")
+	apiVersionPath := cue.ParsePath("apiVersion")
 	metaPath := cue.ParsePath("metadata")
 	specPath := cue.ParsePath("spec")
 	statusPath := cue.ParsePath("status").Optional()
 
-	kindExpr := cCtx.CompileString(fmt.Sprintf("%q", obj.ObjectKind()))
+	// Use regular expressions for exact match string for kind, group and
+	// apiVersion.
+	// This is a limitatin of CUE, see this issue:
+	// 	https://github.com/cue-lang/cue/issues/740
+	kindExpr := cCtx.CompileString(fmt.Sprintf("=~\"^%s$\"", obj.ObjectKind()))
 	if err := kindExpr.Err(); err != nil {
 		return cue.Value{}, fmt.Errorf("compiling kind expression: %w", err)
 	}
-	groupExpr := cCtx.CompileString(fmt.Sprintf("%q", obj.ObjectGroup()))
+	groupExpr := cCtx.CompileString(
+		fmt.Sprintf("=~\"^%s$\"", obj.ObjectGroup()),
+	)
 	if err := groupExpr.Err(); err != nil {
 		return cue.Value{}, fmt.Errorf("compiling group expression: %w", err)
+	}
+	apiVersionExpr := cCtx.CompileString(
+		fmt.Sprintf("=~\"^%s$\"", obj.ObjectAPIVersion()),
+	)
+	if err := apiVersionExpr.Err(); err != nil {
+		return cue.Value{}, fmt.Errorf(
+			"compiling apiVersion expression: %w",
+			err,
+		)
 	}
 
 	metaVal, err := cueEncodeStruct(cCtx, metaType)
@@ -56,6 +72,7 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 
 	defPath := cue.MakePath(cue.Def(obj.ObjectKind()))
 	objDef := cCtx.CompileString("{}").
+		FillPath(apiVersionPath, apiVersionExpr).
 		FillPath(groupPath, groupExpr).
 		FillPath(kindPath, kindExpr).
 		FillPath(metaPath, metaVal).

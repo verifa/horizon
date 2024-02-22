@@ -10,12 +10,16 @@ type RoleBinding struct {
 	Spec RoleBindingSpec `json:"spec,omitempty" cue:""`
 }
 
-func (RoleBinding) ObjectKind() string {
-	return "RoleBinding"
+func (RoleBinding) ObjectAPIVersion() string {
+	return "v1"
 }
 
 func (RoleBinding) ObjectGroup() string {
 	return "hz-internal"
+}
+
+func (RoleBinding) ObjectKind() string {
+	return "RoleBinding"
 }
 
 type RoleBindingSpec struct {

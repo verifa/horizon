@@ -12,6 +12,8 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+var _ Objecter = (*Portal)(nil)
+
 type Portal struct {
 	ObjectMeta `json:"metadata,omitempty"`
 
@@ -19,12 +21,16 @@ type Portal struct {
 	Status PortalStatus `json:"status,omitempty"`
 }
 
-func (e Portal) ObjectKind() string {
-	return "Portal"
+func (e Portal) ObjectAPIVersion() string {
+	return "v1"
 }
 
 func (e Portal) ObjectGroup() string {
 	return "hz-internal"
+}
+
+func (e Portal) ObjectKind() string {
+	return "Portal"
 }
 
 type PortalSpec struct {

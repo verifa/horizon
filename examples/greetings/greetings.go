@@ -9,12 +9,16 @@ type Greeting struct {
 	Status GreetingStatus `json:"status"`
 }
 
-func (s Greeting) ObjectKind() string {
-	return "Greeting"
+func (s Greeting) ObjectAPIVersion() string {
+	return "v1"
 }
 
 func (s Greeting) ObjectGroup() string {
 	return "hz-examples"
+}
+
+func (s Greeting) ObjectKind() string {
+	return "Greeting"
 }
 
 type GreetingSpec struct {

@@ -302,6 +302,10 @@ func (c Client) marshalObjectWithTypeFields(obj Objecter) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("setting group: %w", err)
 	}
+	data, err = sjson.SetBytes(data, "apiVersion", obj.ObjectAPIVersion())
+	if err != nil {
+		return nil, fmt.Errorf("setting apiVersion: %w", err)
+	}
 	return data, nil
 }
 
