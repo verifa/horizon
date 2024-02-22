@@ -86,11 +86,6 @@ func (r *RBAC) ListObjects() []hz.Objecter {
 	return nil
 }
 
-// ListAccounts will return the list of accounts a user has access to read.
-func (r *RBAC) ListAccounts() []string {
-	return nil
-}
-
 type AccountRequest struct {
 	User    string
 	Groups  []string
@@ -113,6 +108,8 @@ const (
 	// VerbDelete allows a user to delete objects.
 	// It implies VerbRead.
 	VerbDelete Verb = "delete"
+	// VerbRun allows a user to run actions for an actor.
+	VerbRun Verb = "run"
 )
 
 type RBACRequest struct {
@@ -152,6 +149,8 @@ func (r *RBAC) Check(ctx context.Context, req RBACRequest) bool {
 					isAllow = checkVerbFilter(allow.Create, req.Object)
 				case VerbDelete:
 					isAllow = checkVerbFilter(allow.Delete, req.Object)
+				case VerbRun:
+					isAllow = checkVerbFilter(allow.Run, req.Object)
 				default:
 					// Unknown verb.
 					return false
@@ -175,6 +174,8 @@ func (r *RBAC) Check(ctx context.Context, req RBACRequest) bool {
 				case VerbDelete:
 					isDeny = checkVerbFilter(deny.Read, req.Object) ||
 						checkVerbFilter(deny.Delete, req.Object)
+				case VerbRun:
+					isDeny = checkVerbFilter(deny.Run, req.Object)
 				default:
 					// Unknown verb.
 					return false
@@ -207,6 +208,18 @@ func checkVerbFilter(vf *VerbFilter, obj hz.ObjectKeyer) bool {
 	return true
 }
 
+// checkStringPattern checks if the value matches the pattern.
+// The pattern matching is very basic, it is either:
+//   - an exact string match
+//   - a prefix match with a trailing "*"
+//
+// Everything after the optional "*" is ignored.
+//
+// E.g.
+//   - "foo" matches "foo"
+//   - "foo*" matches "foobar"
+//   - "foo" does not match "foobar"
+//   - "foo*bar" does not match "foobar"
 func checkStringPattern(pattern *string, value string) bool {
 	if pattern != nil && *pattern != "*" {
 		prefix, ok := strings.CutSuffix(*pattern, "*")

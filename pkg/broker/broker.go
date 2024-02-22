@@ -23,10 +23,6 @@ const (
 	natsHeaderStatusNoResponders = "503"
 )
 
-// const (
-// 	subjectIndex?
-// )
-
 func Start(
 	ctx context.Context,
 	conn *nats.Conn,
@@ -54,7 +50,9 @@ func (b *Broker) Start(ctx context.Context) error {
 		sub, err := b.Conn.QueueSubscribe(
 			hz.SubjectAPIBroker,
 			"broker",
-			b.handleAPIMessage,
+			func(msg *nats.Msg) {
+				b.handleAPIMessage(ctx, msg)
+			},
 		)
 		if err != nil {
 			return fmt.Errorf("subscribing to %q: %w", hz.SubjectAPIBroker, err)
@@ -66,7 +64,9 @@ func (b *Broker) Start(ctx context.Context) error {
 		sub, err := b.Conn.QueueSubscribe(
 			hz.SubjectInternalBroker,
 			"broker",
-			b.handleInternalMessage,
+			func(msg *nats.Msg) {
+				b.handleInternalMessage(ctx, msg)
+			},
 		)
 		if err != nil {
 			return fmt.Errorf("subscribing to %q: %w", hz.SubjectAPIBroker, err)
@@ -77,13 +77,44 @@ func (b *Broker) Start(ctx context.Context) error {
 	return nil
 }
 
-func (b *Broker) handleAPIMessage(msg *nats.Msg) {
-	// TODO: authorize.
-	// b.Auth.Whatever()
-	b.handleInternalMessage(msg)
+func (b *Broker) handleAPIMessage(ctx context.Context, msg *nats.Msg) {
+	tokens := strings.Split(msg.Subject, ".")
+	if len(tokens) != hz.SubjectInternalBrokerLength {
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusBadRequest,
+			Message: fmt.Sprintf("invalid subject: %s", msg.Subject),
+		})
+		return
+	}
+	kind := tokens[hz.SubjectInternalBrokerIndexKind]
+	account := tokens[hz.SubjectInternalBrokerIndexAccount]
+	name := tokens[hz.SubjectInternalBrokerIndexName]
+
+	ok, err := b.Auth.Check(ctx, auth.CheckRequest{
+		Session: msg.Header.Get(hz.HeaderAuthorization),
+		Verb:    auth.VerbRun,
+		Object: hz.Key{
+			Name:    name,
+			Account: account,
+			Kind:    kind,
+		},
+	})
+	if err != nil {
+		_ = hz.RespondError(msg, err)
+		return
+	}
+	if !ok {
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusForbidden,
+			Message: "forbidden",
+		})
+		return
+	}
+
+	b.handleInternalMessage(ctx, msg)
 }
 
-func (b *Broker) handleInternalMessage(msg *nats.Msg) {
+func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
 	var runMsg hz.RunMsg
 	if err := json.Unmarshal(msg.Data, &runMsg); err != nil {
 		_ = hz.RespondError(msg, &hz.Error{
@@ -221,7 +252,9 @@ func (b *Broker) handleInternalMessage(msg *nats.Msg) {
 	// to advertise the action.
 	// We do not want the client to timeout before the broker does.
 	timeout := runMsg.Timeout - (time.Second * 2)
-	runReply, err := b.Conn.Request(runSubject, runMsg.Data, timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	runReply, err := b.Conn.RequestWithContext(ctx, runSubject, runMsg.Data)
 	if err != nil {
 		switch {
 		case errors.Is(err, nats.ErrNoResponders):

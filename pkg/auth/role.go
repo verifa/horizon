@@ -24,6 +24,7 @@ type Verbs struct {
 	Update *VerbFilter `json:"update,omitempty"`
 	Create *VerbFilter `json:"create,omitempty"`
 	Delete *VerbFilter `json:"delete,omitempty"`
+	Run    *VerbFilter `json:"run,omitempty"`
 }
 
 type VerbFilter struct {

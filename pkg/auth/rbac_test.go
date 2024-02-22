@@ -138,7 +138,175 @@ func TestRBAC(t *testing.T) {
 		},
 	}
 
-	tests := []test{testCreateAllowsRead}
+	testAllowRun := test{
+		name: "allow-run",
+		roles: []Role{
+			{
+				ObjectMeta: hz.ObjectMeta{
+					Name:    "role-runner",
+					Account: "account-test",
+				},
+				Spec: RoleSpec{
+					Allow: []Verbs{
+						{
+							Run: &VerbFilter{
+								Kind:  hz.P("object-test"),
+								Group: hz.P("group-test"),
+							},
+						},
+					},
+				},
+			},
+		},
+		bindings: []RoleBinding{
+			{
+				ObjectMeta: hz.ObjectMeta{
+					Name:    "rolebinding-test",
+					Account: "account-test",
+				},
+				Spec: RoleBindingSpec{
+					RoleRef: RoleRef{
+						Name: "role-runner",
+					},
+					Subjects: []Subject{
+						{
+							Kind: "Group",
+							Name: "group-runner",
+						},
+					},
+				},
+			},
+		},
+		cases: []testcase{
+			{
+				req: RBACRequest{
+					Groups: []string{"group-runner"},
+					Verb:   "run",
+					Object: hz.Key{
+						Name:    "superfluous",
+						Account: "account-test",
+						Kind:    "object-test",
+					},
+				},
+				expect: true,
+			},
+		},
+	}
+	testDenyDelete := test{
+		name: "deny-delete",
+		roles: []Role{
+			{
+				ObjectMeta: hz.ObjectMeta{
+					Name:    "role-allow-all",
+					Account: "account-test",
+				},
+				Spec: RoleSpec{
+					Allow: []Verbs{
+						{
+							Read:   &VerbFilter{},
+							Update: &VerbFilter{},
+							Create: &VerbFilter{},
+							Delete: &VerbFilter{},
+							Run:    &VerbFilter{},
+						},
+					},
+				},
+			},
+			{
+				ObjectMeta: hz.ObjectMeta{
+					Name:    "role-deny-delete",
+					Account: "account-test",
+				},
+				Spec: RoleSpec{
+					Deny: []Verbs{
+						{
+							Delete: &VerbFilter{},
+						},
+					},
+				},
+			},
+		},
+		bindings: []RoleBinding{
+			{
+				ObjectMeta: hz.ObjectMeta{
+					Name:    "rolebinding-allow-all",
+					Account: "account-test",
+				},
+				Spec: RoleBindingSpec{
+					RoleRef: RoleRef{
+						Name: "role-allow-all",
+					},
+					Subjects: []Subject{
+						{
+							Kind: "Group",
+							Name: "group-deny-delete",
+						},
+					},
+				},
+			},
+			{
+				ObjectMeta: hz.ObjectMeta{
+					Name:    "rolebinding-deny-delete",
+					Account: "account-test",
+				},
+				Spec: RoleBindingSpec{
+					RoleRef: RoleRef{
+						Name: "role-deny-delete",
+					},
+					Subjects: []Subject{
+						{
+							Kind: "Group",
+							Name: "group-deny-delete",
+						},
+					},
+				},
+			},
+		},
+		cases: []testcase{
+			{
+				req: RBACRequest{
+					Groups: []string{"group-deny-delete"},
+					Verb:   "run",
+					Object: hz.Key{
+						Name:    "superfluous",
+						Account: "account-test",
+						Kind:    "object-test",
+					},
+				},
+				expect: true,
+			},
+			{
+				req: RBACRequest{
+					Groups: []string{"group-deny-delete"},
+					Verb:   "create",
+					Object: hz.Key{
+						Name:    "superfluous",
+						Account: "account-test",
+						Kind:    "object-test",
+					},
+				},
+				expect: true,
+			},
+			{
+				req: RBACRequest{
+					Groups: []string{"group-deny-delete"},
+					Verb:   "delete",
+					Object: hz.Key{
+						Name:    "superfluous",
+						Account: "account-test",
+						Kind:    "object-test",
+					},
+				},
+				expect: false,
+			},
+		},
+	}
+
+	tests := []test{
+		testDenyDelete,
+		testCreateAllowsRead,
+		testAllowRun,
+	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			rbac := RBAC{
@@ -171,5 +339,55 @@ func event[T hz.Objecter](t *testing.T, obj T) hz.Event {
 		Operation: hz.EventOperationPut,
 		Data:      data,
 		Key:       hz.KeyForObject(obj),
+	}
+}
+
+func TestCheckStringPatter(t *testing.T) {
+	type test struct {
+		pattern string
+		value   string
+		expect  bool
+	}
+	tests := []test{
+		{
+			pattern: "foo",
+			value:   "foo",
+			expect:  true,
+		},
+		{
+			pattern: "foo*",
+			value:   "foobar",
+			expect:  true,
+		},
+		{
+			pattern: "foo*",
+			value:   "foo",
+			expect:  true,
+		},
+		{
+			pattern: "foo*",
+			value:   "foo",
+			expect:  true,
+		},
+		{
+			pattern: "foo*",
+			value:   "fo",
+			expect:  false,
+		},
+		{
+			// Pattern does not end with a "*" therefore it treats it as an
+			// exact match.
+			pattern: "foo*zoo",
+			value:   "foobar",
+			expect:  false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.pattern+"->"+tc.value, func(t *testing.T) {
+			ok := checkStringPattern(&tc.pattern, tc.value)
+			if ok != tc.expect {
+				t.Fatal("test case failed")
+			}
+		})
 	}
 }
