@@ -66,10 +66,13 @@ type PortalHandler struct {
 // Start registers the portal with Horizon so that it is available in the UI,
 // and then subscribes to NATS to handle the requests.
 func (e *PortalHandler) Start(ctx context.Context) error {
-	client := Client{Conn: e.nc}
+	client := NewClient(
+		e.nc,
+		WithClientManager("TODO"),
+	)
 	extClient := ObjectClient[Portal]{Client: client}
 	// TODO: field manager.
-	if err := extClient.Apply(ctx, e.ext, WithApplyManager("TODO")); err != nil {
+	if err := extClient.Apply(ctx, e.ext); err != nil {
 		return fmt.Errorf("putting extension: %w", err)
 	}
 

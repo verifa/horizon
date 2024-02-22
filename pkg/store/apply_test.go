@@ -77,7 +77,6 @@ func TestApply(t *testing.T) {
 		_ = ctlr.Stop()
 	})
 
-	client := hz.InternalClient(ti.Conn)
 	tu.AssertNoError(t, err)
 	key := "DummyApplyObject.test.test"
 
@@ -85,6 +84,11 @@ func TestApply(t *testing.T) {
 	tu.AssertNoError(t, err)
 	for _, file := range ar.Files {
 		ts := parseTestFileName(t, file.Name)
+		client := hz.NewClient(
+			ti.Conn,
+			hz.WithClientInternal(true),
+			hz.WithClientManager(ts.manager),
+		)
 		switch ts.command {
 		case testStepCommandApply:
 			obj, err := yaml.YAMLToJSON([]byte(file.Data))
@@ -93,7 +97,6 @@ func TestApply(t *testing.T) {
 				ctx,
 				hz.WithApplyKey(key),
 				hz.WithApplyData(obj),
-				hz.WithApplyManager(ts.manager),
 			)
 			if ts.errStatus == nil {
 				tu.AssertNoError(t, err, "client apply")

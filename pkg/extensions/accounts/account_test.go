@@ -17,7 +17,11 @@ func TestAccount(t *testing.T) {
 	ctx := context.Background()
 	ti := server.Test(t, ctx)
 
-	client := hz.InternalClient(ti.Conn)
+	client := hz.NewClient(
+		ti.Conn,
+		hz.WithClientInternal(true),
+		hz.WithClientManager("ctlr-accounts"),
+	)
 	// recon := accounts.AccountReconciler{
 	// 	Client:            client,
 	// 	Conn:              ti.Conn,

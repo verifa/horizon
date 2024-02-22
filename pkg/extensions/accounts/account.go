@@ -73,7 +73,7 @@ func (r *AccountReconciler) Reconcile(
 		account.Status = *status
 		// Save the account and trigger a requeue to publish the account in
 		// nats.
-		if err := accClient.Apply(ctx, *account, hz.WithApplyManager("accounts-ctlr")); err != nil {
+		if err := accClient.Apply(ctx, *account); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
 		return hz.Result{}, nil
@@ -99,7 +99,7 @@ func (r *AccountReconciler) Reconcile(
 	if !ready {
 		if account.Status.Ready {
 			account.Status.Ready = false
-			if err := accClient.Apply(ctx, *account, hz.WithApplyManager("accounts-ctlr")); err != nil {
+			if err := accClient.Apply(ctx, *account); err != nil {
 				return hz.Result{}, fmt.Errorf("updating account: %w", err)
 			}
 			return hz.Result{}, nil
@@ -110,7 +110,7 @@ func (r *AccountReconciler) Reconcile(
 	}
 	if !account.Status.Ready {
 		account.Status.Ready = true
-		if err := accClient.Apply(ctx, *account, hz.WithApplyManager("accounts-ctlr")); err != nil {
+		if err := accClient.Apply(ctx, *account); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
 	}

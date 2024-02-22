@@ -32,7 +32,7 @@ func (r *GreetingReconciler) Reconcile(
 		return hz.Result{}, fmt.Errorf("running hello action: %w", err)
 	}
 
-	if err := r.GreetingClient.Apply(ctx, reply, hz.WithApplyManager("greeting-ctlr")); err != nil {
+	if err := r.GreetingClient.Apply(ctx, reply); err != nil {
 		return hz.Result{}, fmt.Errorf("updating greeting: %w", err)
 	}
 

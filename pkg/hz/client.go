@@ -37,7 +37,9 @@ var (
 	ErrApplyObjectOrDataRequired = errors.New("apply: object or data required")
 	ErrApplyObjectOrKeyRequired  = errors.New("apply: object or key required")
 
-	ErrStoreNotResponding = errors.New("store not responding")
+	ErrClientNoSession = errors.New("client: no session")
+
+	ErrStoreNotResponding = errors.New("store: not responding")
 
 	ErrRunNoResponders         = errors.New("run: no brokers responding")
 	ErrRunTimeout              = errors.New("run: broker timeout")
@@ -216,20 +218,56 @@ func (oc ObjectClient[T]) Run(
 	return newObj, nil
 }
 
-// TODO: remove this after all... skip all these fluffy functions...
-// Just create the client yourself.
-func InternalClient(conn *nats.Conn) Client {
-	return Client{
-		Conn:     conn,
-		Internal: true,
-	}
-}
-
 func SessionFromRequest(req *http.Request) string {
 	if sessionCookie, err := req.Cookie(CookieSession); err == nil {
 		return sessionCookie.Value
 	}
 	return ""
+}
+
+type ClientOption func(*clientOpts)
+
+func WithClientInternal(b bool) ClientOption {
+	return func(co *clientOpts) {
+		co.internal = b
+	}
+}
+
+func WithClientSession(session string) ClientOption {
+	return func(co *clientOpts) {
+		co.session = session
+	}
+}
+
+func WithClientSessionFromRequest(req *http.Request) ClientOption {
+	return func(co *clientOpts) {
+		co.session = SessionFromRequest(req)
+	}
+}
+
+func WithClientManager(manager string) ClientOption {
+	return func(co *clientOpts) {
+		co.manager = manager
+	}
+}
+
+type clientOpts struct {
+	internal bool
+	session  string
+	manager  string
+}
+
+func NewClient(conn *nats.Conn, opts ...ClientOption) Client {
+	co := clientOpts{}
+	for _, opt := range opts {
+		opt(&co)
+	}
+	return Client{
+		Conn:     conn,
+		Internal: co.internal,
+		Session:  co.session,
+		Manager:  co.manager,
+	}
 }
 
 type Client struct {
@@ -243,6 +281,16 @@ type Client struct {
 	Internal bool
 
 	Session string
+
+	// Manager is the manager of apply operations.
+	Manager string
+}
+
+func (c Client) checkSession() error {
+	if !c.Internal && c.Session == "" {
+		return ErrClientNoSession
+	}
+	return nil
 }
 
 func (c Client) SubjectPrefix() string {
@@ -307,16 +355,9 @@ func (c Client) Validate(
 type ApplyOption func(*applyOptions)
 
 type applyOptions struct {
-	manager string
-	object  Objecter
-	data    []byte
-	key     string
-}
-
-func WithApplyManager(manager string) ApplyOption {
-	return func(ao *applyOptions) {
-		ao.manager = manager
-	}
+	object Objecter
+	data   []byte
+	key    string
 }
 
 func WithApplyObject(object Objecter) ApplyOption {
@@ -341,11 +382,14 @@ func (c Client) Apply(
 	ctx context.Context,
 	opts ...ApplyOption,
 ) error {
+	if err := c.checkSession(); err != nil {
+		return err
+	}
 	ao := applyOptions{}
 	for _, opt := range opts {
 		opt(&ao)
 	}
-	if ao.manager == "" {
+	if c.Manager == "" {
 		return ErrApplyManagerRequired
 	}
 	if ao.object == nil && ao.data == nil {
@@ -368,7 +412,7 @@ func (c Client) Apply(
 	msg := nats.NewMsg(
 		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreApply, ao.key),
 	)
-	msg.Header.Set(HeaderFieldManager, ao.manager)
+	msg.Header.Set(HeaderFieldManager, c.Manager)
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	msg.Data = ao.data
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
@@ -399,6 +443,9 @@ func (c *Client) Create(
 	key string,
 	data []byte,
 ) error {
+	if err := c.checkSession(); err != nil {
+		return err
+	}
 	msg := nats.NewMsg(c.SubjectPrefix() + fmt.Sprintf(SubjectStoreCreate, key))
 	msg.Data = data
 	msg.Header.Set(HeaderAuthorization, c.Session)
@@ -431,6 +478,9 @@ func (c *Client) Get(
 	ctx context.Context,
 	key string,
 ) ([]byte, error) {
+	if err := c.checkSession(); err != nil {
+		return nil, err
+	}
 	msg := nats.NewMsg(c.SubjectPrefix() + fmt.Sprintf(SubjectStoreGet, key))
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
@@ -480,6 +530,9 @@ func (c *Client) List(
 	ctx context.Context,
 	opts ...ListOption,
 ) ([]byte, error) {
+	if err := c.checkSession(); err != nil {
+		return nil, err
+	}
 	lo := listOption{}
 	for _, opt := range opts {
 		opt(&lo)
@@ -583,6 +636,9 @@ func (c *Client) Run(
 	data []byte,
 	opts ...RunOption,
 ) ([]byte, error) {
+	if err := c.checkSession(); err != nil {
+		return nil, err
+	}
 	ro := runOptionDefault
 	for _, opt := range opts {
 		opt(&ro)
