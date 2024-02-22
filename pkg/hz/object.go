@@ -67,22 +67,6 @@ func objectKeyFromKey(key string) (ObjectKey, error) {
 	}, nil
 }
 
-// TODO: remove
-func KeyFromObjectParams(
-	group string,
-	kind string,
-	account string,
-	name string,
-) string {
-	return fmt.Sprintf(
-		"%s.%s.%s.%s",
-		group,
-		kind,
-		account,
-		name,
-	)
-}
-
 func ObjectKeyFromObject(object Objecter) ObjectKey {
 	return ObjectKey{
 		Name:    object.ObjectName(),

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/nats-io/jwt/v2"
@@ -67,14 +66,18 @@ func (r *AccountReconciler) Reconcile(
 	if err != nil {
 		return hz.Result{}, hz.IgnoreNotFound(err)
 	}
+
 	if account.Status.ID == "" {
 		// If the ID is empty, we need to create the account.
 		status, err := r.CreateAccount(account.Name)
 		if err != nil {
 			return hz.Result{}, fmt.Errorf("creating account spec: %w", err)
 		}
-		account.Status.Ready = false
+		if _, err := AccountClaimsUpdate(ctx, r.Conn, r.OpKeyPair, status.Claims); err != nil {
+			return hz.Result{}, fmt.Errorf("updating account: %w", err)
+		}
 		account.Status = *status
+		account.Status.Ready = true
 		// Save the account and trigger a requeue to publish the account in
 		// nats.
 		if err := accClient.Apply(ctx, *account); err != nil {
@@ -82,6 +85,7 @@ func (r *AccountReconciler) Reconcile(
 		}
 		return hz.Result{}, nil
 	}
+
 	ready := true
 	claims, err := AccountClaimsLookup(ctx, r.Conn, account.Status.ID)
 	if err != nil {
@@ -94,12 +98,14 @@ func (r *AccountReconciler) Reconcile(
 		}
 		ready = false
 	}
+
 	if ready && !cmp.Equal(claims, account.Status.Claims) {
 		if _, err := AccountClaimsUpdate(ctx, r.Conn, r.OpKeyPair, account.Status.Claims); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
 		ready = false
 	}
+
 	if !ready {
 		if account.Status.Ready {
 			account.Status.Ready = false
@@ -108,16 +114,16 @@ func (r *AccountReconciler) Reconcile(
 			}
 			return hz.Result{}, nil
 		}
-		return hz.Result{
-			RequeueAfter: time.Second,
-		}, nil
+		return hz.Result{}, nil
 	}
+
 	if !account.Status.Ready {
 		account.Status.Ready = true
 		if err := accClient.Apply(ctx, *account); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
 	}
+
 	return hz.Result{}, nil
 }
 

@@ -357,12 +357,12 @@ func (c *Controller) startReconciler(
 				return
 			}
 			// Key for the owner (parent) object.
-			key := KeyFromObjectParams(
-				ownerRef.Group,
-				ownerRef.Kind,
-				ownerRef.Account,
-				ownerRef.Name,
-			)
+			key := KeyFromObject(ObjectKey{
+				Name:    ownerRef.Name,
+				Account: ownerRef.Account,
+				Group:   ownerRef.Group,
+				Kind:    ownerRef.Kind,
+			})
 			isOwnerReconcile := true
 			go c.handleControlLoop(
 				ctx,

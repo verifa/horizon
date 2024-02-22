@@ -59,6 +59,7 @@ func TestAccount(t *testing.T) {
 		hz.WithWatcherForObject(account),
 		hz.WithWatcherFn(
 			func(event hz.Event) (hz.Result, error) {
+				t.Log("watch event for account")
 				var acc accounts.Account
 				if err := json.Unmarshal(event.Data, &acc); err != nil {
 					return hz.Result{}, fmt.Errorf(
@@ -66,6 +67,7 @@ func TestAccount(t *testing.T) {
 						err,
 					)
 				}
+				t.Log("account ready? ", acc.Status.Ready)
 				if acc.Status.Ready == true {
 					close(done)
 				}
