@@ -24,6 +24,10 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 	if !ok {
 		return cue.Value{}, errors.New("spec field not found")
 	}
+	statusType, ok := cueJSONStructField(t, "status")
+	if !ok {
+		statusType = reflect.TypeOf(struct{}{})
+	}
 
 	kindPath := cue.ParsePath("kind")
 	groupPath := cue.ParsePath("group")
@@ -64,11 +68,10 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 	if err != nil {
 		return cue.Value{}, fmt.Errorf("encoding spec: %w", err)
 	}
-	// "_" is a "lattice" in Cue, which allows any type.
-	// Avoid validating the status as it causes all sorts of problems
-	// with Go types, embedding, if users use 3rd party structs there.
-	// The spec should always be defined by the user.
-	statusObj := cCtx.CompileString("{ status: _ }").LookupPath(statusPath)
+	statusVal, err := cueEncodeStruct(cCtx, statusType)
+	if err != nil {
+		return cue.Value{}, fmt.Errorf("encoding status: %w", err)
+	}
 
 	defPath := cue.MakePath(cue.Def(obj.ObjectKind()))
 	objDef := cCtx.CompileString("{}").
@@ -77,7 +80,7 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 		FillPath(kindPath, kindExpr).
 		FillPath(metaPath, metaVal).
 		FillPath(specPath, specVal).
-		FillPath(statusPath, statusObj)
+		FillPath(statusPath, statusVal)
 	cueDef := cCtx.CompileString("").
 		FillPath(defPath, objDef).LookupPath(defPath)
 	if cueDef.Err() != nil {

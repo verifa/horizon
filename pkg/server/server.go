@@ -145,7 +145,7 @@ type Server struct {
 	ActorUsers   *hz.Actor[accounts.User]
 }
 
-func New(
+func Start(
 	ctx context.Context,
 	opts ...ServerOption,
 ) (*Server, error) {
@@ -280,6 +280,17 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		s.ActorUsers = userActor
 	}
 
+	// Check that the root account exists as an object.
+	// This is a little bit fidgety, because the root account *will* exist in
+	// NATS, but we want it to exist as a horizon object in the store.
+	// We cannot create the horizon object when we create the account in nats
+	// because we would need the store to run, which cannot run until the root
+	// account exists in nats...
+	// For now, create it here but when we split the server out we'll need to
+	// find a good startup process.
+	if err := s.checkRootAccountObject(ctx, s.NS.Auth); err != nil {
+		return fmt.Errorf("checking root account object: %w", err)
+	}
 	return nil
 }
 
@@ -311,8 +322,9 @@ func (s *Server) Close() error {
 		}
 	}
 	if s.NS != nil {
-		s.NS.NS.Shutdown()
-		s.NS.NS.WaitForShutdown()
+		if err := s.NS.Close(); err != nil {
+			errs = errors.Join(errs, err)
+		}
 	}
 	return errs
 }
@@ -338,4 +350,42 @@ func (s *Server) Services() []string {
 		services = append(services, "actor-users")
 	}
 	return services
+}
+
+func (s *Server) checkRootAccountObject(
+	ctx context.Context,
+	jwtAuth natsutil.ServerJWTAuth,
+) error {
+	accClient := hz.ObjectClient[accounts.Account]{
+		Client: hz.NewClient(s.Conn, hz.WithClientInternal(true)),
+	}
+	if _, err := accClient.Get(
+		ctx,
+		hz.WithGetAccount(hz.RootAccount),
+		hz.WithGetName(hz.RootAccount),
+	); err != nil {
+		if !errors.Is(err, hz.ErrNotFound) {
+			return fmt.Errorf("get root account: %w", err)
+		}
+		fmt.Println("Checking root account object: not found, creating...")
+		// If the root account is not found, we need to create it.
+		if err := accClient.Create(ctx, accounts.Account{
+			ObjectMeta: hz.ObjectMeta{
+				Name:    hz.RootAccount,
+				Account: hz.RootAccount,
+			},
+			Spec: accounts.AccountSpec{},
+			Status: accounts.AccountStatus{
+				Ready:          true,
+				ID:             jwtAuth.RootAccount.PublicKey,
+				Seed:           jwtAuth.RootAccount.Seed,
+				SigningKeySeed: jwtAuth.RootAccount.SigningKey.Seed,
+				JWT:            jwtAuth.RootAccount.JWT,
+			},
+		}); err != nil {
+			return fmt.Errorf("create root account: %w", err)
+		}
+	}
+
+	return nil
 }

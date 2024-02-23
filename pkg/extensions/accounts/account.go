@@ -49,10 +49,10 @@ type AccountStatus struct {
 	// and private keys.
 	Seed string `json:"seed,omitempty"`
 	// SigningKeySeed is the seed of the account signing key.
-	// The account signing key should be used for signing all the JWTs for the
-	// account.
-	SigningKeySeed string             `json:"signing_key_seed,omitempty"`
-	Claims         *jwt.AccountClaims `json:"claims,omitempty" cue:",opt"`
+	// The account signing key should be used for signing all the user JWTs
+	// (credentials) for the account.
+	SigningKeySeed string `json:"signing_key_seed,omitempty"`
+	JWT            string `json:"jwt,omitempty" cue:",opt"`
 }
 
 var _ (hz.Reconciler) = (*AccountReconciler)(nil)
@@ -82,7 +82,7 @@ func (r *AccountReconciler) Reconcile(
 		if err != nil {
 			return hz.Result{}, fmt.Errorf("creating account spec: %w", err)
 		}
-		if _, err := AccountClaimsUpdate(ctx, r.Conn, r.OpKeyPair, status.Claims); err != nil {
+		if _, err := AccountClaimsUpdate(ctx, r.Conn, r.OpKeyPair, status.JWT); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
 		account.Status = *status
@@ -96,20 +96,24 @@ func (r *AccountReconciler) Reconcile(
 	}
 
 	ready := true
+	existingClaims, err := jwt.DecodeAccountClaims(account.Status.JWT)
+	if err != nil {
+		return hz.Result{}, fmt.Errorf("decoding account claims: %w", err)
+	}
 	claims, err := AccountClaimsLookup(ctx, r.Conn, account.Status.ID)
 	if err != nil {
 		if !errors.Is(err, ErrAccountNotFound) {
 			return hz.Result{}, fmt.Errorf("looking up account: %w", err)
 		}
 		// If the account is not found, we need to create it.
-		if _, err := AccountClaimsUpdate(ctx, r.Conn, r.OpKeyPair, account.Status.Claims); err != nil {
+		if _, err := AccountClaimsUpdate(ctx, r.Conn, r.OpKeyPair, account.Status.JWT); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
 		ready = false
 	}
 
-	if ready && !cmp.Equal(claims, account.Status.Claims) {
-		if _, err := AccountClaimsUpdate(ctx, r.Conn, r.OpKeyPair, account.Status.Claims); err != nil {
+	if ready && !cmp.Equal(claims, existingClaims) {
+		if _, err := AccountClaimsUpdate(ctx, r.Conn, r.OpKeyPair, account.Status.JWT); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
 		ready = false
@@ -180,23 +184,24 @@ func (r *AccountReconciler) CreateAccount(
 		Subject: jwt.Subject("$JS.API.>"),
 	})
 
-	// To fully populate the claims, we need to encode them into a JWT.
-	// Then we can decode the JWT and get the "full" claims, so there
-	// won't be a drift with the NATS servers.
 	accJWT, err := claims.Encode(r.OpKeyPair)
 	if err != nil {
 		return nil, fmt.Errorf("encoding claims: %w", err)
 	}
-	accClaims, err := jwt.DecodeAccountClaims(accJWT)
-	if err != nil {
-		return nil, fmt.Errorf("decoding claims: %w", err)
-	}
+	// To fully populate the claims, we need to encode them into a JWT.
+	// Then we can decode the JWT and get the "full" claims, so there
+	// won't be a drift with the NATS server if we need to update the
+	// claims.
+	// accClaims, err := jwt.DecodeAccountClaims(accJWT)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("decoding claims: %w", err)
+	// }
 
 	spec := AccountStatus{
 		ID:             accNKey.PublicKey,
 		Seed:           accNKey.Seed,
 		SigningKeySeed: accSK.Seed,
-		Claims:         accClaims,
+		JWT:            accJWT,
 	}
 	return &spec, nil
 }

@@ -80,34 +80,20 @@ func AccountClaimsUpdate(
 	ctx context.Context,
 	nc *nats.Conn,
 	operatorKeyPair nkeys.KeyPair,
-	acc *jwt.AccountClaims,
+	accountJWT string,
 ) (string, error) {
-	if err := validateClaims(acc); err != nil {
+	claims, err := jwt.DecodeAccountClaims(accountJWT)
+	if err != nil {
+		return "", fmt.Errorf("decoding account claims: %w", err)
+	}
+	if err := validateClaims(claims); err != nil {
 		return "", fmt.Errorf("validating account claims: %w", err)
 	}
-	accJWT, err := acc.Encode(operatorKeyPair)
+	accJWT, err := claims.Encode(operatorKeyPair)
 	if err != nil {
 		return "", fmt.Errorf("encoding account claims: %w", err)
 	}
 	return AccountJWTUpdate(ctx, nc, accJWT)
-}
-
-func AccountClaimsUpdateFn(
-	ctx context.Context,
-	nc *nats.Conn,
-	operatorKeyPair nkeys.KeyPair,
-	accountPublicKey string,
-	fn func(claims *jwt.AccountClaims) error,
-) error {
-	ac, err := AccountClaimsLookup(ctx, nc, accountPublicKey)
-	if err != nil {
-		return fmt.Errorf("looking up account claims: %w", err)
-	}
-	if err := fn(ac); err != nil {
-		return fmt.Errorf("updating account claims: %w", err)
-	}
-	_, err = AccountClaimsUpdate(ctx, nc, operatorKeyPair, ac)
-	return err
 }
 
 func validateClaims(claims jwt.Claims) error {

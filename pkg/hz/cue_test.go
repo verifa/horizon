@@ -14,7 +14,8 @@ import (
 
 type cueObj struct {
 	ObjectMeta `json:"metadata,omitempty"`
-	Spec       cueSpec `json:"spec"`
+	Spec       cueSpec   `json:"spec"`
+	Status     cueStatus `json:"status"`
 }
 
 func (s cueObj) ObjectKind() string {
@@ -49,6 +50,10 @@ type cueSpec struct {
 	IntMap    map[int]int       `json:"intMap" cue:""`
 
 	RawData json.RawMessage `json:"rawData" cue:",opt"`
+}
+
+type cueStatus struct {
+	Result bool `json:"result"`
 }
 
 type CueEmbed struct {
@@ -105,7 +110,9 @@ func TestCueDefinition(t *testing.T) {
 
 			rawData?: _
 		}
-		status?: _
+		status?: {
+			result?: bool
+		}
 	}
 }
 	`

@@ -41,6 +41,7 @@ func (s Store) List(
 		if err != nil {
 			return nil, fmt.Errorf("formatting data: %w", err)
 		}
+		fmt.Println("LIST: ", string(data))
 		objects = append(objects, data)
 	}
 	return &ListResponse{

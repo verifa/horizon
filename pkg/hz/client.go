@@ -31,9 +31,12 @@ const (
 )
 
 var (
-	ErrNoRevision                 = errors.New("no revision")
-	ErrIncorrectRevision          = errors.New("incorrect revision")
-	ErrNotFound                   = errors.New("not found")
+	ErrNoRevision        = errors.New("no revision")
+	ErrIncorrectRevision = errors.New("incorrect revision")
+	ErrNotFound          = &Error{
+		Status:  http.StatusNotFound,
+		Message: "not found",
+	}
 	ErrApplyManagerRequired       = errors.New("apply: field manager required")
 	ErrApplyObjectOrDataRequired  = errors.New("apply: object or data required")
 	ErrApplyObjectOrKeyRequired   = errors.New("apply: object or key required")
@@ -53,6 +56,8 @@ var (
 )
 
 const (
+	SubjectAPIAllowAll = "HZ.api.>"
+
 	// format: HZ.api.broker.<group><kind>.<account>.<name>.<action>
 	SubjectAPIBroker                  = "HZ.api.broker.*.*.*.*.*"
 	SubjectInternalBroker             = "HZ.internal.broker.*.*.*.*.*"

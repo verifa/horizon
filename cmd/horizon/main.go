@@ -13,7 +13,7 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	s, err := server.New(
+	s, err := server.Start(
 		ctx,
 		server.WithDevMode(),
 		server.WithAuthOptions(auth.WithAdminGroups("admin")),

@@ -18,15 +18,6 @@ type GetRequest struct {
 func (s Store) Get(ctx context.Context, req GetRequest) ([]byte, error) {
 	data, err := s.get(ctx, req.Key)
 	if err != nil {
-		if errors.Is(err, hz.ErrNotFound) {
-			return nil, &hz.Error{
-				Status: http.StatusNotFound,
-				Message: fmt.Sprintf(
-					"object not found: %q",
-					req.Key,
-				),
-			}
-		}
 		return nil, err
 	}
 	return data, err

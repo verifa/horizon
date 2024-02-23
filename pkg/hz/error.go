@@ -3,6 +3,7 @@ package hz
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/nats-io/nats.go"
@@ -26,6 +27,23 @@ func (e *Error) Is(err error) bool {
 		return false
 	}
 	return e.Status == target.Status && e.Message == target.Message
+}
+
+func ErrorFromHTTP(resp *http.Response) error {
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &Error{
+			Status:  resp.StatusCode,
+			Message: fmt.Sprintf("reading body: %s", err.Error()),
+		}
+	}
+	return &Error{
+		Status:  resp.StatusCode,
+		Message: string(body),
+	}
 }
 
 // respondError responds to a NATS message with an error.

@@ -1,7 +1,10 @@
 package natsutil
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/nats-io/jwt/v2"
 )
@@ -14,12 +17,12 @@ func BootstrapServerJWTAuth() (ServerJWTAuth, error) {
 	vr := jwt.ValidationResults{}
 
 	// Create operator
-	opNK, err := NewOperatorNKey()
+	operatorNKey, err := NewOperatorNKey()
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf("creating operator: %w", err)
 	}
 	// Create operator signing keys
-	opSK, err := NewOperatorNKey()
+	operatorSigningKey, err := NewOperatorNKey()
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf(
 			"creating operator nkey: %w",
@@ -27,7 +30,7 @@ func BootstrapServerJWTAuth() (ServerJWTAuth, error) {
 		)
 	}
 	// Create system account key pair
-	saNK, err := NewAccountNKey()
+	sysAccountNKey, err := NewAccountNKey()
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf(
 			"creating system account key pair: %w",
@@ -35,7 +38,7 @@ func BootstrapServerJWTAuth() (ServerJWTAuth, error) {
 		)
 	}
 	// Create system account signing key
-	saSK, err := NewAccountNKey()
+	sysAccountSigningKey, err := NewAccountNKey()
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf(
 			"creating system account signing key: %w",
@@ -43,29 +46,29 @@ func BootstrapServerJWTAuth() (ServerJWTAuth, error) {
 		)
 	}
 	// Create operator JWT
-	opC := jwt.NewOperatorClaims(opNK.PublicKey)
-	opC.Name = "test"
-	opC.AccountServerURL = accountServerURL
-	opC.SystemAccount = saNK.PublicKey
+	operatorClaims := jwt.NewOperatorClaims(operatorNKey.PublicKey)
+	operatorClaims.Name = "horizon"
+	operatorClaims.AccountServerURL = accountServerURL
+	operatorClaims.SystemAccount = sysAccountNKey.PublicKey
 	// Allow only encoding with signing keys for ALL entities.
 	// This means accounts and users need to be encoded with signing keys.
 	// An account is encoded with an operator signing key, and a user is encoded
 	// with an account signing key.
 	// This is a security measure.
-	opC.StrictSigningKeyUsage = true
-	opC.SigningKeys.Add(opSK.PublicKey)
-	opC.Validate(&vr)
-	opJWT, err := opC.Encode(opNK.KeyPair)
+	operatorClaims.StrictSigningKeyUsage = true
+	operatorClaims.SigningKeys.Add(operatorSigningKey.PublicKey)
+	operatorClaims.Validate(&vr)
+	operatorJWT, err := operatorClaims.Encode(operatorNKey.KeyPair)
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf("encoding operator JWT: %w", err)
 	}
 
 	// Create system account JWT
-	saC := jwt.NewAccountClaims(saNK.PublicKey)
-	saC.Name = "SYS"
-	saC.SigningKeys.Add(saSK.PublicKey)
-	// Export some services to import in actor account
-	saC.Exports.Add(&jwt.Export{
+	sysAccountClaims := jwt.NewAccountClaims(sysAccountNKey.PublicKey)
+	sysAccountClaims.Name = "SYS"
+	sysAccountClaims.SigningKeys.Add(sysAccountSigningKey.PublicKey)
+	// Export some services to import in root account
+	sysAccountClaims.Exports.Add(&jwt.Export{
 		Type:    jwt.Service,
 		Name:    "account-monitoring-services",
 		Subject: jwt.Subject("$SYS.REQ.ACCOUNT.*.CLAIMS.*"),
@@ -74,7 +77,7 @@ func BootstrapServerJWTAuth() (ServerJWTAuth, error) {
 			InfoURL:     "https://docs.nats.io/nats-server/configuration/sys_accounts",
 		},
 	})
-	saC.Exports.Add(&jwt.Export{
+	sysAccountClaims.Exports.Add(&jwt.Export{
 		Type:    jwt.Service,
 		Name:    "account-claims-subjects",
 		Subject: jwt.Subject("$SYS.REQ.CLAIMS.*"),
@@ -83,13 +86,13 @@ func BootstrapServerJWTAuth() (ServerJWTAuth, error) {
 			InfoURL:     "https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt#subjects-available-when-using-nats-based-resolver",
 		},
 	})
-	saC.Exports.Add(&jwt.Export{
+	sysAccountClaims.Exports.Add(&jwt.Export{
 		Type:    jwt.Service,
 		Name:    "test",
 		Subject: jwt.Subject("test"),
 	})
-	saC.Validate(&vr)
-	saJWT, err := saC.Encode(opSK.KeyPair)
+	sysAccountClaims.Validate(&vr)
+	sysAccountJWT, err := sysAccountClaims.Encode(operatorSigningKey.KeyPair)
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf(
 			"encoding system account JWT: %w",
@@ -98,17 +101,17 @@ func BootstrapServerJWTAuth() (ServerJWTAuth, error) {
 	}
 
 	// Create system user
-	suNK, err := NewUserNKey()
+	sysUserNKey, err := NewUserNKey()
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf("creating system user: %w", err)
 	}
 	// Create system user JWT
-	suC := jwt.NewUserClaims(suNK.PublicKey)
-	suC.Name = "sys"
-	suC.IssuerAccount = saNK.PublicKey
-	suC.Validate(&vr)
+	sysUserClaims := jwt.NewUserClaims(sysUserNKey.PublicKey)
+	sysUserClaims.Name = "sys"
+	sysUserClaims.IssuerAccount = sysAccountNKey.PublicKey
+	sysUserClaims.Validate(&vr)
 
-	suJWT, err := suC.Encode(saSK.KeyPair)
+	sysUserJWT, err := sysUserClaims.Encode(sysAccountSigningKey.KeyPair)
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf("encoding system user JWT: %w", err)
 	}
@@ -116,44 +119,44 @@ func BootstrapServerJWTAuth() (ServerJWTAuth, error) {
 	//
 	// Create Horizon Root Account
 	//
-	aaNK, err := NewAccountNKey()
+	rootAccountNKey, err := NewAccountNKey()
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf("creating root account: %w", err)
 	}
 
-	// Create actor account signing key
-	aaSK, err := NewAccountNKey()
+	// Create root account signing key
+	rootAccountSigningKey, err := NewAccountNKey()
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf(
 			"creating root account nkey: %w",
 			err,
 		)
 	}
-	// Create actor account JWT
-	aaC := jwt.NewAccountClaims(aaNK.PublicKey)
-	aaC.Name = "horizon-root"
-	aaC.SigningKeys.Add(aaSK.PublicKey)
-	aaC.Limits.JetStreamLimits.Consumer = -1
-	aaC.Limits.JetStreamLimits.DiskMaxStreamBytes = -1
-	aaC.Limits.JetStreamLimits.DiskStorage = -1
-	aaC.Limits.JetStreamLimits.MaxAckPending = -1
-	aaC.Limits.JetStreamLimits.MemoryMaxStreamBytes = -1
-	aaC.Limits.JetStreamLimits.MemoryStorage = -1
-	aaC.Limits.JetStreamLimits.Streams = -1
-	aaC.Imports.Add(&jwt.Import{
+	// Create root account JWT
+	rootAccountClaims := jwt.NewAccountClaims(rootAccountNKey.PublicKey)
+	rootAccountClaims.Name = "horizon-root"
+	rootAccountClaims.SigningKeys.Add(rootAccountSigningKey.PublicKey)
+	rootAccountClaims.Limits.JetStreamLimits.Consumer = -1
+	rootAccountClaims.Limits.JetStreamLimits.DiskMaxStreamBytes = -1
+	rootAccountClaims.Limits.JetStreamLimits.DiskStorage = -1
+	rootAccountClaims.Limits.JetStreamLimits.MaxAckPending = -1
+	rootAccountClaims.Limits.JetStreamLimits.MemoryMaxStreamBytes = -1
+	rootAccountClaims.Limits.JetStreamLimits.MemoryStorage = -1
+	rootAccountClaims.Limits.JetStreamLimits.Streams = -1
+	rootAccountClaims.Imports.Add(&jwt.Import{
 		Type:    jwt.Service,
 		Name:    "account-monitoring-services",
-		Account: saNK.PublicKey,
+		Account: sysAccountNKey.PublicKey,
 		Subject: jwt.Subject("$SYS.REQ.ACCOUNT.*.CLAIMS.*"),
 	})
-	aaC.Imports.Add(&jwt.Import{
+	rootAccountClaims.Imports.Add(&jwt.Import{
 		Type:    jwt.Service,
 		Name:    "account-claims-subjects",
-		Account: saNK.PublicKey,
+		Account: sysAccountNKey.PublicKey,
 		Subject: jwt.Subject("$SYS.REQ.CLAIMS.*"),
 	})
-	aaC.Validate(&vr)
-	aaJWT, err := aaC.Encode(opSK.KeyPair)
+	rootAccountClaims.Validate(&vr)
+	rootAccountJWT, err := rootAccountClaims.Encode(operatorSigningKey.KeyPair)
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf(
 			"encoding root account JWT: %w",
@@ -164,16 +167,16 @@ func BootstrapServerJWTAuth() (ServerJWTAuth, error) {
 	//
 	// Create Horizon Root User
 	//
-	auNK, err := NewUserNKey()
+	rootUserNKey, err := NewUserNKey()
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf("creating root user: %w", err)
 	}
 	// Create root user JWT
-	auC := jwt.NewUserClaims(auNK.PublicKey)
-	auC.Name = "horizon-root"
-	auC.IssuerAccount = aaNK.PublicKey
-	auC.Validate(&vr)
-	auJWT, err := auC.Encode(aaSK.KeyPair)
+	rootUserClaims := jwt.NewUserClaims(rootUserNKey.PublicKey)
+	rootUserClaims.Name = "horizon-root"
+	rootUserClaims.IssuerAccount = rootAccountNKey.PublicKey
+	rootUserClaims.Validate(&vr)
+	rootUserJWT, err := rootUserClaims.Encode(rootAccountSigningKey.KeyPair)
 	if err != nil {
 		return ServerJWTAuth{}, fmt.Errorf("encoding root user JWT: %w", err)
 	}
@@ -184,29 +187,90 @@ func BootstrapServerJWTAuth() (ServerJWTAuth, error) {
 	return ServerJWTAuth{
 		AccountServerURL: accountServerURL,
 		Operator: AuthEntity{
-			NKey:       *opNK,
-			JWT:        opJWT,
-			SigningKey: opSK,
+			NKey:       *operatorNKey,
+			JWT:        operatorJWT,
+			SigningKey: operatorSigningKey,
 		},
 
 		SysAccount: AuthEntity{
-			NKey:       *saNK,
-			JWT:        saJWT,
-			SigningKey: saSK,
+			NKey:       *sysAccountNKey,
+			JWT:        sysAccountJWT,
+			SigningKey: sysAccountSigningKey,
 		},
 		SysUser: AuthEntity{
-			NKey: *suNK,
-			JWT:  suJWT,
+			NKey: *sysUserNKey,
+			JWT:  sysUserJWT,
 		},
 
 		RootAccount: AuthEntity{
-			NKey:       *aaNK,
-			JWT:        aaJWT,
-			SigningKey: aaSK,
+			NKey:       *rootAccountNKey,
+			JWT:        rootAccountJWT,
+			SigningKey: rootAccountSigningKey,
 		},
 		RootUser: AuthEntity{
-			NKey: *auNK,
-			JWT:  auJWT,
+			NKey: *rootUserNKey,
+			JWT:  rootUserJWT,
 		},
 	}, nil
+}
+
+// LoadServerJWTAuth loads the ServerJWTAuth from the given file.
+// This method is intended to use for testing controllers/actors or other
+// services with a local running instance of the horizon server.
+//
+// For other use cases, you should create nats credentials via the horizon
+// server and provide those to the services you need to connect to NATS/Horizon.
+func LoadServerJWTAuth(file string) (ServerJWTAuth, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return ServerJWTAuth{}, fmt.Errorf("open: %w", err)
+	}
+	defer f.Close()
+	var jwtAuth ServerJWTAuth
+	if err := json.NewDecoder(f).Decode(&jwtAuth); err != nil {
+		return ServerJWTAuth{}, fmt.Errorf("decode: %w", err)
+	}
+	if err := jwtAuth.LoadKeyPairs(); err != nil {
+		return ServerJWTAuth{}, fmt.Errorf("load key pairs: %w", err)
+	}
+	return jwtAuth, nil
+}
+
+// loadOrBootstrapJWTAuth loads the JWT auth from the given file, or bootstraps
+// it if the file does not exist.
+// If the file does not exist, the auth is bootstrapped and saved to the file.
+func loadOrBootstrapJWTAuth(file string) (ServerJWTAuth, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return ServerJWTAuth{}, fmt.Errorf("open: %w", err)
+		}
+		// If it doesn't exist, bootstrap the auth and save it
+		jwtAuth, err := BootstrapServerJWTAuth()
+		if err != nil {
+			return ServerJWTAuth{}, fmt.Errorf("bootstrap: %w", err)
+		}
+		// Ensure the workdir directory exists
+		if err := os.MkdirAll(filepath.Dir(file), os.ModePerm); err != nil {
+			return ServerJWTAuth{}, fmt.Errorf("mkdir: %w", err)
+		}
+		// Save the auth
+		b, err := json.Marshal(jwtAuth)
+		if err != nil {
+			return ServerJWTAuth{}, fmt.Errorf("marshal: %w", err)
+		}
+		if err := os.WriteFile(file, b, os.ModePerm); err != nil {
+			return ServerJWTAuth{}, fmt.Errorf("write file: %w", err)
+		}
+		return jwtAuth, nil
+	}
+	defer f.Close()
+	var jwtAuth ServerJWTAuth
+	if err := json.NewDecoder(f).Decode(&jwtAuth); err != nil {
+		return ServerJWTAuth{}, fmt.Errorf("decode: %w", err)
+	}
+	if err := jwtAuth.LoadKeyPairs(); err != nil {
+		return ServerJWTAuth{}, fmt.Errorf("load key pairs: %w", err)
+	}
+	return jwtAuth, nil
 }

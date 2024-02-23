@@ -71,6 +71,7 @@ func NewServer(opts ...ServerOption) (Server, error) {
 	}
 	if sOpt.Dir == "" {
 		sOpt.Dir = filepath.Join(os.TempDir(), "horizon")
+		fmt.Println("NATS DIR: ", sOpt.Dir)
 	}
 	if sOpt.FindAvailablePort {
 		port, err := findAvailablePort()
@@ -84,8 +85,9 @@ func NewServer(opts ...ServerOption) (Server, error) {
 	if sOpt.UseJWTAuth {
 		jwtAuth = sOpt.JWTAuth
 	} else {
+		serverJWTAuthFile := filepath.Join(sOpt.Dir, "server-jwt-auth.json")
 		var err error
-		jwtAuth, err = BootstrapServerJWTAuth()
+		jwtAuth, err = loadOrBootstrapJWTAuth(serverJWTAuthFile)
 		if err != nil {
 			return Server{}, fmt.Errorf("bootstrapping server JWT auth: %w", err)
 		}
@@ -156,6 +158,22 @@ func (s Server) StartUntilReady() error {
 		return fmt.Errorf("server not ready after %s", timeout.String())
 	}
 	return nil
+}
+
+func (s Server) Close() error {
+	shutdown := make(chan struct{})
+	s.NS.Shutdown()
+	go func() {
+		s.NS.WaitForShutdown()
+		close(shutdown)
+	}()
+
+	select {
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("timeout: server did not shut down in time")
+	case <-shutdown:
+		return nil
+	}
 }
 
 // sysUserConn uses the system user JWT to connect to the server.

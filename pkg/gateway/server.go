@@ -203,6 +203,7 @@ func (s *Server) start(
 	r.Get("/loggedout", s.serveLoggedOut)
 	r.Get("/accounts/new", s.serveAccountsNew)
 	r.Post("/accounts", s.postAccounts)
+	r.Post("/auth/login", s.handleAuthLogin)
 
 	r.Group(func(r chi.Router) {
 		// Check account exists and user has permission.
