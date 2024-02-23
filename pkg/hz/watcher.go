@@ -28,10 +28,17 @@ func WithWatcherFn(
 	}
 }
 
+func WithWatcherCh(ch chan Event) WatcherOption {
+	return func(o *watcherOptions) {
+		o.ch = ch
+	}
+}
+
 type watcherOptions struct {
 	forObject ObjectKeyer
 	ackWait   time.Duration
 	fn        func(event Event) (Result, error)
+	ch        chan Event
 	backoff   time.Duration
 }
 
@@ -77,8 +84,8 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 	if opt.forObject == nil {
 		return fmt.Errorf("for object is required")
 	}
-	if opt.fn == nil {
-		return fmt.Errorf("fn (callback) is required")
+	if opt.fn == nil && opt.ch == nil {
+		return fmt.Errorf("fn (callback) or ch (channel) is required")
 	}
 	js, err := jetstream.New(w.Conn)
 	if err != nil {
@@ -140,7 +147,30 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 		}
 		kvop := opFromMsg(msg)
 		handleEvent := func(msg jetstream.Msg, event Event) {
-			result, err := opt.fn(event)
+			var result Result
+			var err error
+			if opt.ch != nil {
+				event.Reply = make(chan EventResult)
+				opt.ch <- event
+				select {
+				case eventResult := <-event.Reply:
+					result = eventResult.Result
+					err = eventResult.Err
+				case <-time.After(time.Second * 5):
+					slog.Error(
+						"waiting for event reply",
+						"event_operation",
+						event.Operation,
+						"key",
+						event.Key,
+					)
+					_ = msg.NakWithDelay(opt.backoff)
+					return
+				}
+			}
+			if opt.fn != nil {
+				result, err = opt.fn(event)
+			}
 			if err != nil {
 				slog.Error(
 					"handling event",
@@ -152,6 +182,7 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 					event.Operation,
 				)
 				_ = msg.NakWithDelay(opt.backoff)
+				return
 			}
 			switch {
 			case result.IsZero():
@@ -235,6 +266,20 @@ type Event struct {
 	Operation EventOperation
 	Data      []byte
 	Key       ObjectKeyer
+	Reply     chan EventResult
+}
+
+func (e Event) Respond(result EventResult) error {
+	if e.Reply == nil {
+		return errors.New("no reply channel")
+	}
+	e.Reply <- result
+	return nil
+}
+
+type EventResult struct {
+	Result Result
+	Err    error
 }
 
 type EventOperation int

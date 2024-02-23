@@ -58,7 +58,6 @@ type Auth struct {
 	RBAC     *RBAC
 
 	controllers []*hz.Controller
-	watchers    []*hz.Watcher
 }
 
 func (a *Auth) Start(
@@ -122,8 +121,11 @@ func (a *Auth) Start(
 
 func (a *Auth) Close() error {
 	var errs error
-	for _, w := range a.watchers {
-		w.Close()
+	// if a.Sessions != nil {
+	// 	errs = errors.Join(errs, a.Sessions.Close())
+	// }
+	if a.RBAC != nil {
+		errs = errors.Join(errs, a.RBAC.Close())
 	}
 	for _, c := range a.controllers {
 		errs = errors.Join(errs, c.Stop())

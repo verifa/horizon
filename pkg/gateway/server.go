@@ -141,7 +141,7 @@ func (s *Server) start(
 
 	logger := httplog.NewLogger("horizon", httplog.Options{
 		JSON:     false,
-		LogLevel: "info",
+		LogLevel: "error",
 	})
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -202,24 +202,27 @@ func (s *Server) start(
 	r.Get("/", s.serveHome)
 	r.Get("/loggedout", s.serveLoggedOut)
 	r.Get("/accounts/new", s.serveAccountsNew)
-	r.Get("/accounts/{account}", s.serveAccount)
-	r.Get("/accounts/{account}/users", s.serveAccountUsers)
-	r.Post("/accounts/{account}/users", s.postAccountUsers)
-	r.Post("/accounts/{account}/userconfig", s.postAccountUserConfig)
 	r.Post("/accounts", s.postAccounts)
 
-	r.Get("/accounts/{account}/{portal}", s.servePortal)
-	r.Get("/accounts/{account}/{portal}/*", s.servePortal)
-
-	// Actor endpoints triggered by hx-get
-	r.HandleFunc(
-		"/portal/{account}/{portal}",
-		s.handlePortal,
-	)
-	r.HandleFunc(
-		"/portal/{account}/{portal}/*",
-		s.handlePortal,
-	)
+	r.Group(func(r chi.Router) {
+		// Check account exists and user has permission.
+		r.Use(s.middlewareAccount)
+		r.Get("/accounts/{account}", s.serveAccount)
+		r.Get("/accounts/{account}/users", s.serveAccountUsers)
+		r.Post("/accounts/{account}/users", s.postAccountUsers)
+		r.Post("/accounts/{account}/userconfig", s.postAccountUserConfig)
+		r.Get("/accounts/{account}/{portal}", s.servePortal)
+		r.Get("/accounts/{account}/{portal}/*", s.servePortal)
+		// Actor endpoints triggered by hx-get
+		r.HandleFunc(
+			"/portal/{account}/{portal}",
+			s.handlePortal,
+		)
+		r.HandleFunc(
+			"/portal/{account}/{portal}/*",
+			s.handlePortal,
+		)
+	})
 
 	// TODO: these /dist paths should not be protected...
 	r.Get("/dist/htmx.js", func(w http.ResponseWriter, r *http.Request) {

@@ -14,7 +14,9 @@ import (
 )
 
 type RBAC struct {
-	Conn         *nats.Conn
+	Conn *nats.Conn
+	// TODO: RoleBindings and Roles maps are not thread safe.
+	// E.g. HandleRoleEvent and refresh both write and read from Roles.
 	RoleBindings map[string]RoleBinding `json:"roleBindings,omitempty"`
 	Roles        map[string]Role        `json:"roles,omitempty"`
 
@@ -28,11 +30,36 @@ type RBAC struct {
 	// Essentially: have all the existing RBAC objects that existed on startup
 	// been loaded?
 	init     bool
+	eventCh  chan hz.Event
 	mx       sync.RWMutex
 	watchers []*hz.Watcher
 }
 
 func (r *RBAC) Start(ctx context.Context) error {
+	r.eventCh = make(chan hz.Event)
+	go func() {
+		for event := range r.eventCh {
+			var result hz.Result
+			var err error
+			switch event.Key.ObjectKind() {
+			case "Role":
+				result, err = r.HandleRoleEvent(event)
+			case "RoleBinding":
+				result, err = r.HandleRoleBindingEvent(event)
+			default:
+				err = fmt.Errorf(
+					"unexpected object kind: %v",
+					event.Key.ObjectKind(),
+				)
+			}
+			if err := event.Respond(hz.EventResult{
+				Result: result,
+				Err:    err,
+			}); err != nil {
+				slog.Error("responding to event", "err", err)
+			}
+		}
+	}()
 	//
 	// Start role watcher
 	//
@@ -40,7 +67,7 @@ func (r *RBAC) Start(ctx context.Context) error {
 		ctx,
 		r.Conn,
 		hz.WithWatcherForObject(Role{}),
-		hz.WithWatcherFn(r.HandleRoleEvent),
+		hz.WithWatcherCh(r.eventCh),
 	)
 	if err != nil {
 		return fmt.Errorf("starting role watcher: %w", err)
@@ -53,7 +80,7 @@ func (r *RBAC) Start(ctx context.Context) error {
 		ctx,
 		r.Conn,
 		hz.WithWatcherForObject(RoleBinding{}),
-		hz.WithWatcherFn(r.HandleRoleBindingEvent),
+		hz.WithWatcherCh(r.eventCh),
 	)
 	if err != nil {
 		return fmt.Errorf("starting rolebinding watcher: %w", err)
@@ -79,6 +106,14 @@ func (r *RBAC) Start(ctx context.Context) error {
 
 	// Refresh on startup
 	r.refresh()
+	return nil
+}
+
+func (r *RBAC) Close() error {
+	for _, w := range r.watchers {
+		w.Close()
+	}
+	close(r.eventCh)
 	return nil
 }
 

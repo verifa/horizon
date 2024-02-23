@@ -103,12 +103,51 @@ func (oc ObjectClient[T]) Apply(
 	return oc.Client.Apply(ctx, opts...)
 }
 
-func (oc ObjectClient[T]) Get(ctx context.Context, key string) (*T, error) {
+type GetOption func(*getOptions)
+
+func WithGetName(name string) GetOption {
+	return func(opt *getOptions) {
+		opt.name = name
+	}
+}
+
+func WithGetAccount(account string) GetOption {
+	return func(opt *getOptions) {
+		opt.account = account
+	}
+}
+
+func WithGetObjectKey(objectKey ObjectKeyer) GetOption {
+	return func(opt *getOptions) {
+		opt.name = objectKey.ObjectName()
+		opt.account = objectKey.ObjectAccount()
+	}
+}
+
+type getOptions struct {
+	name    string
+	account string
+}
+
+func (oc ObjectClient[T]) Get(
+	ctx context.Context,
+	opts ...GetOption,
+) (*T, error) {
+	opt := getOptions{}
+	for _, o := range opts {
+		o(&opt)
+	}
+	var object T
+	key := ObjectKey{
+		Name:    opt.name,
+		Account: opt.account,
+		Group:   object.ObjectGroup(),
+		Kind:    object.ObjectKind(),
+	}
 	data, err := oc.Client.Get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("getting object %q: %w", key, err)
 	}
-	var object T
 	if err := json.Unmarshal(data, &object); err != nil {
 		return nil, fmt.Errorf("unmarshalling object: %w", err)
 	}
@@ -612,12 +651,14 @@ func (c *Client) Create(
 
 func (c *Client) Get(
 	ctx context.Context,
-	key string,
+	key ObjectKeyer,
 ) ([]byte, error) {
 	if err := c.checkSession(); err != nil {
 		return nil, err
 	}
-	msg := nats.NewMsg(c.SubjectPrefix() + fmt.Sprintf(SubjectStoreGet, key))
+	msg := nats.NewMsg(
+		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreGet, KeyFromObject(key)),
+	)
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()

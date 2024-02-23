@@ -14,6 +14,50 @@ import (
 	"github.com/nats-io/jwt/v2"
 )
 
+func (s *Server) middlewareAccount(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		account := chi.URLParam(r, "account")
+		if account == "" {
+			http.Error(w, "account not found", http.StatusNotFound)
+			return
+		}
+		ok, err := s.Auth.Check(r.Context(), auth.CheckRequest{
+			Session: hz.SessionFromRequest(r),
+			Verb:    auth.VerbRead,
+			Object: hz.ObjectKey{
+				Name:    account,
+				Account: hz.RootAccount,
+				Kind:    accounts.ObjectKind,
+				Group:   accounts.ObjectGroup,
+			},
+		})
+		if err != nil {
+			httpError(w, err)
+			return
+		}
+		if !ok {
+			// TODO: display a prettty 403 page instead.
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		client := hz.Client{
+			Conn:    s.Conn,
+			Session: hz.SessionFromRequest(r),
+		}
+		if _, err := client.Get(r.Context(), hz.ObjectKey{
+			Name:    account,
+			Account: hz.RootAccount,
+			Kind:    accounts.ObjectKind,
+			Group:   accounts.ObjectGroup,
+		}); err != nil {
+			// TODO: display a pretty 404 page instead.
+			httpError(w, err)
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(r.Context()))
+	})
+}
+
 func (s *Server) serveAccount(w http.ResponseWriter, r *http.Request) {
 	userInfo, ok := r.Context().Value(authContext).(auth.UserInfo)
 	if !ok {

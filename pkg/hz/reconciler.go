@@ -14,7 +14,7 @@ type Reconciler interface {
 type Request struct {
 	// Key is the unique identifier of the object in the nats kv store.
 	// It is the key of the object that is being reconciled.
-	Key string
+	Key ObjectKeyer
 }
 
 // Result contains the result of a Reconciler invocation.

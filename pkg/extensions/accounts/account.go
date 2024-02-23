@@ -13,6 +13,11 @@ import (
 	"github.com/verifa/horizon/pkg/natsutil"
 )
 
+const (
+	ObjectKind  = "Account"
+	ObjectGroup = "hz-internal"
+)
+
 type Account struct {
 	hz.ObjectMeta `json:"metadata,omitempty" cue:""`
 
@@ -25,11 +30,11 @@ func (a Account) ObjectAPIVersion() string {
 }
 
 func (a Account) ObjectGroup() string {
-	return "hz-internal"
+	return ObjectGroup
 }
 
 func (a Account) ObjectKind() string {
-	return "Account"
+	return ObjectKind
 }
 
 type AccountSpec struct{}
@@ -66,7 +71,7 @@ func (r *AccountReconciler) Reconcile(
 	req hz.Request,
 ) (hz.Result, error) {
 	accClient := hz.ObjectClient[Account]{Client: r.Client}
-	account, err := accClient.Get(ctx, req.Key)
+	account, err := accClient.Get(ctx, hz.WithGetObjectKey(req.Key))
 	if err != nil {
 		return hz.Result{}, hz.IgnoreNotFound(err)
 	}

@@ -438,6 +438,13 @@ func (c *Controller) handleControlLoop(
 		_ = msg.Ack()
 		return
 	}
+	// Get the object key from the nats subject / kv key.
+	objKey, err := objectKeyFromKey(key)
+	if err != nil {
+		slog.Error("getting object key from key", "key", key, "error", err)
+		_ = msg.NakWithDelay(time.Second)
+		return
+	}
 	// Acquire lock from the mutex.
 	lock, err := mutex.Lock(ctx, key)
 	if err != nil {
@@ -463,7 +470,7 @@ func (c *Controller) handleControlLoop(
 
 	// Prepare the request and call the reconciler.
 	req := Request{
-		Key: key,
+		Key: objKey,
 	}
 	var (
 		reconcileResult Result
@@ -549,7 +556,7 @@ func (c *Controller) handleControlLoop(
 				eo.ObjectMeta.DeletionTimestamp.Before(time.Now()) {
 				slog.Info("control loop delete", "key", req.Key)
 				// Delete the object and ack the message.
-				if err := kv.Delete(ctx, req.Key); err != nil {
+				if err := kv.Delete(ctx, KeyFromObject(req.Key)); err != nil {
 					slog.Error("deleting object", "error", err)
 					_ = msg.NakWithDelay(time.Second)
 					return
