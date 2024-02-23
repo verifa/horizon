@@ -1,15 +1,19 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/verifa/horizon/pkg/hzctl"
+	yaml "sigs.k8s.io/yaml/goyaml.v2"
 )
 
-const (
-	configDefaultFolder = "~/.config/horizon"
-	configDefaultFile   = "config.yaml"
+var (
+	configFile string
+	config     hzctl.Config
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -23,9 +27,28 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	SilenceUsage: true,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("getting user home dir: %w", err)
+		}
+		configFile = filepath.Join(home, ".config", "horizon", "config.yaml")
+		f, err := os.Open(configFile)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("open config file: %w", err)
+			}
+			if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
+				return fmt.Errorf("mkdir config file: %w", err)
+			}
+			return nil
+		}
+		defer f.Close()
+		if err := yaml.NewDecoder(f).Decode(&config); err != nil {
+			return fmt.Errorf("decode config: %w", err)
+		}
+		return nil
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags
@@ -34,7 +57,7 @@ to quickly create a Cobra application.`,
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %s", err)
+		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
 	}
 }

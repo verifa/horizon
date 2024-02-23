@@ -1,19 +1,17 @@
 package main
 
 import (
-	"context"
-	"encoding/base64"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/verifa/horizon/pkg/hzctl/login"
 	yaml "sigs.k8s.io/yaml/goyaml.v2"
 )
 
-// loginCmd represents the login command
-var loginCmd = &cobra.Command{
-	Use:   "login",
+var contextSetCurrent string
+
+var contextSetCmd = &cobra.Command{
+	Use:   "set",
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -21,27 +19,20 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
+	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		hCtx, ok := config.Current()
-		if !ok {
-			return fmt.Errorf(
-				"current context not found: %q",
-				config.CurrentContext,
-			)
+		isModified := false
+		if contextSetCurrent != "" {
+			if config.CurrentContext != contextSetCurrent {
+				config.CurrentContext = contextSetCurrent
+				isModified = true
+			}
 		}
-		ctx := context.Background()
-		resp, err := login.Login(ctx, login.LoginRequest{
-			URL: "http://localhost:9999",
-		})
-		if err != nil {
-			return err
+
+		if !isModified {
+			return nil
 		}
-		creds := base64.StdEncoding.EncodeToString(
-			[]byte(resp.Credentials),
-		)
-		hCtx.Credentials = &creds
-		hCtx.Session = &resp.Session
-		config.Add(hCtx)
+
 		f, err := os.Create(configFile)
 		if err != nil {
 			return fmt.Errorf("create config file: %w", err)
@@ -55,5 +46,8 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
-	authCmd.AddCommand(loginCmd)
+	contextCmd.AddCommand(contextSetCmd)
+
+	contextSetCmd.Flags().
+		StringVar(&contextSetCurrent, "current", "", "name of the current context")
 }
