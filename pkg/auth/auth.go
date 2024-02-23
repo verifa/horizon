@@ -6,33 +6,45 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/verifa/horizon/pkg/hz"
 )
 
-func WithInitTimeout(timeout time.Duration) AuthorizerOption {
+func WithInitTimeout(timeout time.Duration) Option {
 	return func(o *authorizerOptions) {
 		o.timeout = timeout
 	}
 }
 
-type AuthorizerOption func(*authorizerOptions)
+func WithAdminGroups(groups ...string) Option {
+	return func(o *authorizerOptions) {
+		o.adminGroups = append(o.adminGroups, groups...)
+	}
+}
+
+type Option func(*authorizerOptions)
 
 type authorizerOptions struct {
-	timeout time.Duration
+	timeout     time.Duration
+	adminGroups []string
 }
 
 var defaultAuthorizerOptions = authorizerOptions{
 	timeout: 5 * time.Second,
 }
 
-func Start(ctx context.Context, conn *nats.Conn) (*Auth, error) {
+func Start(
+	ctx context.Context,
+	conn *nats.Conn,
+	opts ...Option,
+) (*Auth, error) {
 	auth := Auth{
 		Conn: conn,
 	}
-	err := auth.Start(ctx)
+	err := auth.Start(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("starting auth: %w", err)
 	}
@@ -51,7 +63,7 @@ type Auth struct {
 
 func (a *Auth) Start(
 	ctx context.Context,
-	opts ...AuthorizerOption,
+	opts ...Option,
 ) error {
 	ao := defaultAuthorizerOptions
 	for _, opt := range opts {
@@ -99,6 +111,7 @@ func (a *Auth) Start(
 		RoleBindings: make(map[string]RoleBinding),
 		Roles:        make(map[string]Role),
 		Permissions:  make(map[string]*Group),
+		AdminGroups:  ao.adminGroups,
 	}
 	if err := rbac.Start(ctx); err != nil {
 		return fmt.Errorf("starting rbac: %w", err)
@@ -137,6 +150,7 @@ func (a *Auth) Check(
 		Verb:   req.Verb,
 		Object: req.Object,
 	}
+	slog.Info("checking", "checkRequest", checkRequest)
 	return a.RBAC.Check(ctx, checkRequest), nil
 }
 

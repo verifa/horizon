@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/testutil"
 )
 
 func TestRBAC(t *testing.T) {
@@ -16,9 +17,10 @@ func TestRBAC(t *testing.T) {
 	}
 
 	type test struct {
-		name     string
-		roles    []Role
-		bindings []RoleBinding
+		name        string
+		adminGroups []string
+		roles       []Role
+		bindings    []RoleBinding
 
 		cases []testcase
 	}
@@ -311,7 +313,28 @@ func TestRBAC(t *testing.T) {
 		},
 	}
 
+	testAdminGroup := test{
+		name:        "admin-group",
+		adminGroups: []string{"admin"},
+		cases: []testcase{
+			{
+				req: RBACRequest{
+					Groups: []string{"admin"},
+					Verb:   "delete",
+					Object: hz.ObjectKey{
+						Name:    "superfluous",
+						Kind:    "object-test",
+						Group:   "group-test",
+						Account: "whatever-account-doesnt-matter",
+					},
+				},
+				expect: true,
+			},
+		},
+	}
+
 	tests := []test{
+		testAdminGroup,
 		testCreateAllowsRead,
 		testAllowRun,
 		testDenyDelete,
@@ -322,13 +345,18 @@ func TestRBAC(t *testing.T) {
 				RoleBindings: make(map[string]RoleBinding),
 				Roles:        make(map[string]Role),
 				Permissions:  make(map[string]*Group),
+				AdminGroups:  test.adminGroups,
 			}
 			for _, role := range test.roles {
-				rbac.HandleRoleEvent(event(t, role))
+				_, err := rbac.HandleRoleEvent(event(t, role))
+				testutil.AssertNoError(t, err)
 			}
 			for _, binding := range test.bindings {
-				rbac.HandleRoleBindingEvent(event(t, binding))
+				_, err := rbac.HandleRoleBindingEvent(event(t, binding))
+				testutil.AssertNoError(t, err)
 			}
+			// Call refresh in case of no roles or rolebindings.
+			rbac.refresh()
 			for index, tc := range test.cases {
 				ok := rbac.Check(ctx, tc.req)
 				if ok != tc.expect {

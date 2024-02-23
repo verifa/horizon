@@ -40,6 +40,13 @@ func WithRunAuth(b bool) ServerOption {
 	}
 }
 
+func WithAuthOptions(opts ...auth.Option) ServerOption {
+	return func(o *serverOptions) {
+		o.runAuth = true
+		o.authOptions = append(o.authOptions, opts...)
+	}
+}
+
 func WithRunBroker(b bool) ServerOption {
 	return func(o *serverOptions) {
 		o.runBroker = b
@@ -120,6 +127,7 @@ type serverOptions struct {
 	runUsersActor         bool
 
 	natsOptions               []natsutil.ServerOption
+	authOptions               []auth.Option
 	storeOptions              []store.StoreOption
 	gatewayOptions            []gateway.ServerOption
 	accountsControllerOptions []hz.ControllerOption
@@ -185,7 +193,7 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 	}
 
 	if opt.runAuth {
-		auth, err := auth.Start(ctx, s.Conn)
+		auth, err := auth.Start(ctx, s.Conn, opt.authOptions...)
 		if err != nil {
 			return fmt.Errorf("starting auth: %w", err)
 		}

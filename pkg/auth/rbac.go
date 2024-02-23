@@ -20,6 +20,14 @@ type RBAC struct {
 
 	Permissions map[string]*Group `json:"permissions,omitempty"`
 
+	AdminGroups []string `json:"adminGroups,omitempty"`
+
+	// init is true if the RBAC has been initialised.
+	// RBAC has been initialised if all watchers have been started and
+	// have received their initial state.
+	// Essentially: have all the existing RBAC objects that existed on startup
+	// been loaded?
+	init     bool
 	mx       sync.RWMutex
 	watchers []*hz.Watcher
 }
@@ -64,10 +72,13 @@ func (r *RBAC) Start(ctx context.Context) error {
 	select {
 	case <-init:
 		// Do nothing and continue.
+		r.init = true
 	case <-time.After(5 * time.Second):
 		return fmt.Errorf("timed out waiting for watchers to initialize")
 	}
 
+	// Refresh on startup
+	r.refresh()
 	return nil
 }
 
@@ -129,9 +140,22 @@ func (r *RBAC) Check(ctx context.Context, req RBACRequest) bool {
 		if !ok {
 			continue
 		}
-		account, ok := group.Accounts[req.Object.ObjectAccount()]
-		if !ok {
+		wildcardAccount, wildcardOK := group.Accounts["*"]
+		account, accountOK := group.Accounts[req.Object.ObjectAccount()]
+		if !wildcardOK && !accountOK {
 			continue
+		}
+
+		// Merge wildcard and account permissions.
+		if account == nil {
+			account = &Permissions{
+				Allow: []Verbs{},
+				Deny:  []Verbs{},
+			}
+		}
+		if wildcardAccount != nil {
+			account.Allow = append(account.Allow, wildcardAccount.Allow...)
+			account.Deny = append(account.Deny, wildcardAccount.Deny...)
 		}
 
 		if !isAllow {
@@ -252,7 +276,10 @@ func (r *RBAC) HandleRoleBindingEvent(event hz.Event) (hz.Result, error) {
 		)
 	}
 
-	r.refresh()
+	// Only refresh if rbac has been initialised.
+	if r.init {
+		r.refresh()
+	}
 	return hz.Result{}, nil
 }
 
@@ -274,7 +301,10 @@ func (r *RBAC) HandleRoleEvent(event hz.Event) (hz.Result, error) {
 		)
 	}
 
-	r.refresh()
+	// Only refresh if rbac has been initialised.
+	if r.init {
+		r.refresh()
+	}
 	return hz.Result{}, nil
 }
 
@@ -367,6 +397,33 @@ func (r *RBAC) refresh() {
 				})
 			}
 		}
+	}
+
+	// Add admin group permissions (if any).
+	for _, adminGroup := range r.AdminGroups {
+		group, ok := cache[adminGroup]
+		if !ok {
+			group = &Group{
+				Name:     adminGroup,
+				Accounts: make(map[string]*Permissions),
+			}
+			cache[adminGroup] = group
+		}
+		account, ok := group.Accounts["*"]
+		if !ok {
+			account = &Permissions{
+				Allow: []Verbs{},
+				Deny:  []Verbs{},
+			}
+			group.Accounts["*"] = account
+		}
+		account.Allow = append(account.Allow, Verbs{
+			Read:   &VerbFilter{},
+			Update: &VerbFilter{},
+			Create: &VerbFilter{},
+			Delete: &VerbFilter{},
+			Run:    &VerbFilter{},
+		})
 	}
 
 	r.mx.Lock()

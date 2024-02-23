@@ -42,7 +42,6 @@ func TestReconciler(t *testing.T) {
 	client := hz.NewClient(
 		ti.Conn,
 		hz.WithClientInternal(true),
-		hz.WithClientManager("test"),
 	)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
 	dr := DummyReconciler{

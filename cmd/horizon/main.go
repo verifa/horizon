@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/server"
 )
 
@@ -15,6 +16,7 @@ func main() {
 	s, err := server.New(
 		ctx,
 		server.WithDevMode(),
+		server.WithAuthOptions(auth.WithAdminGroups("admin")),
 		// server.WithGatewayOptions(
 		// 	gateway.WithOIDCConfig(
 		// 		gateway.OIDCConfig{

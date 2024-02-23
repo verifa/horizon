@@ -219,6 +219,7 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		)
 		return
 	}
+	// TODO: make this configurable by config...
 	// Some OIDC providers require querying the UserInfo endpoint to get claims.
 	// Make this configurable via the OIDC configs.
 	userInfo, err := or.provider.UserInfo(
@@ -249,6 +250,14 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		http.Error(
 			w,
 			"unmarshalling claims: "+err.Error(),
+			http.StatusUnauthorized,
+		)
+		return
+	}
+	if err := userInfo.Claims(&claims); err != nil {
+		http.Error(
+			w,
+			"unmarshalling user info: "+err.Error(),
 			http.StatusUnauthorized,
 		)
 		return
