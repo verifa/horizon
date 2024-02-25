@@ -227,6 +227,7 @@ type GenericObject struct {
 	Group      string          `json:"group,omitempty"`
 	APIVersion string          `json:"apiVersion,omitempty"`
 	Spec       json.RawMessage `json:"spec,omitempty"`
+	Status     json.RawMessage `json:"status,omitempty"`
 }
 
 func (r GenericObject) ObjectKind() string {

@@ -106,7 +106,16 @@ to quickly create a Cobra application.`,
 		if err != nil {
 			return fmt.Errorf("list: %w", err)
 		}
-		fmt.Println(string(data))
+		switch len(data) {
+		case 0:
+			fmt.Println("No objects found")
+		case 1:
+			if err := printObject(data[0]); err != nil {
+				return fmt.Errorf("print object: %w", err)
+			}
+		default:
+			printObjects(data)
+		}
 		return nil
 	},
 }

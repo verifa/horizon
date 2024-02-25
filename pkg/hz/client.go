@@ -173,7 +173,7 @@ func (oc ObjectClient[T]) List(
 		key := KeyFromObject(t)
 		opts = append(opts, WithListKey(key))
 	}
-	data, err := oc.Client.List(ctx, opts...)
+	data, err := oc.Client.list(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("listing objects: %w", err)
 	}
@@ -709,6 +709,24 @@ type listOption struct {
 }
 
 func (c *Client) List(
+	ctx context.Context,
+	opts ...ListOption,
+) ([]GenericObject, error) {
+	data, err := c.list(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	type Result struct {
+		Data []GenericObject `json:"data"`
+	}
+	var result Result
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("unmarshalling objects: %w", err)
+	}
+	return result.Data, nil
+}
+
+func (c *Client) list(
 	ctx context.Context,
 	opts ...ListOption,
 ) ([]byte, error) {
