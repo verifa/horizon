@@ -2,6 +2,12 @@
 
 > Horizon provides essential building blocks and patterns for creating a minimal internal platform that enables developer self-service and autonomy.
 
+> [!CAUTION]
+> Horizon is under really heavy development right now.
+>
+> We decided to build it in the open, so if you've come here please be gentle and expect things to be broken and changing often.
+> If you think Horizon could be useful for your internal platform then please give it a try, and feel free to start a discussion with your use case!
+
 ## Why Horizon
 
 We could not find something "simple" that would enable us to create self-service capabilities for development teams (or stream-aligned teams in Team Topologies lingo).
