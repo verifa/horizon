@@ -104,7 +104,6 @@ func (a returnIDAction) Do(
 }
 
 func TestBroker(t *testing.T) {
-	t.Parallel()
 	ctx := context.Background()
 	ti := server.Test(t, ctx)
 

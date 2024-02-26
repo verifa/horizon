@@ -38,7 +38,7 @@ to quickly create a Cobra application.`,
 			if !errors.Is(err, os.ErrNotExist) {
 				return fmt.Errorf("open config file: %w", err)
 			}
-			if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(configFile), 0o755); err != nil {
 				return fmt.Errorf("mkdir config file: %w", err)
 			}
 			return nil

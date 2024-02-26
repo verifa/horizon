@@ -11,6 +11,13 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		slog.Error("horizon server failed", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	s, err := server.Start(
@@ -29,8 +36,7 @@ func main() {
 		// ),
 	)
 	if err != nil {
-		slog.Error("failed to start horizon", "error", err)
-		os.Exit(1)
+		return err
 	}
 	defer s.Close()
 	slog.Info("horizon server started", "services", s.Services())
@@ -42,4 +48,5 @@ func main() {
 	slog.Info(
 		"interrupt received, shutting down horizon server",
 	)
+	return nil
 }

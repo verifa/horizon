@@ -25,7 +25,9 @@ func (s Store) validate(
 ) error {
 	subject := fmt.Sprintf("CTLR.validate.%s.%s", key.Group, key.Kind)
 	slog.Info("validate", "subject", subject)
-	reply, err := s.Conn.Request(subject, data, time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	reply, err := s.Conn.RequestWithContext(ctx, subject, data)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
 			return errors.New("controller not responding")

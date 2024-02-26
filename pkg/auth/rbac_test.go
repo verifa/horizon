@@ -421,7 +421,8 @@ func TestCheckStringPatter(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.pattern+"->"+tc.value, func(t *testing.T) {
-			ok := checkStringPattern(&tc.pattern, tc.value)
+			pattern := tc.pattern
+			ok := checkStringPattern(&pattern, tc.value)
 			if ok != tc.expect {
 				t.Fatal("test case failed")
 			}

@@ -131,7 +131,7 @@ type ObjectMeta struct {
 
 	// Revision is the revision number of the object.
 	Revision          *uint64                     `json:"revision,omitempty" cue:"-"`
-	OwnerReferences   []OwnerReference            `json:"ownerReferences,omitempty" cue:"-"`
+	OwnerReferences   []OwnerReference            `json:"ownerReferences,omitempty" cue:",opt"`
 	DeletionTimestamp *Time                       `json:"deletionTimestamp,omitempty" cue:"-"`
 	ManagedFields     managedfields.ManagedFields `json:"managedFields,omitempty" cue:"-"`
 }
@@ -281,5 +281,5 @@ func (r MetaOnlyObject) ObjectGroup() string {
 }
 
 func (r MetaOnlyObject) ObjectAPIVersion() string {
-	return r.ObjectAPIVersion()
+	return r.APIVersion
 }

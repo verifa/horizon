@@ -37,9 +37,9 @@ func WithControllerValidator(validator Validator) ControllerOption {
 	}
 }
 
-func WithControllerValidatorCUE() ControllerOption {
+func WithControllerValidatorCUE(b bool) ControllerOption {
 	return func(ro *controllerOption) {
-		ro.cueValidator = true
+		ro.cueValidator = b
 	}
 }
 
@@ -78,9 +78,9 @@ type controllerOption struct {
 }
 
 var controllerOptionsDefault = controllerOption{
-	// TODO: pick a better default...
 	bucketObjects: BucketObjects,
 	bucketMutex:   BucketMutex,
+	cueValidator:  true,
 }
 
 func StartController(
@@ -157,7 +157,7 @@ func (c *Controller) Start(
 }
 
 func (c *Controller) startSchema(
-	ctx context.Context,
+	_ context.Context,
 	opt controllerOption,
 ) error {
 	obj := opt.forObject

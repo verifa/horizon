@@ -108,15 +108,16 @@ func cueEncodeStruct(cCtx *cue.Context, t reflect.Type) (cue.Value, error) {
 
 	// Handle special structs.
 	iVal := reflect.New(t).Elem().Interface()
-	switch iVal.(type) {
-	case time.Time:
-		return cCtx.BuildExpr(ast.NewIdent("string")), nil
+	if _, ok := iVal.(time.Time); ok {
 		// This was the best attempt at getting formatting for time, but it
 		// involves importing stuff and complicated things a lot right now.
-		// importTime := ast.NewImport(nil, "time")
-		// vtime := &ast.Ident{Name: "time", Node: importTime}
-		// return cCtx.BuildExpr(ast.NewCall(ast.NewSel(vtime, "Format"),
+		// 	importTime := ast.NewImport(nil, "time")
+		// 	vtime := &ast.Ident{Name: "time", Node: importTime}
+		// 	return cCtx.BuildExpr(ast.NewCall(ast.NewSel(vtime, "Format"),
 		// 	ast.NewSel(vtime, "RFC3339"))), nil
+		//
+		// So we just go with string for now.
+		return cCtx.BuildExpr(ast.NewIdent("string")), nil
 	}
 
 	val := cCtx.CompileString("{}")
@@ -155,7 +156,7 @@ func cueEncodeStruct(cCtx *cue.Context, t reflect.Type) (cue.Value, error) {
 			}
 		}
 
-		fieldExpr, err := cueEncodeField(cCtx, field, fieldType)
+		fieldExpr, err := cueEncodeField(cCtx, fieldType)
 		if err != nil {
 			return cue.Value{}, fmt.Errorf(
 				"encoding field %q: %w",
@@ -187,17 +188,16 @@ func cueEncodeStruct(cCtx *cue.Context, t reflect.Type) (cue.Value, error) {
 
 func cueEncodeField(
 	cCtx *cue.Context,
-	field reflect.StructField,
 	fieldType reflect.Type,
 ) (cue.Value, error) {
 	if fieldType.Kind() == reflect.Ptr {
-		return cueEncodeField(cCtx, field, fieldType.Elem())
+		return cueEncodeField(cCtx, fieldType.Elem())
 	}
 
 	// Handle special types.
 	iVal := reflect.New(fieldType).Elem().Interface()
-	switch iVal.(type) {
-	case json.RawMessage:
+	if _, ok := iVal.(json.RawMessage); ok {
+		// Use lattice type for raw message.
 		return cCtx.BuildExpr(ast.NewIdent("_")), nil
 	}
 
@@ -224,7 +224,7 @@ func cueEncodeField(
 	// 	return cCtx.NewList(vals...), nil
 	case reflect.Slice, reflect.Array:
 		elem := fieldType.Elem()
-		elemVal, err := cueEncodeField(cCtx, field, elem)
+		elemVal, err := cueEncodeField(cCtx, elem)
 		if err != nil {
 			return cue.Value{}, err
 		}

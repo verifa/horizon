@@ -56,8 +56,6 @@ type testStep struct {
 	errStatus *int
 }
 
-type testStepConflict struct{}
-
 func parseTestFileName(t *testing.T, file string) testStep {
 	parts := strings.Split(file, ":")
 	ts := testStep{}
@@ -87,6 +85,7 @@ func TestApply(t *testing.T) {
 		ctx,
 		ti.Conn,
 		hz.WithControllerFor(DummyApplyObject{}),
+		hz.WithControllerValidatorCUE(false),
 		hz.WithControllerValidatorForceNone(),
 	)
 	tu.AssertNoError(t, err)
@@ -113,7 +112,7 @@ func TestApply(t *testing.T) {
 		)
 		switch ts.command {
 		case testStepCommandApply:
-			obj, err := yaml.YAMLToJSON([]byte(file.Data))
+			obj, err := yaml.YAMLToJSON(file.Data)
 			tu.AssertNoError(t, err, "obj yaml to json")
 			err = client.Apply(
 				ctx,
@@ -130,7 +129,7 @@ func TestApply(t *testing.T) {
 				return
 			}
 		case testStepCommandAssert:
-			expObj, err := yaml.YAMLToJSON([]byte(file.Data))
+			expObj, err := yaml.YAMLToJSON(file.Data)
 			tu.AssertNoError(t, err, "expObj yaml to json")
 			actObj, err := ti.Store.Get(ctx, store.GetRequest{Key: key})
 			tu.AssertNoError(t, err, "client get")

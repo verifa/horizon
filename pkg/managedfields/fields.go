@@ -86,13 +86,6 @@ const (
 	FieldsV1KeyArray
 )
 
-func (k FieldsV1Key) String() string {
-	if k.Type == FieldsV1KeyObject {
-		return k.Key
-	}
-	return fmt.Sprintf("{%s:%s}", k.Key, k.Value)
-}
-
 func (f FieldsV1) MarshalJSON() ([]byte, error) {
 	if len(f.Fields) > 0 && len(f.Elements) > 0 {
 		return nil, errors.New("cannot have both object and array")
@@ -213,6 +206,13 @@ func (f *FieldsV1Key) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	return errors.New("empty fields key \"k:\"")
+}
+
+func (f FieldsV1Key) String() string {
+	if f.Type == FieldsV1KeyObject {
+		return f.Key
+	}
+	return fmt.Sprintf("{%s:%s}", f.Key, f.Value)
 }
 
 type Operation string

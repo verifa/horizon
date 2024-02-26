@@ -82,6 +82,12 @@ func TestCueDefinition(t *testing.T) {
 			labels?: {
 				[string]: string
 			}
+			ownerReferences?: [...{
+				Group?:   string
+				Kind?:    string
+				Name?:    string
+				Account?: string
+			}]
 		}
 		spec: {
 			embedField: string

@@ -393,12 +393,8 @@ func (r *RBAC) refresh() {
 				return
 			}
 
-			for _, allowRule := range role.Spec.Allow {
-				permissions.Allow = append(permissions.Allow, allowRule)
-			}
-			for _, denyRule := range role.Spec.Deny {
-				permissions.Deny = append(permissions.Deny, denyRule)
-			}
+			permissions.Allow = append(permissions.Allow, role.Spec.Allow...)
+			permissions.Deny = append(permissions.Deny, role.Spec.Deny...)
 		}
 	}
 

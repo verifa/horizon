@@ -68,7 +68,9 @@ func Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
 	go func() {
 		_ = server.Serve(list)
 	}()
-	defer server.Shutdown(ctx)
+	defer func() {
+		_ = server.Shutdown(ctx)
+	}()
 
 	select {
 	case <-ctx.Done():
@@ -91,7 +93,7 @@ func (l *loginHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	userConfig, err := postNewUser(l.baseURL, sessionCookie, "test")
+	userConfig, err := postNewUser(l.baseURL, sessionCookie)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -111,7 +113,6 @@ func (l *loginHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 func postNewUser(
 	baseURL *url.URL,
 	cookie *http.Cookie,
-	account string,
 ) ([]byte, error) {
 	loginURL := baseURL.JoinPath("auth", "login")
 	req, err := http.NewRequest(
@@ -153,7 +154,7 @@ func openBrowser(url string) error {
 		cmd = exec.Command("open", url)
 	case "windows":
 		r := strings.NewReplacer("&", "^&")
-		cmd = exec.Command("cmd", "/c", "start", r.Replace(url))
+		cmd = exec.Command("cmd", "/c", "start", r.Replace(url)) //nolint:gosec
 	}
 	if cmd != nil {
 		cmd.Stdout = os.Stdout

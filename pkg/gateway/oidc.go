@@ -173,7 +173,7 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	returnURL, err := or.verifyState(w, req)
+	returnURL, err := or.verifyState(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -315,7 +315,6 @@ func (or *oidcHandler) stateCookie(
 }
 
 func (or *oidcHandler) verifyState(
-	w http.ResponseWriter,
 	req *http.Request,
 ) (string, error) {
 	state := req.FormValue("state")

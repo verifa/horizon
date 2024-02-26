@@ -182,8 +182,7 @@ func (s Server) Close() error {
 func (s Server) sysUserConn() (*nats.Conn, error) {
 	nc, err := nats.Connect(
 		s.NS.ClientURL(),
-		nats.UserJWTAndSeed(s.Auth.SysUser.JWT, string(s.Auth.SysUser.Seed)),
-		// UserJWTOption(t.Auth.SysUser.JWT, t.Auth.SysUser.KeyPair),
+		nats.UserJWTAndSeed(s.Auth.SysUser.JWT, s.Auth.SysUser.Seed),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to nats: %w", err)
@@ -197,7 +196,7 @@ func (s Server) RootUserConn() (*nats.Conn, error) {
 		s.NS.ClientURL(),
 		nats.UserJWTAndSeed(
 			s.Auth.RootUser.JWT,
-			string(s.Auth.RootUser.Seed),
+			s.Auth.RootUser.Seed,
 		),
 	)
 	if err != nil {

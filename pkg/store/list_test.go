@@ -20,8 +20,6 @@ var cmpOptIgnoreMetaRevision = cmp.FilterPath(func(p cmp.Path) bool {
 }, cmp.Ignore())
 
 func TestList(t *testing.T) {
-	t.Parallel()
-
 	ctx := context.Background()
 	ti := server.Test(t, ctx)
 
@@ -30,7 +28,6 @@ func TestList(t *testing.T) {
 		ctx,
 		ti.Conn,
 		hz.WithControllerFor(DummyApplyObject{}),
-		hz.WithControllerValidatorCUE(),
 	)
 	tu.AssertNoError(t, err)
 	t.Cleanup(func() {

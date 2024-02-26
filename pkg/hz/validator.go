@@ -74,6 +74,5 @@ func (v *CUEValidator) Validate(ctx context.Context, data []byte) error {
 		}
 		return fmt.Errorf("validating cue value: %w", err)
 	}
-	fmt.Println("VALIDATION OK!")
 	return nil
 }

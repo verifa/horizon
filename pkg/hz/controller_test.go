@@ -34,8 +34,6 @@ func (r *ChildReconciler) Reconcile(
 }
 
 func TestReconciler(t *testing.T) {
-	t.Parallel()
-
 	ctx := context.Background()
 	ti := server.Test(t, ctx)
 
@@ -109,7 +107,6 @@ func (r *PanicReconciler) Reconcile(
 }
 
 func TestReconcilerPanic(t *testing.T) {
-	t.Parallel()
 	ctx := context.Background()
 	ti := server.Test(t, ctx)
 
@@ -177,7 +174,6 @@ func (r *SlowReconciler) Reconcile(
 }
 
 func TestReconcilerSlow(t *testing.T) {
-	t.Parallel()
 	ctx := context.Background()
 	lockTTL := time.Second
 	ti := server.Test(
@@ -259,7 +255,6 @@ func (r *ConcurrentReconciler) Reconcile(
 }
 
 func TestReconcilerConcurrent(t *testing.T) {
-	t.Parallel()
 	ctx := context.Background()
 	ti := server.Test(t, ctx)
 

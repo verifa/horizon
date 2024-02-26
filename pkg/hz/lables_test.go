@@ -3,8 +3,6 @@ package hz
 import "testing"
 
 func TestLabelSelector(t *testing.T) {
-	t.Parallel()
-
 	type testcase struct {
 		name     string
 		labels   map[string]string

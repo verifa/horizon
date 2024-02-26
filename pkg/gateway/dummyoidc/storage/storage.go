@@ -317,7 +317,7 @@ func (s *Storage) CreateAccessAndRefreshTokens(
 	ctx context.Context,
 	request op.TokenRequest,
 	currentRefreshToken string,
-) (accessTokenID string, newRefreshToken string, expiration time.Time, err error) {
+) (accessTokenID, newRefreshToken string, expiration time.Time, err error) {
 	// generate tokens via token exchange flow if request is relevant
 	if teReq, ok := request.(op.TokenExchangeRequest); ok {
 		return s.exchangeRefreshToken(ctx, teReq)
@@ -372,7 +372,7 @@ func (s *Storage) CreateAccessAndRefreshTokens(
 func (s *Storage) exchangeRefreshToken(
 	ctx context.Context,
 	request op.TokenExchangeRequest,
-) (accessTokenID string, newRefreshToken string, expiration time.Time, err error) {
+) (accessTokenID, newRefreshToken string, expiration time.Time, err error) {
 	applicationID := request.GetClientID()
 	authTime := request.GetAuthTime()
 
@@ -437,7 +437,7 @@ func (s *Storage) GetRefreshTokenInfo(
 	ctx context.Context,
 	clientID string,
 	token string,
-) (userID string, tokenID string, err error) {
+) (userID, tokenID string, err error) {
 	refreshToken, ok := s.refreshTokens[token]
 	if !ok {
 		return "", "", op.ErrInvalidRefreshToken

@@ -35,8 +35,7 @@ var (
 type Sessions struct {
 	Conn *nats.Conn
 
-	kv   jetstream.KeyValue
-	subs []*nats.Subscription
+	kv jetstream.KeyValue
 }
 
 func (s *Sessions) Start(ctx context.Context) error {

@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -9,33 +8,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nkeys"
-	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/extensions/accounts"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/natsutil"
 )
 
-var dummyAuthDefault = auth.UserInfo{
-	Sub:    "123",
-	Iss:    "http://localhost:9998/",
-	Name:   "John Doe",
-	Email:  "local@localhost",
-	Groups: []string{"admin"},
-}
-
-func dummyAuthHandler(
-	next http.Handler,
-	userInfo auth.UserInfo,
-) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		ctx = context.WithValue(ctx, authContext, userInfo)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-// TODO: should login use user actor or generate credentials directly?
-// If user actor, how do we limit permissions??
+// handleAuthLogin generates nats user credentials for the root nats account.
 func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	superAccountClient := hz.ObjectClient[accounts.Account]{
 		Client: hz.NewClient(s.Conn, hz.WithClientInternal(true)),
@@ -64,6 +42,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	claims.IssuerAccount = rootAccount.Status.ID
 	claims.Pub.Allow.Add(hz.SubjectAPIAllowAll)
 	claims.Expires = time.Now().Add(time.Hour * 24).Unix()
+	claims.Claims()
 	userJWT, err := claims.Encode(signingKey)
 	if err != nil {
 		httpError(w, fmt.Errorf("encode claims: %w", err))

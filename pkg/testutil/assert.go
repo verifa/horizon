@@ -19,7 +19,7 @@ func AssertNoError(t *testing.T, err error, msg ...string) {
 }
 
 // AssertErrorIs checks if the error is another error.
-func AssertErrorIs(t *testing.T, err error, expErr error, msg ...string) {
+func AssertErrorIs(t *testing.T, err, expErr error, msg ...string) {
 	t.Helper()
 	if err == nil {
 		t.Fatal(Callers(), msg, errors.New("error was expected but is nil"))

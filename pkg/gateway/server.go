@@ -22,11 +22,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httplog"
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
-)
-
-const (
-	bucketSession = "hz_session"
 )
 
 //go:embed dist/htmx-1.9.8.min.js
@@ -58,7 +53,8 @@ func WithDummyAuthUsers(users ...storage.User) ServerOption {
 			o.dummyAuthUsers = make(map[string]*storage.User)
 		}
 		for _, user := range users {
-			o.dummyAuthUsers[user.ID] = &user
+			u := user
+			o.dummyAuthUsers[user.ID] = &u
 		}
 	}
 }
@@ -283,41 +279,6 @@ func (s *Server) start(
 	}()
 
 	return nil
-}
-
-func (s *Server) initSessionBucket(
-	ctx context.Context,
-) (jetstream.KeyValue, error) {
-	js, err := jetstream.New(s.Conn)
-	if err != nil {
-		return nil, fmt.Errorf("new jetstream: %w", err)
-	}
-
-	kv, err := js.KeyValue(ctx, bucketSession)
-	if err != nil {
-		if !errors.Is(err, jetstream.ErrBucketNotFound) {
-			return nil, fmt.Errorf(
-				"get objects bucket %q: %w",
-				bucketSession,
-				err,
-			)
-		}
-		kv, err := js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
-			Description: "KV bucket for storing horizon user sessions.",
-			Bucket:      bucketSession,
-			History:     1,
-			TTL:         0,
-		})
-		if err != nil {
-			return nil, fmt.Errorf(
-				"create objects bucket %q: %w",
-				bucketSession,
-				err,
-			)
-		}
-		return kv, nil
-	}
-	return kv, nil
 }
 
 func (s *Server) Close() error {

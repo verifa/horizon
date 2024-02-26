@@ -248,7 +248,6 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		defaultOptions := []hz.ControllerOption{
 			hz.WithControllerFor(accounts.Account{}),
 			hz.WithControllerReconciler(&recon),
-			hz.WithControllerValidatorCUE(),
 		}
 
 		ctlr, err := hz.StartController(

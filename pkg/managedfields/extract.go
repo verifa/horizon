@@ -1,7 +1,6 @@
 package managedfields
 
 import (
-	"encoding/json"
 	"fmt"
 )
 
@@ -19,10 +18,10 @@ func ExtractFieldsV1Object(
 			dst[key] = value
 			continue
 		}
-		switch value.(type) {
+		switch value := value.(type) {
 		case map[string]interface{}:
 			subDst, err := ExtractFieldsV1Object(
-				value.(map[string]interface{}),
+				value,
 				subFields,
 			)
 			if err != nil {
@@ -31,7 +30,7 @@ func ExtractFieldsV1Object(
 			dst[key] = subDst
 		case []interface{}:
 			subDst, err := extractFieldsV1Array(
-				value.([]interface{}),
+				value,
 				subFields,
 			)
 			if err != nil {
@@ -95,16 +94,4 @@ func FindIndexArrayByKey(obj []interface{}, key FieldsV1Key) int {
 		}
 	}
 	return -1
-}
-
-func mapToObject[T any](m map[string]interface{}) (T, error) {
-	var t T
-	bDst, err := json.Marshal(m)
-	if err != nil {
-		return t, fmt.Errorf("marshalling object: %w", err)
-	}
-	if err := json.Unmarshal(bDst, &t); err != nil {
-		return t, fmt.Errorf("unmarshalling object: %w", err)
-	}
-	return t, nil
 }

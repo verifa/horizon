@@ -76,7 +76,6 @@ func (a *Auth) Start(
 		ctx,
 		a.Conn,
 		hz.WithControllerFor(&Role{}),
-		hz.WithControllerValidatorCUE(),
 	)
 	if err != nil {
 		return fmt.Errorf("starting role controller: %w", err)
@@ -87,7 +86,6 @@ func (a *Auth) Start(
 		ctx,
 		a.Conn,
 		hz.WithControllerFor(&RoleBinding{}),
-		hz.WithControllerValidatorCUE(),
 	)
 	if err != nil {
 		return fmt.Errorf("starting rolebinding controller: %w", err)

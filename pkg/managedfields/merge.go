@@ -108,17 +108,17 @@ func fieldsConflict(
 	}
 }
 
-func fieldsDiff(mr *MergeResult, old, new FieldsV1) {
-	for oldKey, oldValue := range old.Fields {
-		newValue, ok := new.Fields[oldKey]
+func fieldsDiff(mr *MergeResult, oldFields, newFields FieldsV1) {
+	for oldKey, oldValue := range oldFields.Fields {
+		newValue, ok := newFields.Fields[oldKey]
 		if !ok {
 			mr.Removed = append(mr.Removed, oldValue)
 			continue
 		}
 		fieldsDiff(mr, oldValue, newValue)
 	}
-	for oldKey, oldValue := range old.Elements {
-		newValue, ok := new.Elements[oldKey]
+	for oldKey, oldValue := range oldFields.Elements {
+		newValue, ok := newFields.Elements[oldKey]
 		if !ok {
 			mr.Removed = append(mr.Removed, oldValue)
 			continue
@@ -251,7 +251,7 @@ func MergeObjects(
 	mergeObjects(dst, src)
 }
 
-func mergeObjects(dst map[string]interface{}, src map[string]interface{}) {
+func mergeObjects(dst, src map[string]interface{}) {
 	for key, srcValue := range src {
 		if dstValue, ok := dst[key]; ok {
 			switch sv := srcValue.(type) {

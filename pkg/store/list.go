@@ -30,9 +30,11 @@ func (s Store) List(
 			Message: fmt.Sprintf("watching key: %s", err.Error()),
 		}
 	}
-	defer watcher.Stop()
+	defer func() {
+		_ = watcher.Stop()
+	}()
 
-	var objects []json.RawMessage
+	objects := []json.RawMessage{}
 	for entry := range watcher.Updates() {
 		if entry == nil {
 			break
