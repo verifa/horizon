@@ -20,7 +20,7 @@ func TestAccount(t *testing.T) {
 	client := hz.NewClient(
 		ti.Conn,
 		hz.WithClientInternal(true),
-		hz.WithClientManager("ctlr-accounts"),
+		hz.WithClientManager("test"),
 	)
 	// recon := accounts.AccountReconciler{
 	// 	Client:            client,
@@ -42,10 +42,10 @@ func TestAccount(t *testing.T) {
 			Account: hz.RootAccount,
 			Name:    "test",
 		},
-		Spec: accounts.AccountSpec{},
+		Spec: &accounts.AccountSpec{},
 	}
 	accClient := hz.ObjectClient[accounts.Account]{Client: client}
-	err := accClient.Create(ctx, account)
+	err := accClient.Apply(ctx, account)
 	tu.AssertNoError(t, err)
 
 	// Create a timeout and a done channel.
@@ -66,6 +66,9 @@ func TestAccount(t *testing.T) {
 						"unmarshalling account: %w",
 						err,
 					)
+				}
+				if acc.Status == nil {
+					return hz.Result{}, nil
 				}
 				t.Log("account ready? ", acc.Status.Ready)
 				if acc.Status.Ready == true {

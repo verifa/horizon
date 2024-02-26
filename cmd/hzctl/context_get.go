@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/verifa/horizon/pkg/hzctl"
 )
 
 var contextGetCmd = &cobra.Command{
@@ -17,14 +18,14 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if config.CurrentContext == "" {
-			return fmt.Errorf("no current context")
-		}
-		hCtx, ok := config.Current()
-		if !ok {
+		hCtx, err := config.Context(
+			hzctl.WithContextCurrent(true),
+			hzctl.WithContextValidate(hzctl.WithValidateSession(true)),
+		)
+		if err != nil {
 			return fmt.Errorf(
-				"current context not found: %q",
-				config.CurrentContext,
+				"obtaining current context: %w",
+				err,
 			)
 		}
 		fmt.Println(hCtx.Name, hCtx.URL)

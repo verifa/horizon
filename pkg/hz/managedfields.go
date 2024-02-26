@@ -1,213 +1,90 @@
 package hz
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"strconv"
-	"strings"
+
+	"github.com/verifa/horizon/pkg/managedfields"
 )
 
-type FieldManager struct {
-	Manager string `json:"manager" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
-	// Operation  Operation `json:"operation" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
-	// Time       time.Time `json:"time" cue:",opt"`
-	FieldsType string   `json:"fieldsType" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
-	FieldsV1   FieldsV1 `json:"fieldsV1"`
-}
-
-type FieldsV1 struct {
-	Parent *FieldsV1Step `json:"-"`
-	// Fields = Object
-	Fields map[FieldsV1Key]FieldsV1 `json:"-"`
-	// Elements = Array
-	Elements map[FieldsV1Key]FieldsV1 `json:"-"`
-}
-
-func (f FieldsV1) IsLeaf() bool {
-	return len(f.Fields) == 0 && len(f.Elements) == 0
-}
-
-func (f FieldsV1) Path() FieldsV1Path {
-	if f.Parent == nil {
-		return FieldsV1Path{}
+// ExtractManagedFields creates an object containing the fields managed by the
+// given manager. If the manager does not manage any fields, the object will be
+// empty (except for the identifying fields, like metadata.name,
+// metadata.account).
+//
+// The use of ExtractManagedFields is for a controller (for example) to get an
+// object from the store, extract the fields it manages, and then update the
+// object with the managed fields.
+func ExtractManagedFields[T Objecter](
+	object T,
+	manager string,
+) (T, error) {
+	var t T
+	bObject, err := json.Marshal(object)
+	if err != nil {
+		return t, fmt.Errorf("marshalling object: %w", err)
 	}
-	return append(f.Parent.Field.Path(), *f.Parent)
-}
-
-type FieldsV1Path []FieldsV1Step
-
-func (p FieldsV1Path) String() string {
-	steps := []string{}
-	for _, step := range p {
-		steps = append(steps, step.Key.Key)
+	var src map[string]interface{}
+	if err := json.Unmarshal(bObject, &src); err != nil {
+		return t, fmt.Errorf("unmarshalling object: %w", err)
 	}
-	return strings.Join(steps, ".")
-}
 
-type FieldsV1Step struct {
-	Key   FieldsV1Key `json:"-"`
-	Field *FieldsV1   `json:"-"`
-}
-
-func (s FieldsV1Step) String() string {
-	if s.Field.Parent == nil {
-		return s.Key.String()
-	}
-	steps := []string{s.Key.String()}
-	for step := s.Field.Parent; step != nil; step = step.Field.Parent {
-		steps = append([]string{step.Key.String()}, steps...)
-	}
-	return strings.Join(steps, ".")
-}
-
-type FieldsV1Key struct {
-	Type  FieldsV1KeyType `json:"-"`
-	Key   string          `json:"-"`
-	Value string          `json:"-"`
-}
-
-type FieldsV1KeyType int
-
-const (
-	FieldsV1KeyObject FieldsV1KeyType = iota
-	FieldsV1KeyArray
-)
-
-func (k FieldsV1Key) String() string {
-	if k.Type == FieldsV1KeyObject {
-		return k.Key
-	}
-	return fmt.Sprintf("{%s:%s}", k.Key, k.Value)
-}
-
-func (f FieldsV1) MarshalJSON() ([]byte, error) {
-	if len(f.Fields) > 0 && len(f.Elements) > 0 {
-		return nil, errors.New("cannot have both object and array")
-	}
-	if len(f.Fields) > 0 {
-		buf := bytes.Buffer{}
-		buf.WriteString("{")
-		index := 0
-		for key, subField := range f.Fields {
-			bSub, err := json.Marshal(subField)
-			if err != nil {
-				return nil, err
-			}
-			if index > 0 {
-				buf.WriteString(",")
-			}
-			buf.WriteString(fmt.Sprintf("\"f:%s\":", key.Key))
-			buf.Write(bSub)
-			index++
+	fieldManager, ok := object.ObjectManagedFields().FieldManager(manager)
+	if !ok {
+		// If the field manager is not found, this manager currently owns no
+		// fields in the object.
+		// Therefore return an empty object with the necessary fields set (i.e.
+		// kind, apiVersion, metadata.name, metadata.account).
+		dst := map[string]interface{}{}
+		copyObjectIDToMap(object, dst)
+		t, err := mapToObject[T](dst)
+		if err != nil {
+			return t, fmt.Errorf("converting dst map to object: %w", err)
 		}
-		buf.WriteString("}")
-		return buf.Bytes(), nil
+		return t, nil
 	}
-	if len(f.Elements) > 0 {
-		buf := bytes.Buffer{}
-		buf.WriteString("{")
-		index := 0
-		for key, subField := range f.Elements {
-			bSub, err := json.Marshal(subField)
-			if err != nil {
-				return nil, err
-			}
-			if index > 0 {
-				buf.WriteString(",")
-			}
-			// Could json unmarshal key otherwise, but this seems easier
-			// somehow.
-			strKey := strconv.Quote(
-				fmt.Sprintf("k:{\"%s\":\"%s\"}", key.Key, key.Value),
-			)
-			buf.WriteString(fmt.Sprintf("%s:%s", strKey, bSub))
-			index++
+	ownedFields, err := managedfields.ExtractFieldsV1Object(
+		src,
+		fieldManager.FieldsV1,
+	)
+	if err != nil {
+		return t, fmt.Errorf("extracting fields: %w", err)
+	}
+	copyObjectIDToMap(object, ownedFields)
+
+	t, err = mapToObject[T](ownedFields)
+	if err != nil {
+		return t, fmt.Errorf("converting dst map to object: %w", err)
+	}
+	return t, nil
+}
+
+func copyObjectIDToMap(
+	obj Objecter,
+	m map[string]interface{},
+) {
+	meta, ok := m["metadata"].(map[string]interface{})
+	if !ok {
+		meta = map[string]interface{}{
+			"name":    obj.ObjectName(),
+			"account": obj.ObjectAccount(),
 		}
-		buf.WriteString("}")
-
-		return buf.Bytes(), nil
+		m["metadata"] = meta
+		return
 	}
-	return []byte("{}"), nil
+	meta["name"] = obj.ObjectName()
+	meta["account"] = obj.ObjectAccount()
+	m["metadata"] = meta
 }
 
-func (f *FieldsV1) UnmarshalJSON(data []byte) error {
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+func mapToObject[T Objecter](m map[string]interface{}) (T, error) {
+	var t T
+	bDst, err := json.Marshal(m)
+	if err != nil {
+		return t, fmt.Errorf("marshalling object: %w", err)
 	}
-
-	for key, value := range raw {
-		switch key[0:2] {
-		case "f:":
-			if len(f.Fields) == 0 {
-				f.Fields = make(map[FieldsV1Key]FieldsV1, len(raw))
-			}
-			var subField FieldsV1
-			if err := json.Unmarshal(value, &subField); err != nil {
-				return err
-			}
-			subKey := FieldsV1Key{Key: key[2:]}
-
-			subField.Parent = &FieldsV1Step{
-				Key:   subKey,
-				Field: f,
-			}
-			f.Fields[subKey] = subField
-		case "k:":
-			if len(f.Elements) == 0 {
-				f.Elements = make(map[FieldsV1Key]FieldsV1, len(raw))
-			}
-			var subKey FieldsV1Key
-			if err := json.Unmarshal([]byte(key[2:]), &subKey); err != nil {
-				return err
-			}
-			var subField FieldsV1
-			if err := json.Unmarshal(value, &subField); err != nil {
-				return err
-			}
-			subField.Parent = &FieldsV1Step{
-				Key:   subKey,
-				Field: f,
-			}
-			f.Elements[subKey] = subField
-		default:
-			return fmt.Errorf("invalid key: %s", key)
-		}
+	if err := json.Unmarshal(bDst, &t); err != nil {
+		return t, fmt.Errorf("unmarshalling object: %w", err)
 	}
-	return nil
+	return t, nil
 }
-
-func (f FieldsV1Key) MarshalJSON() ([]byte, error) {
-	if f.Type == FieldsV1KeyObject {
-		return nil, errors.New(
-			"cannot marshal key of type object (must be array)",
-		)
-	}
-	return json.Marshal(map[string]string{
-		f.Key: f.Value,
-	})
-}
-
-func (f *FieldsV1Key) UnmarshalJSON(data []byte) error {
-	var raw map[string]string
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	for key, value := range raw {
-		f.Type = FieldsV1KeyArray
-		f.Key = key
-		f.Value = value
-		return nil
-	}
-	return errors.New("empty fields key \"k:\"")
-}
-
-type Operation string
-
-const (
-	OperationCreate Operation = "Create"
-	OperationUpdate Operation = "Update"
-	OperationApply  Operation = "Apply"
-)

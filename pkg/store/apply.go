@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/tidwall/sjson"
 	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/managedfields"
 )
 
 type ApplyRequest struct {
@@ -20,6 +20,7 @@ type ApplyRequest struct {
 }
 
 func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
+	// TODO: validate should come once we have merged the object.
 	if err := s.validate(ctx, req.Key, req.Data); err != nil {
 		return &hz.Error{
 			Status: http.StatusBadRequest,
@@ -31,7 +32,8 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 		}
 	}
 
-	fieldsV1, err := ManagedFieldsV1(req.Data)
+	// Create managed fields for the request data.
+	fieldsV1, err := managedfields.ManagedFieldsV1(req.Data)
 	if err != nil {
 		return &hz.Error{
 			Status: http.StatusBadRequest,
@@ -41,12 +43,14 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 			),
 		}
 	}
-	fieldManager := hz.FieldManager{
+	fieldManager := managedfields.FieldManager{
 		Manager:    req.Manager,
 		FieldsV1:   fieldsV1,
 		FieldsType: "FieldsV1",
 	}
 
+	// Get the existing object (if it exists).
+	// If not, add the managed fields to the request and create the object.
 	rawObj, err := s.get(ctx, req.Key)
 	if err != nil {
 		if !errors.Is(err, hz.ErrNotFound) {
@@ -58,8 +62,6 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 				),
 			}
 		}
-		// Object does not exist.
-		// In this case, create the object from the payload.
 		var generic hz.GenericObject
 		if err := json.Unmarshal(req.Data, &generic); err != nil {
 			return &hz.Error{
@@ -70,20 +72,7 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 				),
 			}
 		}
-		b, err := json.Marshal([]hz.FieldManager{fieldManager})
-		if err != nil {
-			return &hz.Error{
-				Status: http.StatusInternalServerError,
-				Message: fmt.Sprintf(
-					"marshalling field manager: %s",
-					err.Error(),
-				),
-			}
-		}
-		// Set the kind as this might not exist in the JSON payload.
-		generic.Kind = req.Key.Kind
-		generic.Group = req.Key.Group
-		generic.ManagedFields = b
+		generic.ManagedFields = []managedfields.FieldManager{fieldManager}
 		bGeneric, err := json.Marshal(generic)
 		if err != nil {
 			return &hz.Error{
@@ -106,7 +95,8 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 		return nil
 	}
 
-	// If the object already exists we need to perform a merge.
+	// If the object already exists we need to perform a merge of the objects
+	// and managed fields.
 	// Decode the existing object's managed fields.
 	var generic hz.GenericObject
 	if err := json.Unmarshal(rawObj, &generic); err != nil {
@@ -118,24 +108,13 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 			),
 		}
 	}
-	var fieldManagers []hz.FieldManager
-	// If the stored JSON does not contain any managed fields, skip decoding.
-	// Otherwise we get an error because we are trying to decode an empty JSON
-	// string (which is invalid JSON).
-	if len(generic.ManagedFields) != 0 {
-		if err := json.Unmarshal(generic.ManagedFields, &fieldManagers); err != nil {
-			return &hz.Error{
-				Status: http.StatusInternalServerError,
-				Message: fmt.Sprintf(
-					"decoding existing managed fields: %s",
-					err.Error(),
-				),
-			}
-		}
-	}
-	result, err := MergeManagedFields(fieldManagers, fieldManager)
+	// Merge managed fields and detect any conflicts.
+	result, err := managedfields.MergeManagedFields(
+		generic.ManagedFields,
+		fieldManager,
+	)
 	if err != nil {
-		var conflictErr *Conflict
+		var conflictErr *managedfields.Conflict
 		if !errors.As(err, &conflictErr) {
 			return &hz.Error{
 				Status: http.StatusInternalServerError,
@@ -154,16 +133,13 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 		}
 	}
 
-	newObj, err := sjson.SetBytes(
-		rawObj,
-		"metadata.managedFields",
-		result.ManagedFields,
-	)
+	generic.ManagedFields = result.ManagedFields
+	newObj, err := json.Marshal(generic)
 	if err != nil {
 		return &hz.Error{
 			Status: http.StatusInternalServerError,
 			Message: fmt.Sprintf(
-				"setting managed fields: %s",
+				"marshalling merged managed fields object: %s",
 				err.Error(),
 			),
 		}
@@ -192,7 +168,7 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 			),
 		}
 	}
-	if err := PurgeRemovedFields(dst, result.Removed); err != nil {
+	if err := managedfields.PurgeRemovedFields(dst, result.Removed); err != nil {
 		return &hz.Error{
 			Status: http.StatusInternalServerError,
 			Message: fmt.Sprintf(
@@ -201,7 +177,7 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 			),
 		}
 	}
-	MergeObjects(dst, src)
+	managedfields.MergeObjects(dst, src)
 	bDst, err := json.Marshal(dst)
 	if err != nil {
 		return &hz.Error{

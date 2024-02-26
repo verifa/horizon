@@ -14,14 +14,14 @@ type ListRequest struct {
 	Key hz.ObjectKey `json:"key,omitempty"`
 }
 
-type ListResponse struct {
-	Data []json.RawMessage `json:"data"`
-}
+// type ListResponse struct {
+// 	Data []json.RawMessage `json:"data"`
+// }
 
 func (s Store) List(
 	ctx context.Context,
 	req ListRequest,
-) (*ListResponse, error) {
+) (*hz.ObjectList, error) {
 	wOpts := []jetstream.WatchOpt{jetstream.IgnoreDeletes()}
 	watcher, err := s.kv.Watch(ctx, hz.KeyFromObject(req.Key), wOpts...)
 	if err != nil {
@@ -43,7 +43,7 @@ func (s Store) List(
 		}
 		objects = append(objects, data)
 	}
-	return &ListResponse{
-		Data: objects,
+	return &hz.ObjectList{
+		Items: objects,
 	}, nil
 }

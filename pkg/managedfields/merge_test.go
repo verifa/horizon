@@ -1,12 +1,10 @@
-package store_test
+package managedfields
 
 import (
 	"encoding/json"
 	"fmt"
 	"testing"
 
-	"github.com/verifa/horizon/pkg/hz"
-	"github.com/verifa/horizon/pkg/store"
 	tu "github.com/verifa/horizon/pkg/testutil"
 )
 
@@ -15,8 +13,8 @@ func TestMergeManagedFields(t *testing.T) {
 		name          string
 		managedFields string
 		merge         string
-		expConflict   func(hz.FieldsV1) []hz.FieldsV1
-		expRemoved    func([]hz.FieldManager) []hz.FieldsV1
+		expConflict   func(FieldsV1) []FieldsV1
+		expRemoved    func([]FieldManager) []FieldsV1
 	}
 	tests := []test{
 		{
@@ -44,8 +42,8 @@ func TestMergeManagedFields(t *testing.T) {
 					}
 				}
 			}`,
-			expConflict: func(fields hz.FieldsV1) []hz.FieldsV1 { return nil },
-			expRemoved:  func(fms []hz.FieldManager) []hz.FieldsV1 { return nil },
+			expConflict: func(fields FieldsV1) []FieldsV1 { return nil },
+			expRemoved:  func(fms []FieldManager) []FieldsV1 { return nil },
 		},
 		{
 			name: "array",
@@ -67,8 +65,8 @@ func TestMergeManagedFields(t *testing.T) {
 					}
 				}
 			}`,
-			expConflict: func(fields hz.FieldsV1) []hz.FieldsV1 { return nil },
-			expRemoved:  func(fms []hz.FieldManager) []hz.FieldsV1 { return nil },
+			expConflict: func(fields FieldsV1) []FieldsV1 { return nil },
+			expRemoved:  func(fms []FieldManager) []FieldsV1 { return nil },
 		},
 		{
 			name: "removed object",
@@ -93,9 +91,9 @@ func TestMergeManagedFields(t *testing.T) {
 					}
 				}
 			}`,
-			expConflict: func(fields hz.FieldsV1) []hz.FieldsV1 { return nil },
-			expRemoved: func(fms []hz.FieldManager) []hz.FieldsV1 {
-				return []hz.FieldsV1{
+			expConflict: func(fields FieldsV1) []FieldsV1 { return nil },
+			expRemoved: func(fms []FieldManager) []FieldsV1 {
+				return []FieldsV1{
 					fms[0].FieldsV1.Fields[fkey("metadata")].Fields[fkey("labels")],
 				}
 			},
@@ -121,11 +119,11 @@ func TestMergeManagedFields(t *testing.T) {
 					}
 				}
 			}`,
-			expConflict: func(fields hz.FieldsV1) []hz.FieldsV1 { return nil },
-			expRemoved: func(fms []hz.FieldManager) []hz.FieldsV1 {
-				return []hz.FieldsV1{
-					fms[0].FieldsV1.Fields[fkey("slice")].Elements[hz.FieldsV1Key{
-						Type:  hz.FieldsV1KeyArray,
+			expConflict: func(fields FieldsV1) []FieldsV1 { return nil },
+			expRemoved: func(fms []FieldManager) []FieldsV1 {
+				return []FieldsV1{
+					fms[0].FieldsV1.Fields[fkey("slice")].Elements[FieldsV1Key{
+						Type:  FieldsV1KeyArray,
 						Key:   "id",
 						Value: "2",
 					}],
@@ -152,12 +150,12 @@ func TestMergeManagedFields(t *testing.T) {
 					}
 				}
 			}`,
-			expConflict: func(fields hz.FieldsV1) []hz.FieldsV1 {
-				return []hz.FieldsV1{
+			expConflict: func(fields FieldsV1) []FieldsV1 {
+				return []FieldsV1{
 					fields.Fields[fkey("metadata")].Fields[fkey("name")],
 				}
 			},
-			expRemoved: func(fms []hz.FieldManager) []hz.FieldsV1 { return nil },
+			expRemoved: func(fms []FieldManager) []FieldsV1 { return nil },
 		},
 		{
 			name: "conflict array",
@@ -179,36 +177,36 @@ func TestMergeManagedFields(t *testing.T) {
 					}
 				}
 			}`,
-			expConflict: func(fields hz.FieldsV1) []hz.FieldsV1 {
-				return []hz.FieldsV1{
-					fields.Fields[fkey("slice")].Elements[hz.FieldsV1Key{
-						Type:  hz.FieldsV1KeyArray,
+			expConflict: func(fields FieldsV1) []FieldsV1 {
+				return []FieldsV1{
+					fields.Fields[fkey("slice")].Elements[FieldsV1Key{
+						Type:  FieldsV1KeyArray,
 						Key:   "id",
 						Value: "1",
 					}],
 				}
 			},
-			expRemoved: func(fms []hz.FieldManager) []hz.FieldsV1 { return nil },
+			expRemoved: func(fms []FieldManager) []FieldsV1 { return nil },
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var managedFields []hz.FieldManager
+			var managedFields []FieldManager
 			err := json.Unmarshal([]byte(tc.managedFields), &managedFields)
 			tu.AssertNoError(t, err, "parsing managed fields json")
-			var merge hz.FieldManager
+			var merge FieldManager
 			err = json.Unmarshal([]byte(tc.merge), &merge)
 			tu.AssertNoError(t, err, "parsing field manager json")
 
 			var expErr error
 			expConflictFields := tc.expConflict(merge.FieldsV1)
 			if len(expConflictFields) > 0 {
-				expErr = &store.Conflict{
+				expErr = &Conflict{
 					Fields: expConflictFields,
 				}
 			}
 			expRm := tc.expRemoved(managedFields)
-			result, err := store.MergeManagedFields(managedFields, merge)
+			result, err := MergeManagedFields(managedFields, merge)
 			tu.AssertEqual(t, expErr, err, cmpOptIgnoreParent)
 			tu.AssertEqual(
 				t,
@@ -218,18 +216,18 @@ func TestMergeManagedFields(t *testing.T) {
 			)
 		})
 	}
-	mf := []hz.FieldManager{
+	mf := []FieldManager{
 		{
 			Manager: "m1",
-			FieldsV1: hz.FieldsV1{
-				Fields: map[hz.FieldsV1Key]hz.FieldsV1{
+			FieldsV1: FieldsV1{
+				Fields: map[FieldsV1Key]FieldsV1{
 					fkey("metadata"): {
-						Fields: map[hz.FieldsV1Key]hz.FieldsV1{
+						Fields: map[FieldsV1Key]FieldsV1{
 							fkey("name"): {},
 						},
 					},
 					fkey("spec"): {
-						Fields: map[hz.FieldsV1Key]hz.FieldsV1{
+						Fields: map[FieldsV1Key]FieldsV1{
 							fkey("replicas"): {},
 						},
 					},
@@ -238,15 +236,15 @@ func TestMergeManagedFields(t *testing.T) {
 		},
 		{
 			Manager: "m2",
-			FieldsV1: hz.FieldsV1{
-				Fields: map[hz.FieldsV1Key]hz.FieldsV1{
+			FieldsV1: FieldsV1{
+				Fields: map[FieldsV1Key]FieldsV1{
 					fkey("metadata"): {
-						Fields: map[hz.FieldsV1Key]hz.FieldsV1{
+						Fields: map[FieldsV1Key]FieldsV1{
 							fkey("name"): {},
 						},
 					},
 					fkey("spec"): {
-						Fields: map[hz.FieldsV1Key]hz.FieldsV1{
+						Fields: map[FieldsV1Key]FieldsV1{
 							fkey("field"): {},
 						},
 					},
@@ -255,12 +253,12 @@ func TestMergeManagedFields(t *testing.T) {
 		},
 	}
 
-	m2 := hz.FieldManager{
+	m2 := FieldManager{
 		Manager: "m2",
-		FieldsV1: hz.FieldsV1{
-			Fields: map[hz.FieldsV1Key]hz.FieldsV1{
+		FieldsV1: FieldsV1{
+			Fields: map[FieldsV1Key]FieldsV1{
 				fkey("metadata"): {
-					Fields: map[hz.FieldsV1Key]hz.FieldsV1{
+					Fields: map[FieldsV1Key]FieldsV1{
 						fkey("name"): {},
 					},
 				},
@@ -268,7 +266,7 @@ func TestMergeManagedFields(t *testing.T) {
 		},
 	}
 
-	result, _ := store.MergeManagedFields(mf, m2)
+	result, _ := MergeManagedFields(mf, m2)
 	fmt.Println(result.Removed)
 }
 
@@ -433,7 +431,7 @@ func TestMergeObjects(t *testing.T) {
 			tu.AssertNoError(t, err, "parsing src json")
 			err = json.Unmarshal([]byte(tc.exp), &exp)
 			tu.AssertNoError(t, err, "parsing exp json")
-			store.MergeObjects(dst, src)
+			MergeObjects(dst, src)
 			tu.AssertEqual(t, exp, dst)
 		})
 	}
@@ -444,7 +442,7 @@ func TestPurgeRemoveFields(t *testing.T) {
 		name    string
 		obj     map[string]interface{}
 		exp     map[string]interface{}
-		removed func(hz.FieldsV1) []hz.FieldsV1
+		removed func(FieldsV1) []FieldsV1
 	}
 	tests := []test{
 		{
@@ -457,8 +455,8 @@ func TestPurgeRemoveFields(t *testing.T) {
 			exp: map[string]interface{}{
 				"metadata": map[string]interface{}{},
 			},
-			removed: func(fields hz.FieldsV1) []hz.FieldsV1 {
-				return []hz.FieldsV1{
+			removed: func(fields FieldsV1) []FieldsV1 {
+				return []FieldsV1{
 					fields.Fields[fkey("metadata")].Fields[fkey("name")],
 				}
 			},
@@ -476,10 +474,10 @@ func TestPurgeRemoveFields(t *testing.T) {
 			exp: map[string]interface{}{
 				"slice": []interface{}{},
 			},
-			removed: func(fields hz.FieldsV1) []hz.FieldsV1 {
-				return []hz.FieldsV1{
-					fields.Fields[fkey("slice")].Elements[hz.FieldsV1Key{
-						Type:  hz.FieldsV1KeyArray,
+			removed: func(fields FieldsV1) []FieldsV1 {
+				return []FieldsV1{
+					fields.Fields[fkey("slice")].Elements[FieldsV1Key{
+						Type:  FieldsV1KeyArray,
 						Key:   "id",
 						Value: "1",
 					}],
@@ -526,11 +524,11 @@ func TestPurgeRemoveFields(t *testing.T) {
 					},
 				},
 			},
-			removed: func(fields hz.FieldsV1) []hz.FieldsV1 {
-				return []hz.FieldsV1{
+			removed: func(fields FieldsV1) []FieldsV1 {
+				return []FieldsV1{
 					fields.Fields[fkey("metadata")].Fields[fkey("labels")].Fields[fkey("app")],
-					fields.Fields[fkey("spec")].Fields[fkey("objslice")].Elements[hz.FieldsV1Key{
-						Type:  hz.FieldsV1KeyArray,
+					fields.Fields[fkey("spec")].Fields[fkey("objslice")].Elements[FieldsV1Key{
+						Type:  FieldsV1KeyArray,
 						Key:   "id",
 						Value: "1",
 					}],
@@ -541,9 +539,9 @@ func TestPurgeRemoveFields(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			fields := store.ManagedFieldsV1Object(nil, tc.obj)
+			fields := ManagedFieldsV1Object(nil, tc.obj)
 			removed := tc.removed(fields)
-			err := store.PurgeRemovedFields(tc.obj, removed)
+			err := PurgeRemovedFields(tc.obj, removed)
 			tu.AssertNoError(t, err)
 			tu.AssertEqual(t, tc.exp, tc.obj)
 		})

@@ -11,13 +11,15 @@ import (
 	yaml "sigs.k8s.io/yaml/goyaml.v2"
 )
 
-var (
-	contextName string
-	contextURL  string
-)
+type contextEditOptions struct {
+	name string
+	url  string
+}
 
-var contextAddCmd = &cobra.Command{
-	Use:   "add",
+var contextEditOpts contextEditOptions
+
+var contextEditCmd = &cobra.Command{
+	Use:   "edit",
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -27,11 +29,21 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		hCtx, err := config.Context(
+			hzctl.WithContextTryName(&contextEditOpts.name),
+			hzctl.WithContextValidate(hzctl.WithValidateSession(true)),
+		)
+		if err != nil {
+			return fmt.Errorf(
+				"obtaining context: %w",
+				err,
+			)
+		}
 		form := huh.NewForm(
 			huh.NewGroup(
 				huh.NewInput().
 					Title("Context name").
-					Value(&contextName).
+					Value(&hCtx.Name).
 					Validate(func(str string) error {
 						matched, err := regexp.MatchString(
 							"^[a-zA-Z0-9_-]+$",
@@ -46,9 +58,9 @@ to quickly create a Cobra application.`,
 						return nil
 					}),
 				huh.NewInput().
-					Title("NATS Server URL").
-					Placeholder("nats://localhost:4222").
-					Value(&contextURL).
+					Title("Horizon Server URL").
+					Placeholder("http://localhost:9999").
+					Value(&hCtx.URL).
 					Validate(func(str string) error {
 						return nil
 					}),
@@ -57,17 +69,7 @@ to quickly create a Cobra application.`,
 		if err := form.Run(); err != nil {
 			return fmt.Errorf("form run: %w", err)
 		}
-		if contextName == "" {
-			return fmt.Errorf("context name is required")
-		}
-		if contextURL == "" {
-			return fmt.Errorf("context url is required")
-		}
-		hzCtx := hzctl.Context{
-			Name: contextName,
-			URL:  contextURL,
-		}
-		config.Add(hzCtx)
+		config.Add(hCtx)
 
 		f, err := os.Create(configFile)
 		if err != nil {
@@ -82,10 +84,10 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
-	contextCmd.AddCommand(contextAddCmd)
+	contextCmd.AddCommand(contextEditCmd)
 
-	contextAddCmd.Flags().
-		StringVar(&contextName, "name", "", "name of the context")
-	contextAddCmd.Flags().
-		StringVar(&contextURL, "url", "", "url of the horizon server")
+	contextEditCmd.Flags().
+		StringVar(&contextEditOpts.name, "name", "", "name of the context")
+	contextEditCmd.Flags().
+		StringVar(&contextEditOpts.url, "url", "", "url of the horizon server")
 }

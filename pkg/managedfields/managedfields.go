@@ -1,20 +1,21 @@
-package store
+package managedfields
 
 import (
 	"encoding/json"
 	"fmt"
-
-	"github.com/verifa/horizon/pkg/hz"
 )
 
-func ManagedFieldsV1(data []byte) (hz.FieldsV1, error) {
+func ManagedFieldsV1(data []byte) (FieldsV1, error) {
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return hz.FieldsV1{}, fmt.Errorf("decoding request data: %w", err)
+		return FieldsV1{}, fmt.Errorf("decoding request data: %w", err)
 	}
 
 	// Remove fields that should not be included in the managed fields.
 	delete(raw, "kind")
+	delete(raw, "apiVersion")
+	// TODO: remove this once group gets merged with apiVersion.
+	delete(raw, "group")
 	if metadata, ok := raw["metadata"].(map[string]interface{}); ok {
 		delete(metadata, "name")
 		delete(metadata, "account")
@@ -27,16 +28,16 @@ func ManagedFieldsV1(data []byte) (hz.FieldsV1, error) {
 }
 
 func ManagedFieldsV1Object(
-	parent *hz.FieldsV1Step,
+	parent *FieldsV1Step,
 	raw map[string]interface{},
-) hz.FieldsV1 {
-	fields := hz.FieldsV1{
+) FieldsV1 {
+	fields := FieldsV1{
 		Parent: parent,
-		Fields: make(map[hz.FieldsV1Key]hz.FieldsV1),
+		Fields: make(map[FieldsV1Key]FieldsV1),
 	}
 	for k, value := range raw {
-		key := hz.FieldsV1Key{Key: k}
-		step := hz.FieldsV1Step{
+		key := FieldsV1Key{Key: k}
+		step := FieldsV1Step{
 			Key:   key,
 			Field: &fields,
 		}
@@ -45,18 +46,8 @@ func ManagedFieldsV1Object(
 			fields.Fields[key] = ManagedFieldsV1Object(&step, value)
 		case []interface{}:
 			fields.Fields[key] = managedFieldsV1Array(&step, value)
-		case []map[string]interface{}:
-			// Convert to []interface{}.
-			// When json unmarshalling an array of objects, it is converted to
-			// []interface{} and this will not be needed.
-			// When creating test objects, however, we need to do this.
-			array := make([]interface{}, len(value))
-			for i, v := range value {
-				array[i] = v
-			}
-			fields.Fields[key] = managedFieldsV1Array(&step, array)
 		default:
-			fields.Fields[key] = hz.FieldsV1{
+			fields.Fields[key] = FieldsV1{
 				Parent: &step,
 			}
 		}
@@ -66,22 +57,21 @@ func ManagedFieldsV1Object(
 }
 
 func managedFieldsV1Array(
-	parent *hz.FieldsV1Step,
+	parent *FieldsV1Step,
 	raw []interface{},
-) hz.FieldsV1 {
-	defaultFields := hz.FieldsV1{
+) FieldsV1 {
+	defaultFields := FieldsV1{
 		Parent: parent,
 	}
-	// If hz.the hz.list is empty, we *should* use the schema to know the
-	// element
+	// If the list is empty, we *should* use the schema to know the element
 	// type. For now we can say that the manager owns the field entirely, which
 	// is bad and wrong.
 	if len(raw) == 0 {
 		return defaultFields
 	}
-	fields := hz.FieldsV1{
+	fields := FieldsV1{
 		Parent:   parent,
-		Elements: make(map[hz.FieldsV1Key]hz.FieldsV1),
+		Elements: make(map[FieldsV1Key]FieldsV1),
 	}
 	for _, elem := range raw {
 		switch elem := elem.(type) {
@@ -103,12 +93,12 @@ func managedFieldsV1Array(
 				// owns this field. This is bad and wrong.
 				return defaultFields
 			}
-			key := hz.FieldsV1Key{
-				Type:  hz.FieldsV1KeyArray,
+			key := FieldsV1Key{
+				Type:  FieldsV1KeyArray,
 				Key:   "id",
 				Value: idStr,
 			}
-			step := hz.FieldsV1Step{
+			step := FieldsV1Step{
 				Key:   key,
 				Field: &fields,
 			}

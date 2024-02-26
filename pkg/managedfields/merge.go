@@ -1,17 +1,15 @@
-package store
+package managedfields
 
 import (
 	"fmt"
 	"strings"
-
-	"github.com/verifa/horizon/pkg/hz"
 )
 
 var _ (error) = (*Conflict)(nil)
 
 type Conflict struct {
 	// Fields is a list of fields that are in conflict.
-	Fields []hz.FieldsV1
+	Fields []FieldsV1
 }
 
 func (c *Conflict) Error() string {
@@ -26,12 +24,12 @@ func (c *Conflict) Error() string {
 }
 
 func MergeManagedFields(
-	managedFields []hz.FieldManager,
-	reqFM hz.FieldManager,
+	managedFields []FieldManager,
+	reqFM FieldManager,
 ) (MergeResult, error) {
 	mr := MergeResult{}
 	// Create slice of all field managers except the one we are merging.
-	otherFields := []hz.FieldsV1{}
+	otherFields := []FieldsV1{}
 	for _, mgrs := range managedFields {
 		if mgrs.Manager == reqFM.Manager {
 			continue
@@ -65,20 +63,20 @@ func MergeManagedFields(
 
 type MergeResult struct {
 	// ManagedFields is the updated list of field managers after the merge.
-	ManagedFields []hz.FieldManager
+	ManagedFields []FieldManager
 	// Removed contains a list of fields that were previously owned by the field
 	// manager and have been removed in this merge request.
-	Removed []hz.FieldsV1
+	Removed []FieldsV1
 }
 
 func fieldsConflict(
 	conflicts *Conflict,
-	fd hz.FieldsV1,
-	existing ...hz.FieldsV1,
+	fd FieldsV1,
+	existing ...FieldsV1,
 ) {
 	// Object values.
 	for key, value := range fd.Fields {
-		subFields := []hz.FieldsV1{}
+		subFields := []FieldsV1{}
 		for _, fields := range existing {
 			// If the key exists (conflicts) with another manager and this field
 			// is a leaf (no children), then we have a conflict.
@@ -96,7 +94,7 @@ func fieldsConflict(
 	}
 	// Array elements.
 	for key, value := range fd.Elements {
-		subFields := []hz.FieldsV1{}
+		subFields := []FieldsV1{}
 		for _, fields := range existing {
 			if subField, ok := fields.Elements[key]; ok {
 				if value.IsLeaf() {
@@ -110,7 +108,7 @@ func fieldsConflict(
 	}
 }
 
-func fieldsDiff(mr *MergeResult, old, new hz.FieldsV1) {
+func fieldsDiff(mr *MergeResult, old, new FieldsV1) {
 	for oldKey, oldValue := range old.Fields {
 		newValue, ok := new.Fields[oldKey]
 		if !ok {
@@ -131,7 +129,7 @@ func fieldsDiff(mr *MergeResult, old, new hz.FieldsV1) {
 
 func PurgeRemovedFields(
 	obj map[string]interface{},
-	removed []hz.FieldsV1,
+	removed []FieldsV1,
 ) error {
 	for _, field := range removed {
 		if err := blaObject(obj, field.Path()); err != nil {
@@ -143,11 +141,11 @@ func PurgeRemovedFields(
 
 func blaObject(
 	obj map[string]interface{},
-	path []hz.FieldsV1Step,
+	path []FieldsV1Step,
 ) error {
 	fmt.Println("blaObject: ", path)
 	step := path[0]
-	if step.Key.Type != hz.FieldsV1KeyObject {
+	if step.Key.Type != FieldsV1KeyObject {
 		return fmt.Errorf(
 			"expected array but got object at %s",
 			step.String(),
@@ -167,7 +165,7 @@ func blaObject(
 		return nil
 	}
 	nextStep := path[1]
-	if nextStep.Key.Type == hz.FieldsV1KeyObject {
+	if nextStep.Key.Type == FieldsV1KeyObject {
 		v, ok := stepObj.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf(
@@ -190,7 +188,6 @@ func blaObject(
 		)
 	}
 
-	fmt.Println("calling bla array", path, path[1:])
 	arrayVal, err := blaArray(stepObj.([]interface{}), path[1:])
 	if err != nil {
 		return err
@@ -202,29 +199,17 @@ func blaObject(
 
 func blaArray(
 	obj []interface{},
-	path []hz.FieldsV1Step,
+	path []FieldsV1Step,
 ) ([]interface{}, error) {
 	step := path[0]
-	fmt.Println("blaArray: ", step)
-	// return obj, nil
-	if step.Key.Type == hz.FieldsV1KeyObject {
+	if step.Key.Type == FieldsV1KeyObject {
 		return nil, fmt.Errorf(
 			"expected array but got object at %q",
 			step.String(),
 		)
 	}
-	findIndex := func() (int, bool) {
-		for i, e := range obj {
-			if v, ok := e.(map[string]interface{}); ok {
-				if value, ok := v[step.Key.Key]; ok && value == step.Key.Value {
-					return i, true
-				}
-			}
-		}
-		return -1, false
-	}
-	index, ok := findIndex()
-	if !ok {
+	index := FindIndexArrayByKey(obj, step.Key)
+	if index == -1 {
 		return nil, fmt.Errorf(
 			"key %q not found at %q",
 			step.Key.String(),
@@ -249,6 +234,15 @@ func blaArray(
 	}
 	return obj, nil
 }
+
+// func MergeObjectsWithFields(
+// 	dst map[string]interface{},
+// 	src map[string]interface{},
+// 	fields FieldsV1,
+// ) {
+// 	for _, elem := range fields.Elements {
+// 	}
+// }
 
 func MergeObjects(
 	dst map[string]interface{},

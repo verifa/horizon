@@ -21,8 +21,8 @@ const (
 type Account struct {
 	hz.ObjectMeta `json:"metadata,omitempty" cue:""`
 
-	Spec   AccountSpec   `json:"spec"`
-	Status AccountStatus `json:"status"`
+	Spec   *AccountSpec   `json:"spec,omitempty"`
+	Status *AccountStatus `json:"status,omitempty"`
 }
 
 func (a Account) ObjectAPIVersion() string {
@@ -71,12 +71,20 @@ func (r *AccountReconciler) Reconcile(
 	req hz.Request,
 ) (hz.Result, error) {
 	accClient := hz.ObjectClient[Account]{Client: r.Client}
-	account, err := accClient.Get(ctx, hz.WithGetObjectKey(req.Key))
+	account, err := accClient.Get(
+		ctx,
+		hz.WithGetObjectKey(req.Key),
+	)
 	if err != nil {
 		return hz.Result{}, hz.IgnoreNotFound(err)
 	}
 
-	if account.Status.ID == "" {
+	accountApply, err := hz.ExtractManagedFields(account, "ctrl-accounts")
+	if err != nil {
+		return hz.Result{}, fmt.Errorf("extracting managed fields: %w", err)
+	}
+
+	if account.Status == nil {
 		// If the ID is empty, we need to create the account.
 		status, err := r.CreateAccount(account.Name)
 		if err != nil {
@@ -85,11 +93,11 @@ func (r *AccountReconciler) Reconcile(
 		if _, err := AccountClaimsUpdate(ctx, r.Conn, r.OpKeyPair, status.JWT); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
-		account.Status = *status
-		account.Status.Ready = true
+		accountApply.Status = status
+		accountApply.Status.Ready = true
 		// Save the account and trigger a requeue to publish the account in
 		// nats.
-		if err := accClient.Apply(ctx, *account); err != nil {
+		if err := accClient.Apply(ctx, accountApply); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
 		return hz.Result{}, nil
@@ -121,8 +129,8 @@ func (r *AccountReconciler) Reconcile(
 
 	if !ready {
 		if account.Status.Ready {
-			account.Status.Ready = false
-			if err := accClient.Apply(ctx, *account); err != nil {
+			accountApply.Status.Ready = false
+			if err := accClient.Apply(ctx, accountApply); err != nil {
 				return hz.Result{}, fmt.Errorf("updating account: %w", err)
 			}
 			return hz.Result{}, nil
@@ -131,8 +139,8 @@ func (r *AccountReconciler) Reconcile(
 	}
 
 	if !account.Status.Ready {
-		account.Status.Ready = true
-		if err := accClient.Apply(ctx, *account); err != nil {
+		accountApply.Status.Ready = true
+		if err := accClient.Apply(ctx, accountApply); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
 	}

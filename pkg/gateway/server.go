@@ -194,16 +194,18 @@ func (s *Server) start(
 	if err != nil {
 		return fmt.Errorf("oidc auth middleware: %w", err)
 	}
-	r.Use(oidcHandler.authMiddleware)
 	r.Get("/login", oidcHandler.login)
 	r.Get("/logout", oidcHandler.logout)
+	r.Get("/loggedout", s.serveLoggedOut)
 	r.Get("/auth/callback", oidcHandler.authCallback)
 
-	r.Get("/", s.serveHome)
-	r.Get("/loggedout", s.serveLoggedOut)
-	r.Get("/accounts/new", s.serveAccountsNew)
-	r.Post("/accounts", s.postAccounts)
-	r.Post("/auth/login", s.handleAuthLogin)
+	r.Group(func(r chi.Router) {
+		r.Use(oidcHandler.authMiddleware)
+		r.Get("/", s.serveHome)
+		r.Get("/accounts/new", s.serveAccountsNew)
+		r.Post("/accounts", s.postAccounts)
+		r.Post("/auth/login", s.handleAuthLogin)
+	})
 
 	r.Group(func(r chi.Router) {
 		// Check account exists and user has permission.
@@ -224,6 +226,12 @@ func (s *Server) start(
 			s.handlePortal,
 		)
 	})
+
+	objHandler := ObjectHandler{
+		Conn: s.Conn,
+	}
+	objRouter := objHandler.router()
+	r.Mount("/v1/objects", objRouter)
 
 	// TODO: these /dist paths should not be protected...
 	r.Get("/dist/htmx.js", func(w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,10 @@
+apiVersion: v1 # "core/v1"
+kind: Account
+group: hz-internal # todo: remove
+metadata:
+  name: test-account
+  account: hz-root
+  labels:
+    app: test-app
+    env: test-env
+spec: {}

@@ -22,11 +22,11 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		hCtx, ok := config.Current()
-		if !ok {
+		hCtx, err := config.Context()
+		if err != nil {
 			return fmt.Errorf(
-				"current context not found: %q",
-				config.CurrentContext,
+				"obtaining current context: %w",
+				err,
 			)
 		}
 		ctx := context.Background()

@@ -374,8 +374,8 @@ func (s *Server) checkRootAccountObject(
 				Name:    hz.RootAccount,
 				Account: hz.RootAccount,
 			},
-			Spec: accounts.AccountSpec{},
-			Status: accounts.AccountStatus{
+			Spec: &accounts.AccountSpec{},
+			Status: &accounts.AccountStatus{
 				Ready:          true,
 				ID:             jwtAuth.RootAccount.PublicKey,
 				Seed:           jwtAuth.RootAccount.Seed,

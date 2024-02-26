@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/server"
 	"github.com/verifa/horizon/pkg/store"
@@ -15,6 +16,14 @@ import (
 	"golang.org/x/tools/txtar"
 	"sigs.k8s.io/yaml"
 )
+
+var cmpOptIgnoreRevision = cmp.FilterPath(func(p cmp.Path) bool {
+	if len(p) != 4 {
+		return false
+	}
+	return p.Index(1).String() == "[\"metadata\"]" &&
+		p.Last().String() == "[\"revision\"]"
+}, cmp.Ignore())
 
 type DummyApplyObject struct {
 	hz.ObjectMeta `json:"metadata"`
@@ -108,7 +117,7 @@ func TestApply(t *testing.T) {
 			tu.AssertNoError(t, err, "obj yaml to json")
 			err = client.Apply(
 				ctx,
-				hz.WithApplyObjectKey(key),
+				hz.WithApplyKey(key),
 				hz.WithApplyData(obj),
 			)
 			if ts.errStatus == nil {

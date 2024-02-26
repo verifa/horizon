@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"strings"
 
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nkeys"
 	"github.com/spf13/cobra"
 	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/hzctl"
 )
 
 var getCmd = &cobra.Command{
@@ -24,11 +22,14 @@ to quickly create a Cobra application.`,
 	Args:          cobra.MinimumNArgs(1),
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		hCtx, ok := config.Current()
-		if !ok {
+		hCtx, err := config.Context(
+			hzctl.WithContextCurrent(true),
+			hzctl.WithContextValidate(hzctl.WithValidateSession(true)),
+		)
+		if err != nil {
 			return fmt.Errorf(
-				"current context not found: %q",
-				config.CurrentContext,
+				"obtaining current context: %w",
+				err,
 			)
 		}
 		var (
@@ -51,8 +52,8 @@ to quickly create a Cobra application.`,
 			case 1:
 				key.Kind = parts[0]
 			case 2:
-				key.Group = parts[0]
-				key.Kind = parts[1]
+				key.Kind = parts[0]
+				key.Name = parts[1]
 			default:
 				return fmt.Errorf("invalid object type: %q", *objectType)
 			}
@@ -61,60 +62,65 @@ to quickly create a Cobra application.`,
 			key.Name = *objectName
 		}
 
-		if hCtx.Credentials == nil {
-			return fmt.Errorf(
-				"no credentials for context: %q. Please login",
-				hCtx.Name,
-			)
+		client := hz.HTTPClient{
+			Server:  "http://localhost:9999",
+			Session: *hCtx.Session,
 		}
-		if hCtx.Session == nil {
-			return fmt.Errorf(
-				"no session for context: %q. Please login",
-				hCtx.Name,
-			)
-		}
-		creds, err := base64.StdEncoding.DecodeString(*hCtx.Credentials)
-		if err != nil {
-			return fmt.Errorf("decode credentials: %w", err)
-		}
-		userJWT, err := nkeys.ParseDecoratedJWT(creds)
-		if err != nil {
-			return fmt.Errorf("parse jwt: %w", err)
-		}
-		keyPair, err := nkeys.ParseDecoratedUserNKey(creds)
-		if err != nil {
-			return fmt.Errorf("parse nkey: %w", err)
-		}
-		seed, err := keyPair.Seed()
-		if err != nil {
-			return fmt.Errorf("get seed: %w", err)
-		}
-		conn, err := nats.Connect(
-			hCtx.URL,
-			nats.UserJWTAndSeed(userJWT, string(seed)),
-		)
-		if err != nil {
-			return fmt.Errorf("connect to nats: %w", err)
-		}
-		client := hz.NewClient(
-			conn,
-			hz.WithClientManager("hzctl"),
-			hz.WithClientSession(*hCtx.Session),
-		)
 		ctx := context.Background()
-		data, err := client.List(ctx, hz.WithListKeyFromObject(key))
-		if err != nil {
+		resp := hz.GenericObjectList{}
+		if err := client.List(
+			ctx,
+			hz.WithHTTPListKey(key),
+			hz.WithHTTPListResponseGenericObject(&resp),
+		); err != nil {
 			return fmt.Errorf("list: %w", err)
 		}
-		switch len(data) {
+		// If using nats instead of http, below is how to create a nats client.
+		// Leaving it here as not sure which approach we are going with just yet
+		// (or maybe both!).
+		// creds, err := base64.StdEncoding.DecodeString(*hCtx.Credentials)
+		// if err != nil {
+		// 	return fmt.Errorf("decode credentials: %w", err)
+		// }
+		// userJWT, err := nkeys.ParseDecoratedJWT(creds)
+		// if err != nil {
+		// 	return fmt.Errorf("parse jwt: %w", err)
+		// }
+		// keyPair, err := nkeys.ParseDecoratedUserNKey(creds)
+		// if err != nil {
+		// 	return fmt.Errorf("parse nkey: %w", err)
+		// }
+		// seed, err := keyPair.Seed()
+		// if err != nil {
+		// 	return fmt.Errorf("get seed: %w", err)
+		// }
+		// conn, err := nats.Connect(
+		// 	hCtx.URL,
+		// 	nats.UserJWTAndSeed(userJWT, string(seed)),
+		// )
+		// if err != nil {
+		// 	return fmt.Errorf("connect to nats: %w", err)
+		// }
+		// client := hz.NewClient(
+		// 	conn,
+		// 	hz.WithClientManager("hzctl"),
+		// 	hz.WithClientSession(*hCtx.Session),
+		// )
+		// ctx := context.Background()
+		// resp := hz.GenericObjectList{}
+		// if err := client.List(ctx, hz.WithListKeyFromObject(key),
+		// hz.WithListResponseGenericObjects(&resp)); err != nil {
+		// 	return fmt.Errorf("list: %w", err)
+		// }
+		switch len(resp.Items) {
 		case 0:
 			fmt.Println("No objects found")
 		case 1:
-			if err := printObject(data[0]); err != nil {
+			if err := printObject(resp.Items[0]); err != nil {
 				return fmt.Errorf("print object: %w", err)
 			}
 		default:
-			printObjects(data)
+			printObjects(resp.Items)
 		}
 		return nil
 	},

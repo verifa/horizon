@@ -158,29 +158,23 @@ func (a *Auth) Check(
 
 // Verb is implied (read).
 type ListRequest struct {
-	Session string
-	Objects []json.RawMessage
-}
-
-type ListResponse struct {
-	Objects []json.RawMessage
+	Session    string
+	ObjectList *hz.ObjectList
 }
 
 func (a *Auth) List(
 	ctx context.Context,
 	req ListRequest,
-) (*ListResponse, error) {
+) error {
 	user, err := a.Sessions.Get(ctx, req.Session)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	resp := ListResponse{
-		Objects: []json.RawMessage{},
-	}
-	for _, rawObj := range req.Objects {
+	filteredObjects := make([]json.RawMessage, 0)
+	for _, rawObj := range req.ObjectList.Items {
 		var obj hz.EmptyObjectWithMeta
 		if err := json.Unmarshal(rawObj, &obj); err != nil {
-			return nil, fmt.Errorf("unmarshaling object: %w", err)
+			return fmt.Errorf("unmarshaling object: %w", err)
 		}
 		ok := a.RBAC.Check(ctx, RBACRequest{
 			Groups: user.Groups,
@@ -188,8 +182,9 @@ func (a *Auth) List(
 			Object: obj,
 		})
 		if ok {
-			resp.Objects = append(resp.Objects, rawObj)
+			filteredObjects = append(filteredObjects, rawObj)
 		}
 	}
-	return &resp, nil
+	req.ObjectList.Items = filteredObjects
+	return nil
 }

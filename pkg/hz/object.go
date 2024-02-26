@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/verifa/horizon/pkg/managedfields"
 )
 
 type Objecter interface {
@@ -13,6 +15,7 @@ type Objecter interface {
 	ObjectDeletionTimestamp() *Time
 	ObjectOwnerReferences() []OwnerReference
 	ObjectOwnerReference(Objecter) (OwnerReference, bool)
+	ObjectManagedFields() managedfields.ManagedFields
 	ObjectAPIVersion() string
 }
 
@@ -127,10 +130,10 @@ type ObjectMeta struct {
 	Labels map[string]string `json:"labels,omitempty" cue:",opt"`
 
 	// Revision is the revision number of the object.
-	Revision          *uint64          `json:"revision,omitempty" cue:"-"`
-	OwnerReferences   []OwnerReference `json:"ownerReferences,omitempty" cue:"-"`
-	DeletionTimestamp *Time            `json:"deletionTimestamp,omitempty" cue:"-"`
-	ManagedFields     json.RawMessage  `json:"managedFields,omitempty" cue:"-"`
+	Revision          *uint64                     `json:"revision,omitempty" cue:"-"`
+	OwnerReferences   []OwnerReference            `json:"ownerReferences,omitempty" cue:"-"`
+	DeletionTimestamp *Time                       `json:"deletionTimestamp,omitempty" cue:"-"`
+	ManagedFields     managedfields.ManagedFields `json:"managedFields,omitempty" cue:"-"`
 }
 
 func (o ObjectMeta) ObjectName() string {
@@ -171,6 +174,10 @@ func (o ObjectMeta) ObjectOwnerReference(
 		}
 	}
 	return OwnerReference{}, false
+}
+
+func (o ObjectMeta) ObjectManagedFields() managedfields.ManagedFields {
+	return o.ManagedFields
 }
 
 func OwnerReferenceFromObject(object Objecter) *OwnerReference {
@@ -240,6 +247,18 @@ func (r GenericObject) ObjectGroup() string {
 
 func (r GenericObject) ObjectAPIVersion() string {
 	return r.APIVersion
+}
+
+type GenericObjectList struct {
+	Items []GenericObject `json:"items,omitempty"`
+}
+
+type ObjectList struct {
+	Items []json.RawMessage `json:"items,omitempty"`
+}
+
+type TypedObjectList[T Objecter] struct {
+	Items []*T `json:"items,omitempty"`
 }
 
 var _ Objecter = (*MetaOnlyObject)(nil)

@@ -387,15 +387,13 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 		session := msg.Header.Get(hz.HeaderAuthorization)
 		if session != "" {
 			// Filter the response with the rbac.
-			filterList, err := s.Auth.List(ctx, auth.ListRequest{
-				Session: msg.Header.Get(hz.HeaderAuthorization),
-				Objects: resp.Data,
-			})
-			if err != nil {
+			if err := s.Auth.List(ctx, auth.ListRequest{
+				Session:    msg.Header.Get(hz.HeaderAuthorization),
+				ObjectList: resp,
+			}); err != nil {
 				_ = hz.RespondError(msg, err)
 				return
 			}
-			resp.Data = filterList.Objects
 		}
 
 		data, err := json.Marshal(resp)

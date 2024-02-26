@@ -26,14 +26,20 @@ func printObject(object hz.GenericObject) error {
 	buf.WriteString("meta:\n")
 	buf.WriteString(fmt.Sprintf("\taccount: %s\n", object.Account))
 	buf.WriteString(fmt.Sprintf("\tname: %s\n", object.Name))
+	buf.WriteString(
+		fmt.Sprintf("\tmanagedFields: %s\n", object.ManagedFields),
+	)
+	buf.WriteString(fmt.Sprintf("\tlabels: %s\n", object.Labels))
 	buf.WriteString("spec:\n")
 	if err := json.Indent(&buf, object.Spec, "", "  "); err != nil {
 		return fmt.Errorf("formatting spec: %w", err)
 	}
 	buf.WriteString("\n\n")
 	buf.WriteString("status:\n")
-	if err := json.Indent(&buf, object.Status, "", "  "); err != nil {
-		return fmt.Errorf("formatting status: %w", err)
+	if object.Status != nil {
+		if err := json.Indent(&buf, object.Status, "", "  "); err != nil {
+			return fmt.Errorf("formatting status: %w", err)
+		}
 	}
 	fmt.Println(buf.String())
 	return nil
@@ -60,8 +66,9 @@ func printObjects(objects []hz.GenericObject) {
 	rows := make([][]string, len(objects))
 	for i, obj := range objects {
 		rows[i] = []string{
-			obj.Account,
 			obj.Kind,
+			obj.Account,
+			obj.Name,
 		}
 	}
 
@@ -78,7 +85,11 @@ func printObjects(objects []hz.GenericObject) {
 				return OddRowStyle
 			}
 		}).
-		Headers("Account", "Kind").
+		Headers(
+			"Kind",
+			"Account",
+			"Name",
+		).
 		Rows(rows...)
 
 	fmt.Println(t)

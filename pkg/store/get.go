@@ -29,6 +29,14 @@ func (s Store) get(ctx context.Context, key hz.ObjectKey) ([]byte, error) {
 		if errors.Is(err, jetstream.ErrKeyNotFound) {
 			return nil, hz.ErrNotFound
 		}
+		return nil, &hz.Error{
+			Status: http.StatusInternalServerError,
+			Message: fmt.Sprintf(
+				"getting key %s: %s",
+				key,
+				err.Error(),
+			),
+		}
 	}
 	return s.toObjectWithRevision(kve)
 }

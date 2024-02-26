@@ -50,11 +50,11 @@ func TestUser(t *testing.T) {
 			Account: hz.RootAccount,
 			Name:    "test",
 		},
-		Spec: accounts.AccountSpec{},
+		Spec: &accounts.AccountSpec{},
 	}
 	accstatus, err := recon.CreateAccount(account.Name)
 	tu.AssertNoError(t, err)
-	account.Status = *accstatus
+	account.Status = accstatus
 	accClient := hz.ObjectClient[accounts.Account]{Client: client}
 	err = accClient.Create(ctx, account)
 	tu.AssertNoError(t, err)

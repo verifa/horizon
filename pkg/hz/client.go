@@ -1,10 +1,12 @@
 package hz
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -58,7 +60,7 @@ var (
 const (
 	SubjectAPIAllowAll = "HZ.api.>"
 
-	// format: HZ.api.broker.<group><kind>.<account>.<name>.<action>
+	// format: HZ.api.broker.<group>.<kind>.<account>.<name>.<action>
 	SubjectAPIBroker                  = "HZ.api.broker.*.*.*.*.*"
 	SubjectInternalBroker             = "HZ.internal.broker.*.*.*.*.*"
 	SubjectInternalBrokerIndexGroup   = 3
@@ -137,7 +139,7 @@ type getOptions struct {
 func (oc ObjectClient[T]) Get(
 	ctx context.Context,
 	opts ...GetOption,
-) (*T, error) {
+) (T, error) {
 	opt := getOptions{}
 	for _, o := range opts {
 		o(&opt)
@@ -151,12 +153,12 @@ func (oc ObjectClient[T]) Get(
 	}
 	data, err := oc.Client.Get(ctx, key)
 	if err != nil {
-		return nil, fmt.Errorf("getting object %q: %w", key, err)
+		return object, fmt.Errorf("getting object %q: %w", key, err)
 	}
 	if err := json.Unmarshal(data, &object); err != nil {
-		return nil, fmt.Errorf("unmarshalling object: %w", err)
+		return object, fmt.Errorf("unmarshalling object: %w", err)
 	}
-	return &object, nil
+	return object, nil
 }
 
 func (oc ObjectClient[T]) List(
@@ -173,20 +175,18 @@ func (oc ObjectClient[T]) List(
 		key := KeyFromObject(t)
 		opts = append(opts, WithListKey(key))
 	}
-	data, err := oc.Client.list(ctx, opts...)
-	if err != nil {
+	resp := bytes.Buffer{}
+	opts = append(opts, WithListResponseWriter(&resp))
+	if err := oc.Client.List(ctx, opts...); err != nil {
 		return nil, fmt.Errorf("listing objects: %w", err)
 	}
 
-	type Result struct {
-		Data []*T `json:"data"`
-	}
-	var result Result
-	if err := json.Unmarshal(data, &result); err != nil {
+	var result TypedObjectList[T]
+	if err := json.NewDecoder(&resp).Decode(&result); err != nil {
 		return nil, fmt.Errorf("unmarshalling objects: %w", err)
 	}
 
-	return result.Data, nil
+	return result.Items, nil
 }
 
 // func (oc ObjectClient[T]) Delete(
@@ -269,7 +269,8 @@ func SessionFromRequest(req *http.Request) string {
 	if sessionCookie, err := req.Cookie(CookieSession); err == nil {
 		return sessionCookie.Value
 	}
-	return ""
+	fmt.Println("REQ HEADER:", req.Header.Get(HeaderAuthorization))
+	return req.Header.Get(HeaderAuthorization)
 }
 
 type ClientOption func(*clientOpts)
@@ -474,13 +475,13 @@ type ApplyOption func(*applyOptions)
 type applyOptions struct {
 	object    Objecter
 	data      []byte
-	objectKey *ObjectKey
-	key       string
+	objectKey ObjectKeyer
 }
 
 func WithApplyObject(object Objecter) ApplyOption {
 	return func(ao *applyOptions) {
 		ao.object = object
+		ao.objectKey = object
 	}
 }
 
@@ -490,9 +491,9 @@ func WithApplyData(data []byte) ApplyOption {
 	}
 }
 
-func WithApplyObjectKey(objectKey ObjectKey) ApplyOption {
+func WithApplyKey(key ObjectKeyer) ApplyOption {
 	return func(ao *applyOptions) {
-		ao.objectKey = &objectKey
+		ao.objectKey = key
 	}
 }
 
@@ -518,22 +519,23 @@ func (c Client) Apply(
 		return ErrApplyObjectOrKeyRequired
 	}
 
+	var key string
 	if ao.object != nil {
 		var err error
 		ao.data, err = c.marshalObjectWithTypeFields(ao.object)
 		if err != nil {
 			return fmt.Errorf("marshalling object: %w", err)
 		}
-		ao.key = KeyFromObject(ao.object)
+		key = KeyFromObject(ao.object)
 	}
 	if ao.objectKey != nil {
-		ao.key = KeyFromObject(ao.objectKey)
+		key = KeyFromObject(ao.objectKey)
 	}
 
 	msg := nats.NewMsg(
 		c.SubjectPrefix() + fmt.Sprintf(
 			SubjectStoreApply,
-			ao.key,
+			key,
 		),
 	)
 	msg.Header.Set(HeaderFieldManager, c.Manager)
@@ -702,43 +704,40 @@ func WithListKeyFromObject(obj ObjectKeyer) ListOption {
 	}
 }
 
+func WithListResponseWriter(w io.Writer) ListOption {
+	return func(lo *listOption) {
+		lo.responseWriter = w
+	}
+}
+
+func WithListResponseGenericObjects(resp *GenericObjectList) ListOption {
+	return func(lo *listOption) {
+		lo.responseGenericObjectList = resp
+	}
+}
+
 type ListOption func(*listOption)
 
 type listOption struct {
 	key string
+
+	responseWriter            io.Writer
+	responseGenericObjectList *GenericObjectList
 }
 
 func (c *Client) List(
 	ctx context.Context,
 	opts ...ListOption,
-) ([]GenericObject, error) {
-	data, err := c.list(ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	type Result struct {
-		Data []GenericObject `json:"data"`
-	}
-	var result Result
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, fmt.Errorf("unmarshalling objects: %w", err)
-	}
-	return result.Data, nil
-}
-
-func (c *Client) list(
-	ctx context.Context,
-	opts ...ListOption,
-) ([]byte, error) {
+) error {
 	if err := c.checkSession(); err != nil {
-		return nil, err
+		return err
 	}
 	lo := listOption{}
 	for _, opt := range opts {
 		opt(&lo)
 	}
 	if lo.key == "" {
-		return nil, fmt.Errorf("list: key required")
+		return fmt.Errorf("list: key required")
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
@@ -749,21 +748,33 @@ func (c *Client) list(
 	reply, err := c.Conn.RequestMsgWithContext(ctx, msg)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
-			return nil, ErrStoreNotResponding
+			return ErrStoreNotResponding
 		}
-		return nil, fmt.Errorf("making request to store: %w", err)
+		return fmt.Errorf("making request to store: %w", err)
 	}
 	status, err := strconv.Atoi(reply.Header.Get(HeaderStatus))
 	if err != nil {
-		return nil, fmt.Errorf("invalid status header: %w", err)
+		return fmt.Errorf("invalid status header: %w", err)
 	}
-	if status == http.StatusOK {
-		return reply.Data, nil
+	if status != http.StatusOK {
+		return &Error{
+			Status:  status,
+			Message: string(reply.Data),
+		}
 	}
-	return nil, &Error{
-		Status:  status,
-		Message: string(reply.Data),
+	if lo.responseWriter != nil {
+		_, err := lo.responseWriter.Write(reply.Data)
+		if err != nil {
+			return fmt.Errorf("writing response: %w", err)
+		}
 	}
+	if lo.responseGenericObjectList != nil {
+		if err := json.Unmarshal(reply.Data, lo.responseGenericObjectList); err != nil {
+			return fmt.Errorf("unmarshalling objects: %w", err)
+		}
+	}
+
+	return nil
 }
 
 type RunOption func(*runOption)

@@ -26,7 +26,7 @@ func (r *GreetingReconciler) Reconcile(
 	reply, err := r.GreetingClient.Run(
 		ctx,
 		&GreetingsHelloAction{},
-		*greeting,
+		greeting,
 	)
 	if err != nil {
 		return hz.Result{}, fmt.Errorf("running hello action: %w", err)
