@@ -15,26 +15,10 @@ import (
 )
 
 func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
-	t := reflect.TypeOf(obj)
-	metaType, ok := cueJSONStructField(t, "metadata")
-	if !ok {
-		return cue.Value{}, errors.New("metadata field not found")
-	}
-	specType, ok := cueJSONStructField(t, "spec")
-	if !ok {
-		return cue.Value{}, errors.New("spec field not found")
-	}
-	statusType, ok := cueJSONStructField(t, "status")
-	if !ok {
-		statusType = reflect.TypeOf(struct{}{})
-	}
+	cueVal := cCtx.CompileString("{}")
 
 	kindPath := cue.ParsePath("kind")
-	groupPath := cue.ParsePath("group")
 	apiVersionPath := cue.ParsePath("apiVersion")
-	metaPath := cue.ParsePath("metadata")
-	specPath := cue.ParsePath("spec")
-	statusPath := cue.ParsePath("status").Optional()
 
 	// Use regular expressions for exact match string for kind, group and
 	// apiVersion.
@@ -44,14 +28,8 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 	if err := kindExpr.Err(); err != nil {
 		return cue.Value{}, fmt.Errorf("compiling kind expression: %w", err)
 	}
-	groupExpr := cCtx.CompileString(
-		fmt.Sprintf("=~\"^%s$\"", obj.ObjectGroup()),
-	)
-	if err := groupExpr.Err(); err != nil {
-		return cue.Value{}, fmt.Errorf("compiling group expression: %w", err)
-	}
 	apiVersionExpr := cCtx.CompileString(
-		fmt.Sprintf("=~\"^%s$\"", obj.ObjectAPIVersion()),
+		fmt.Sprintf("=~\"^%s/%s$\"", obj.ObjectGroup(), obj.ObjectAPIVersion()),
 	)
 	if err := apiVersionExpr.Err(); err != nil {
 		return cue.Value{}, fmt.Errorf(
@@ -59,28 +37,21 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 			err,
 		)
 	}
-
-	metaVal, err := cueEncodeStruct(cCtx, metaType)
+	t := reflect.TypeOf(obj)
+	cueObj, err := cueEncodeStruct(cCtx, t)
 	if err != nil {
-		return cue.Value{}, fmt.Errorf("encoding metadata: %w", err)
+		return cue.Value{}, fmt.Errorf("encoding struct: %w", err)
 	}
-	specVal, err := cueEncodeStruct(cCtx, specType)
-	if err != nil {
-		return cue.Value{}, fmt.Errorf("encoding spec: %w", err)
-	}
-	statusVal, err := cueEncodeStruct(cCtx, statusType)
-	if err != nil {
-		return cue.Value{}, fmt.Errorf("encoding status: %w", err)
-	}
-
-	defPath := cue.MakePath(cue.Def(obj.ObjectKind()))
-	objDef := cCtx.CompileString("{}").
-		FillPath(apiVersionPath, apiVersionExpr).
-		FillPath(groupPath, groupExpr).
+	objDef := cueVal.FillPath(apiVersionPath, apiVersionExpr).
 		FillPath(kindPath, kindExpr).
-		FillPath(metaPath, metaVal).
-		FillPath(specPath, specVal).
-		FillPath(statusPath, statusVal)
+		Unify(cueObj)
+
+	// We need a cue definition to validate that there are not extra fields in
+	// the object.
+	// To create a definition in Go, the only hacky approach I found was to
+	// fill a definition path with the object and then lookup that path
+	// afterwards.
+	defPath := cue.MakePath(cue.Def(obj.ObjectKind()))
 	cueDef := cCtx.CompileString("").
 		FillPath(defPath, objDef).LookupPath(defPath)
 	if cueDef.Err() != nil {
@@ -299,28 +270,6 @@ func cueEncodeField(
 			fieldType.Kind(),
 		)
 	}
-}
-
-// cueJSONStructField returns the type of a field in a struct
-func cueJSONStructField(t reflect.Type, name string) (reflect.Type, bool) {
-	if t.Kind() == reflect.Ptr {
-		return cueJSONStructField(t.Elem(), name)
-	}
-	if t.Kind() != reflect.Struct {
-		return nil, false
-	}
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		fieldName := field.Name
-		jTag, ok := field.Tag.Lookup("json")
-		if ok {
-			fieldName = strings.Split(jTag, ",")[0]
-		}
-		if fieldName == name {
-			return field.Type, true
-		}
-	}
-	return nil, false
 }
 
 func cueFieldPath(field reflect.StructField) (cue.Path, bool) {

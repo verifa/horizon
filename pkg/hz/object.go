@@ -2,6 +2,7 @@ package hz
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -36,13 +37,41 @@ func KeyFromObject(obj ObjectKeyer) string {
 	if obj.ObjectName() != "" {
 		name = obj.ObjectName()
 	}
+	group := "*"
+	if obj.ObjectGroup() != "" {
+		group = obj.ObjectGroup()
+	}
+	kind := "*"
+	if obj.ObjectKind() != "" {
+		kind = obj.ObjectKind()
+	}
 	return fmt.Sprintf(
 		"%s.%s.%s.%s",
-		obj.ObjectGroup(),
-		obj.ObjectKind(),
+		group,
+		kind,
 		account,
 		name,
 	)
+}
+
+func keyFromObjectStrict(obj ObjectKeyer) (string, error) {
+	var errs error
+	if obj.ObjectAccount() == "" {
+		errs = errors.Join(errs, fmt.Errorf("account is required"))
+	}
+	if obj.ObjectName() == "" {
+		errs = errors.Join(errs, fmt.Errorf("name is required"))
+	}
+	if obj.ObjectKind() == "" {
+		errs = errors.Join(errs, fmt.Errorf("kind is required"))
+	}
+	if obj.ObjectGroup() == "" {
+		errs = errors.Join(errs, fmt.Errorf("group is required"))
+	}
+	if errs != nil {
+		return "", errs
+	}
+	return KeyFromObject(obj), nil
 }
 
 func objectKeyFromKey(key string) (ObjectKey, error) {
@@ -230,9 +259,8 @@ var _ Objecter = (*GenericObject)(nil)
 type GenericObject struct {
 	ObjectMeta `json:"metadata,omitempty"`
 
-	Kind       string          `json:"kind,omitempty"`
-	Group      string          `json:"group,omitempty"`
 	APIVersion string          `json:"apiVersion,omitempty"`
+	Kind       string          `json:"kind,omitempty"`
 	Spec       json.RawMessage `json:"spec,omitempty"`
 	Status     json.RawMessage `json:"status,omitempty"`
 }
@@ -242,11 +270,19 @@ func (r GenericObject) ObjectKind() string {
 }
 
 func (r GenericObject) ObjectGroup() string {
-	return r.Group
+	parts := strings.Split(r.APIVersion, "/")
+	if len(parts) != 2 {
+		return ""
+	}
+	return parts[0]
 }
 
 func (r GenericObject) ObjectAPIVersion() string {
-	return r.APIVersion
+	parts := strings.Split(r.APIVersion, "/")
+	if len(parts) != 2 {
+		return ""
+	}
+	return parts[1]
 }
 
 type GenericObjectList struct {

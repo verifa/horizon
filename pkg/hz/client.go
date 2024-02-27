@@ -343,11 +343,11 @@ func (c Client) marshalObjectWithTypeFields(obj Objecter) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("setting kind: %w", err)
 	}
-	data, err = sjson.SetBytes(data, "group", obj.ObjectGroup())
-	if err != nil {
-		return nil, fmt.Errorf("setting group: %w", err)
-	}
-	data, err = sjson.SetBytes(data, "apiVersion", obj.ObjectAPIVersion())
+	data, err = sjson.SetBytes(
+		data,
+		"apiVersion",
+		fmt.Sprintf("%s/%s", obj.ObjectGroup(), obj.ObjectAPIVersion()),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("setting apiVersion: %w", err)
 	}
@@ -526,11 +526,19 @@ func (c Client) Apply(
 		if err != nil {
 			return fmt.Errorf("marshalling object: %w", err)
 		}
-		key = KeyFromObject(ao.object)
+		key, err = keyFromObjectStrict(ao.object)
+		if err != nil {
+			return fmt.Errorf("invalid object: %w", err)
+		}
 	}
 	if ao.objectKey != nil {
-		key = KeyFromObject(ao.objectKey)
+		var err error
+		key, err = keyFromObjectStrict(ao.objectKey)
+		if err != nil {
+			return fmt.Errorf("invalid object: %w", err)
+		}
 	}
+	fmt.Println("key:", key)
 
 	msg := nats.NewMsg(
 		c.SubjectPrefix() + fmt.Sprintf(

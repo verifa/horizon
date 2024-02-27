@@ -20,7 +20,7 @@ const (
 func printObject(object hz.GenericObject) error {
 	buf := bytes.Buffer{}
 	buf.WriteString(
-		fmt.Sprintf("apiVersion: %s/%s\n", object.Group, object.APIVersion),
+		fmt.Sprintf("apiVersion: %s\n", object.APIVersion),
 	)
 	buf.WriteString(fmt.Sprintf("kind: %s\n", object.Kind))
 	buf.WriteString("meta:\n")

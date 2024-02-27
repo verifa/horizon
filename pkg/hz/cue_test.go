@@ -13,7 +13,7 @@ import (
 )
 
 type cueObj struct {
-	ObjectMeta `json:"metadata,omitempty"`
+	ObjectMeta `json:"metadata,omitempty" cue:""`
 	Spec       cueSpec   `json:"spec"`
 	Status     cueStatus `json:"status"`
 }
@@ -73,8 +73,7 @@ func TestCueDefinition(t *testing.T) {
 {
 	_#def
 	_#def: {
-		apiVersion: =~"^v1$"
-		group: =~"^CueGroup$"
+		apiVersion: =~"^CueGroup/v1$"
 		kind: =~"^CueObject$"
 		metadata: {
 			name:    =~"^[a-zA-Z0-9-_]+$"
@@ -89,7 +88,7 @@ func TestCueDefinition(t *testing.T) {
 				Account?: string
 			}]
 		}
-		spec: {
+		spec?: {
 			embedField: string
 			embedJSON: {
 				embedField: string
