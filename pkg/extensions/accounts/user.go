@@ -10,6 +10,8 @@ import (
 	"github.com/verifa/horizon/pkg/natsutil"
 )
 
+var _ (hz.Objecter) = (*User)(nil)
+
 // User represents a NATS user.
 type User struct {
 	hz.ObjectMeta `json:"metadata"`
@@ -18,7 +20,7 @@ type User struct {
 	Status UserStatus `json:"status"`
 }
 
-func (u User) ObjectAPIVersion() string {
+func (u User) ObjectVersion() string {
 	return "v1"
 }
 

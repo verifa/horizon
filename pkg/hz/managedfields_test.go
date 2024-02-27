@@ -66,6 +66,8 @@ func TestExtractObjectFields(t *testing.T) {
 	tu.AssertEqual(t, idObj, idObjManagedFields, cmpOptIgnoreMetaManagedFields)
 }
 
+var _ hz.Objecter = (*extractFieldsObject)(nil)
+
 type extractFieldsObject struct {
 	hz.ObjectMeta `json:"metadata,omitempty"`
 
@@ -86,6 +88,6 @@ func (o extractFieldsObject) ObjectGroup() string {
 	return "extractFieldsGroup"
 }
 
-func (o extractFieldsObject) ObjectAPIVersion() string {
+func (o extractFieldsObject) ObjectVersion() string {
 	return "v1"
 }

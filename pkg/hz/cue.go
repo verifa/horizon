@@ -29,7 +29,7 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 		return cue.Value{}, fmt.Errorf("compiling kind expression: %w", err)
 	}
 	apiVersionExpr := cCtx.CompileString(
-		fmt.Sprintf("=~\"^%s/%s$\"", obj.ObjectGroup(), obj.ObjectAPIVersion()),
+		fmt.Sprintf("=~\"^%s/%s$\"", obj.ObjectGroup(), obj.ObjectVersion()),
 	)
 	if err := apiVersionExpr.Err(); err != nil {
 		return cue.Value{}, fmt.Errorf(

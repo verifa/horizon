@@ -20,7 +20,7 @@ type DummyObject struct {
 	Status struct{} `json:"status,omitempty"`
 }
 
-func (o DummyObject) ObjectAPIVersion() string {
+func (o DummyObject) ObjectVersion() string {
 	return "v1"
 }
 
@@ -62,6 +62,8 @@ func (a timeoutAction) Do(
 	return obj, nil
 }
 
+var _ (hz.Objecter) = (*returnIDObject)(nil)
+
 type returnIDObject struct {
 	hz.ObjectMeta `json:"metadata,omitempty"`
 
@@ -69,7 +71,7 @@ type returnIDObject struct {
 	Status returnIDStatus `json:"status"`
 }
 
-func (n returnIDObject) ObjectAPIVersion() string {
+func (n returnIDObject) ObjectVersion() string {
 	return "v1"
 }
 

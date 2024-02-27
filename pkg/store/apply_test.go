@@ -30,7 +30,7 @@ type DummyApplyObject struct {
 	Spec          struct{} `json:"spec"`
 }
 
-func (r DummyApplyObject) ObjectAPIVersion() string {
+func (r DummyApplyObject) ObjectVersion() string {
 	return "v1"
 }
 

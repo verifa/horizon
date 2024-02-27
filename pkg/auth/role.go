@@ -10,7 +10,7 @@ type Role struct {
 	Spec RoleSpec `json:"spec,omitempty" cue:""`
 }
 
-func (Role) ObjectAPIVersion() string {
+func (Role) ObjectVersion() string {
 	return "v1"
 }
 

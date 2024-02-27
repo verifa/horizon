@@ -25,7 +25,7 @@ type Account struct {
 	Status *AccountStatus `json:"status,omitempty"`
 }
 
-func (a Account) ObjectAPIVersion() string {
+func (a Account) ObjectVersion() string {
 	return "v1"
 }
 

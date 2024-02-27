@@ -21,7 +21,7 @@ type Portal struct {
 	Status PortalStatus `json:"status,omitempty"`
 }
 
-func (e Portal) ObjectAPIVersion() string {
+func (e Portal) ObjectVersion() string {
 	return "v1"
 }
 

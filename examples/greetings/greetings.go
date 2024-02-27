@@ -2,6 +2,8 @@ package greetings
 
 import "github.com/verifa/horizon/pkg/hz"
 
+var _ hz.Objecter = (*Greeting)(nil)
+
 type Greeting struct {
 	hz.ObjectMeta `json:"metadata"`
 
@@ -9,7 +11,7 @@ type Greeting struct {
 	Status GreetingStatus `json:"status"`
 }
 
-func (s Greeting) ObjectAPIVersion() string {
+func (s Greeting) ObjectVersion() string {
 	return "v1"
 }
 

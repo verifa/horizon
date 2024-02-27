@@ -10,7 +10,7 @@ type RoleBinding struct {
 	Spec RoleBindingSpec `json:"spec,omitempty" cue:""`
 }
 
-func (RoleBinding) ObjectAPIVersion() string {
+func (RoleBinding) ObjectVersion() string {
 	return "v1"
 }
 

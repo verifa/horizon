@@ -17,7 +17,7 @@ type Objecter interface {
 	ObjectOwnerReferences() []OwnerReference
 	ObjectOwnerReference(Objecter) (OwnerReference, bool)
 	ObjectManagedFields() managedfields.ManagedFields
-	ObjectAPIVersion() string
+	ObjectVersion() string
 }
 
 // ObjectKeyer is an interface that can produce a unique key for an object.
@@ -259,10 +259,11 @@ var _ Objecter = (*GenericObject)(nil)
 type GenericObject struct {
 	ObjectMeta `json:"metadata,omitempty"`
 
-	APIVersion string          `json:"apiVersion,omitempty"`
-	Kind       string          `json:"kind,omitempty"`
-	Spec       json.RawMessage `json:"spec,omitempty"`
-	Status     json.RawMessage `json:"status,omitempty"`
+	APIVersion string `json:"apiVersion,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+
+	Spec   json.RawMessage `json:"spec,omitempty"`
+	Status json.RawMessage `json:"status,omitempty"`
 }
 
 func (r GenericObject) ObjectKind() string {
@@ -277,7 +278,7 @@ func (r GenericObject) ObjectGroup() string {
 	return parts[0]
 }
 
-func (r GenericObject) ObjectAPIVersion() string {
+func (r GenericObject) ObjectVersion() string {
 	parts := strings.Split(r.APIVersion, "/")
 	if len(parts) != 2 {
 		return ""
@@ -316,6 +317,6 @@ func (r MetaOnlyObject) ObjectGroup() string {
 	return r.Group
 }
 
-func (r MetaOnlyObject) ObjectAPIVersion() string {
+func (r MetaOnlyObject) ObjectVersion() string {
 	return r.APIVersion
 }

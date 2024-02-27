@@ -21,7 +21,7 @@ func (o DummyObject) ObjectGroup() string {
 	return "DummyGroup"
 }
 
-func (o DummyObject) ObjectAPIVersion() string {
+func (o DummyObject) ObjectVersion() string {
 	return "v1"
 }
 
@@ -39,6 +39,6 @@ func (o ChildObject) ObjectGroup() string {
 	return "ChildGroup"
 }
 
-func (o ChildObject) ObjectAPIVersion() string {
+func (o ChildObject) ObjectVersion() string {
 	return "v1"
 }

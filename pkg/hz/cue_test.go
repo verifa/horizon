@@ -26,7 +26,7 @@ func (s cueObj) ObjectGroup() string {
 	return "CueGroup"
 }
 
-func (s cueObj) ObjectAPIVersion() string {
+func (s cueObj) ObjectVersion() string {
 	return "v1"
 }
 

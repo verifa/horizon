@@ -346,7 +346,7 @@ func (c Client) marshalObjectWithTypeFields(obj Objecter) ([]byte, error) {
 	data, err = sjson.SetBytes(
 		data,
 		"apiVersion",
-		fmt.Sprintf("%s/%s", obj.ObjectGroup(), obj.ObjectAPIVersion()),
+		fmt.Sprintf("%s/%s", obj.ObjectGroup(), obj.ObjectVersion()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("setting apiVersion: %w", err)

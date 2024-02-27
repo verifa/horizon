@@ -10,7 +10,7 @@ type Member struct {
 	Spec MemberSpec `json:"spec,omitempty" cue:""`
 }
 
-func (Member) ObjectAPIVersion() string {
+func (Member) ObjectVersion() string {
 	return "v1"
 }
 
