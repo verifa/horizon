@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/verifa/horizon/pkg/hz"
@@ -21,14 +22,24 @@ func (s Store) update(
 	data []byte,
 	revision uint64,
 ) (uint64, error) {
-	revision, err := s.kv.Update(ctx, hz.KeyFromObject(key), data, revision)
+	rawKey, err := hz.KeyFromObjectConcrete(key)
+	if err != nil {
+		return 0, &hz.Error{
+			Status: http.StatusBadRequest,
+			Message: fmt.Sprintf(
+				"invalid key: %q",
+				err.Error(),
+			),
+		}
+	}
+	newRevision, err := s.kv.Update(ctx, rawKey, data, revision)
 	if err != nil {
 		if isErrWrongLastSequence(err) {
 			return 0, hz.ErrIncorrectRevision
 		}
 		return 0, fmt.Errorf("update: %w", err)
 	}
-	return revision, nil
+	return newRevision, nil
 }
 
 // isErrWrongLastSequence returns true if the error is caused by a write

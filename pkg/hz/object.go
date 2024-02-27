@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/verifa/horizon/pkg/managedfields"
+	"github.com/verifa/horizon/pkg/internal/managedfields"
 )
 
 type Objecter interface {
@@ -28,6 +28,14 @@ type ObjectKeyer interface {
 	ObjectGroup() string
 }
 
+// KeyFromObject takes an ObjectKeyer and returns a string key.
+// Any empty fields in the ObjectKeyer are replaced with "*" which works well
+// for nats subjects to list objects.
+//
+// If performing an action on a specific object (e.g. get, create, apply) the
+// key cannot contain "*".
+// In this case you can use [KeyFromObjectConcrete] which makes sure the
+// ObjectKeyer is concrete.
 func KeyFromObject(obj ObjectKeyer) string {
 	account := "*"
 	if obj.ObjectAccount() != "" {
@@ -54,7 +62,11 @@ func KeyFromObject(obj ObjectKeyer) string {
 	)
 }
 
-func keyFromObjectStrict(obj ObjectKeyer) (string, error) {
+// KeyFromObjectConcrete takes an ObjectKeyer and returns a string key.
+// It returns an error if any of the fields are empty.
+// This is useful when you want to ensure the key is concrete when performing
+// operations on specific objects (e.g. get, create, apply).
+func KeyFromObjectConcrete(obj ObjectKeyer) (string, error) {
 	var errs error
 	if obj.ObjectAccount() == "" {
 		errs = errors.Join(errs, fmt.Errorf("account is required"))

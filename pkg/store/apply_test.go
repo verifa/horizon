@@ -4,8 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strconv"
-	"strings"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -35,7 +34,7 @@ func (r DummyApplyObject) ObjectVersion() string {
 }
 
 func (r DummyApplyObject) ObjectGroup() string {
-	return "DummyApplyGroup"
+	return "dummy"
 }
 
 func (r DummyApplyObject) ObjectKind() string {
@@ -51,28 +50,20 @@ const (
 )
 
 type testStep struct {
-	command   testStepCommand
-	manager   string
-	errStatus *int
+	Command testStepCommand `json:"cmd,omitempty"`
+	Manager string          `json:"manager,omitempty"`
+	Status  *int            `json:"status,omitempty"`
+	Force   bool            `json:"force,omitempty"`
+}
+
+func (t testStep) String() string {
+	return fmt.Sprintf("%s:%s:%v", t.Command, t.Manager, t.Status)
 }
 
 func parseTestFileName(t *testing.T, file string) testStep {
-	parts := strings.Split(file, ":")
 	ts := testStep{}
-	for i, part := range parts {
-		switch i {
-		case 0:
-			ts.command = testStepCommand(part)
-		case 1:
-			ts.manager = part
-		case 2:
-			status, err := strconv.Atoi(part)
-			tu.AssertNoError(t, err)
-			ts.errStatus = &status
-		default:
-			ts.command = testStepCommandError
-		}
-	}
+	err := json.Unmarshal([]byte(file), &ts)
+	tu.AssertNoError(t, err)
 	return ts
 }
 
@@ -94,57 +85,63 @@ func TestApply(t *testing.T) {
 	})
 
 	tu.AssertNoError(t, err)
-	key := hz.ObjectKey{
-		Group:   "DummyApplyGroup",
-		Kind:    "DummyApplyObject",
-		Name:    "test",
-		Account: "test",
-	}
 
 	ar, err := txtar.ParseFile("./testdata/apply/1.txtar")
 	tu.AssertNoError(t, err)
-	for _, file := range ar.Files {
+	for i, file := range ar.Files {
 		ts := parseTestFileName(t, file.Name)
-		client := hz.NewClient(
-			ti.Conn,
-			hz.WithClientInternal(true),
-			hz.WithClientManager(ts.manager),
-		)
-		switch ts.command {
-		case testStepCommandApply:
-			obj, err := yaml.YAMLToJSON(file.Data)
-			tu.AssertNoError(t, err, "obj yaml to json")
-			err = client.Apply(
-				ctx,
-				hz.WithApplyKey(key),
-				hz.WithApplyData(obj),
+		testName := fmt.Sprintf("%d:%s", i, ts.String())
+		t.Run(testName, func(t *testing.T) {
+			client := hz.NewClient(
+				ti.Conn,
+				hz.WithClientInternal(true),
+				hz.WithClientManager(ts.Manager),
 			)
-			if ts.errStatus == nil {
-				tu.AssertNoError(t, err, "client apply")
-				return
-			}
-			var applyErr *hz.Error
-			if errors.As(err, &applyErr) {
-				tu.AssertEqual(t, applyErr.Status, *ts.errStatus)
-				return
-			}
-		case testStepCommandAssert:
-			expObj, err := yaml.YAMLToJSON(file.Data)
-			tu.AssertNoError(t, err, "expObj yaml to json")
-			actObj, err := ti.Store.Get(ctx, store.GetRequest{Key: key})
-			tu.AssertNoError(t, err, "client get")
-			var exp, act interface{}
-			err = json.Unmarshal(expObj, &exp)
-			tu.AssertNoError(t, err, "unmarshal exp")
-			err = json.Unmarshal(actObj, &act)
-			tu.AssertNoError(t, err, "unmarshal act")
-			tu.AssertEqual(t, exp, act, cmpOptIgnoreRevision)
+			switch ts.Command {
+			case testStepCommandApply:
+				jsonData, err := yaml.YAMLToJSON(file.Data)
+				tu.AssertNoError(t, err, "obj yaml to json")
+				obj := hz.GenericObject{}
+				err = json.Unmarshal(jsonData, &obj)
+				tu.AssertNoError(t, err, "unmarshal obj")
 
-		case testStepCommandError:
-			t.Errorf("invalid test file name: %s", file.Name)
-		default:
-			t.Errorf("invalid test file name: %s", file.Name)
+				err = client.Apply(
+					ctx,
+					hz.WithApplyObject(obj),
+					hz.WithApplyForce(ts.Force),
+				)
+				if ts.Status == nil {
+					tu.AssertNoError(t, err, "client apply")
+					return
+				}
+				var applyErr *hz.Error
+				if errors.As(err, &applyErr) {
+					tu.AssertEqual(t, applyErr.Status, *ts.Status)
+					return
+				} else {
+					t.Fatal("expected error status")
+				}
+			case testStepCommandAssert:
+				expJSONData, err := yaml.YAMLToJSON(file.Data)
+				tu.AssertNoError(t, err, "expObj yaml to json")
+				expObj := hz.GenericObject{}
+				err = json.Unmarshal(expJSONData, &expObj)
+				tu.AssertNoError(t, err, "unmarshal obj")
+				actObj, err := ti.Store.Get(ctx, store.GetRequest{Key: expObj})
+				tu.AssertNoError(t, err, "client get")
+				var exp, act interface{}
+				err = json.Unmarshal(expJSONData, &exp)
+				tu.AssertNoError(t, err, "unmarshal exp")
+				err = json.Unmarshal(actObj, &act)
+				tu.AssertNoError(t, err, "unmarshal act")
+				tu.AssertEqual(t, exp, act, cmpOptIgnoreRevision)
 
-		}
+			case testStepCommandError:
+				t.Errorf("invalid test file name: %s", file.Name)
+			default:
+				t.Errorf("invalid test file name: %s", file.Name)
+
+			}
+		})
 	}
 }

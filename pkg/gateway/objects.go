@@ -3,7 +3,6 @@ package gateway
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -65,7 +64,7 @@ func (o *ObjectHandler) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (o *ObjectHandler) apply(w http.ResponseWriter, r *http.Request) {
-	manager := r.Header.Get(hz.HeaderFieldManager)
+	manager := r.Header.Get(hz.HeaderApplyFieldManager)
 	client := hz.NewClient(
 		o.Conn,
 		hz.WithClientSessionFromRequest(r),
@@ -80,7 +79,6 @@ func (o *ObjectHandler) apply(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
-	fmt.Println("GENERIC OBJECT: ", obj)
 	if err := client.Apply(r.Context(), hz.WithApplyObject(obj)); err != nil {
 		httpError(w, err)
 		return

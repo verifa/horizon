@@ -44,7 +44,6 @@ func Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
 	// Add return_url to login request.
 	form.Add("return_url", returnURL)
 	loginURL.RawQuery = form.Encode()
-	fmt.Println("loginURL: ", loginURL.String())
 
 	if err := openBrowser(loginURL.String()); err != nil {
 		return nil, fmt.Errorf("opening browser: %w", err)

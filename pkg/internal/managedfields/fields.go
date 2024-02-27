@@ -20,26 +20,50 @@ func (m ManagedFields) FieldManager(manager string) (FieldManager, bool) {
 	return FieldManager{}, false
 }
 
+type FieldsType string
+
+const (
+	FieldsTypeV1 FieldsType = "FieldsV1"
+)
+
+// FieldManager is a manager of fields for a given object.
+// An object can have multiple field managers, and those field managers make up
+// the managed fields for the object.
 type FieldManager struct {
+	// Manager is the unique name of the manager.
 	Manager string `json:"manager" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
-	// Operation  Operation `json:"operation" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
-	// Time       time.Time `json:"time" cue:",opt"`
-	FieldsType string   `json:"fieldsType" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
-	FieldsV1   FieldsV1 `json:"fieldsV1"`
+	// FieldsType is the type of fields that are managed.
+	// Only supported type is right now is "FieldsV1".
+	FieldsType FieldsType `json:"fieldsType" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
+	// FieldsV1 is the actual fields that are managed.
+	FieldsV1 FieldsV1 `json:"fieldsV1"`
 }
 
+// FieldsV1 is the actual fields that are managed.
 type FieldsV1 struct {
+	// Parent is a pointer to the parent field.
+	// It is only used when creating and operating on the managed fields, and
+	// not stored together with the object.
 	Parent *FieldsV1Step `json:"-"`
-	// Fields = Object
+	// Fields represents an object, and all of its fields.
 	Fields map[FieldsV1Key]FieldsV1 `json:"-"`
-	// Elements = Array
+	// Elements represents an array.
+	// To allow managing indexes of an array, we use a key (not a numerical
+	// index) for the array index.
+	//
+	// The fancy term for this is "associative list".
 	Elements map[FieldsV1Key]FieldsV1 `json:"-"`
 }
 
+// IsLeaf returns true if the field is a leaf node and does not have any fields
+// (object) or elements (array).
 func (f FieldsV1) IsLeaf() bool {
 	return len(f.Fields) == 0 && len(f.Elements) == 0
 }
 
+// Path constructs a path from this node to the root.
+// It only works if the parent is set, which is only the case when creating a
+// [FieldsV1].
 func (f FieldsV1) Path() FieldsV1Path {
 	if f.Parent == nil {
 		return FieldsV1Path{}
@@ -47,6 +71,7 @@ func (f FieldsV1) Path() FieldsV1Path {
 	return append(f.Parent.Field.Path(), *f.Parent)
 }
 
+// FieldsV1Path is a series of steps from a node (root) to a leaf node.
 type FieldsV1Path []FieldsV1Step
 
 func (p FieldsV1Path) String() string {
@@ -73,6 +98,8 @@ func (s FieldsV1Step) String() string {
 	return strings.Join(steps, ".")
 }
 
+// FieldsV1Key represents a key in a FieldsV1 object.
+// It can be either an object key (string) or an array (key-value).
 type FieldsV1Key struct {
 	Type  FieldsV1KeyType `json:"-"`
 	Key   string          `json:"-"`
@@ -214,11 +241,3 @@ func (f FieldsV1Key) String() string {
 	}
 	return fmt.Sprintf("{%s:%s}", f.Key, f.Value)
 }
-
-type Operation string
-
-const (
-	OperationCreate Operation = "Create"
-	OperationUpdate Operation = "Update"
-	OperationApply  Operation = "Apply"
-)

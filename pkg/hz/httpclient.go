@@ -161,7 +161,7 @@ func (c *HTTPClient) Apply(ctx context.Context, opts ...HTTPApplyOption) error {
 
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add(HeaderAuthorization, c.Session)
-	req.Header.Add(HeaderFieldManager, c.Manager)
+	req.Header.Add(HeaderApplyFieldManager, c.Manager)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

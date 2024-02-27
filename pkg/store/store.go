@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -340,7 +341,19 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			return
 		}
 	case StoreCommandApply:
-		manager := msg.Header.Get(hz.HeaderFieldManager)
+		manager := msg.Header.Get(hz.HeaderApplyFieldManager)
+		forceStr := msg.Header.Get(hz.HeaderApplyForceConflicts)
+		force, err := strconv.ParseBool(forceStr)
+		if err != nil {
+			_ = hz.RespondError(
+				msg,
+				&hz.Error{
+					Status:  http.StatusBadRequest,
+					Message: "invalid header " + hz.HeaderApplyForceConflicts,
+				},
+			)
+			return
+		}
 		if manager == "" {
 			_ = hz.RespondError(
 				msg,
@@ -355,6 +368,7 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			Data:    data,
 			Manager: manager,
 			Key:     key,
+			Force:   force,
 		}
 
 		if err := s.Apply(ctx, req); err != nil {

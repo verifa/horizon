@@ -46,6 +46,33 @@ func ErrorFromHTTP(resp *http.Response) error {
 	}
 }
 
+// ErrorWrap takes an error and checks if it is an [Error].
+// If it is, it will make a copy of the [Error], add the given message and
+// return it. The status will remain the same.
+//
+// If it is not an [Error], it will wrap the given error in an [Error] with the
+// given status and message.
+func ErrorWrap(
+	err error,
+	status int,
+	message string,
+) error {
+	if err == nil {
+		return nil
+	}
+	var hErr *Error
+	if errors.As(err, &hErr) {
+		return &Error{
+			Status:  hErr.Status,
+			Message: fmt.Sprintf("%s: %s", message, hErr.Message),
+		}
+	}
+	return &Error{
+		Status:  status,
+		Message: fmt.Sprintf("%s: %s", message, err.Error()),
+	}
+}
+
 // respondError responds to a NATS message with an error.
 // It expects the err to be an *Error and will use the status and message for
 // the response.

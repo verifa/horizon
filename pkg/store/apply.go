@@ -8,7 +8,7 @@ import (
 	"net/http"
 
 	"github.com/verifa/horizon/pkg/hz"
-	"github.com/verifa/horizon/pkg/managedfields"
+	"github.com/verifa/horizon/pkg/internal/managedfields"
 )
 
 type ApplyRequest struct {
@@ -16,7 +16,9 @@ type ApplyRequest struct {
 	Data []byte
 	// Manager is the name of the field manager for this request.
 	Manager string
-	Key     hz.ObjectKey
+	// Force will force the apply to happen even if there are conflicts.
+	Force bool
+	Key   hz.ObjectKey
 }
 
 func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
@@ -46,7 +48,7 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 	fieldManager := managedfields.FieldManager{
 		Manager:    req.Manager,
 		FieldsV1:   fieldsV1,
-		FieldsType: "FieldsV1",
+		FieldsType: managedfields.FieldsTypeV1,
 	}
 
 	// Get the existing object (if it exists).
@@ -54,13 +56,7 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 	rawObj, err := s.get(ctx, req.Key)
 	if err != nil {
 		if !errors.Is(err, hz.ErrNotFound) {
-			return &hz.Error{
-				Status: http.StatusInternalServerError,
-				Message: fmt.Sprintf(
-					"checking existing object: %s",
-					err.Error(),
-				),
-			}
+			return err
 		}
 		var generic hz.GenericObject
 		if err := json.Unmarshal(req.Data, &generic); err != nil {
@@ -84,13 +80,7 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 			}
 		}
 		if err := s.create(ctx, req.Key, bGeneric); err != nil {
-			return &hz.Error{
-				Status: http.StatusInternalServerError,
-				Message: fmt.Sprintf(
-					"creating object: %s",
-					err.Error(),
-				),
-			}
+			return err
 		}
 		return nil
 	}
@@ -112,6 +102,7 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 	result, err := managedfields.MergeManagedFields(
 		generic.ManagedFields,
 		fieldManager,
+		req.Force,
 	)
 	if err != nil {
 		var conflictErr *managedfields.Conflict
@@ -147,7 +138,7 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 
 	// Create map[string]interface{} values for the existing object (dst) and
 	// the request object (src).
-	// Then purge any removed fields (if any) from the manager in src, in dst.
+	// Then purge any removed fields (if any) from dst.
 	// Finally merge src into dst.
 	var dst, src map[string]interface{}
 	if err := json.Unmarshal(newObj, &dst); err != nil {
@@ -177,7 +168,7 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 			),
 		}
 	}
-	managedfields.MergeObjects(dst, src)
+	managedfields.MergeObjects(dst, src, fieldsV1)
 	bDst, err := json.Marshal(dst)
 	if err != nil {
 		return &hz.Error{

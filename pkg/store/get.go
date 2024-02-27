@@ -12,19 +12,25 @@ import (
 )
 
 type GetRequest struct {
-	Key hz.ObjectKey
+	Key hz.ObjectKeyer
 }
 
 func (s Store) Get(ctx context.Context, req GetRequest) ([]byte, error) {
-	data, err := s.get(ctx, req.Key)
-	if err != nil {
-		return nil, err
-	}
-	return data, err
+	return s.get(ctx, req.Key)
 }
 
-func (s Store) get(ctx context.Context, key hz.ObjectKey) ([]byte, error) {
-	kve, err := s.kv.Get(ctx, hz.KeyFromObject(key))
+func (s Store) get(ctx context.Context, key hz.ObjectKeyer) ([]byte, error) {
+	rawKey, err := hz.KeyFromObjectConcrete(key)
+	if err != nil {
+		return nil, &hz.Error{
+			Status: http.StatusBadRequest,
+			Message: fmt.Sprintf(
+				"invalid key: %s",
+				err.Error(),
+			),
+		}
+	}
+	kve, err := s.kv.Get(ctx, rawKey)
 	if err != nil {
 		if errors.Is(err, jetstream.ErrKeyNotFound) {
 			return nil, hz.ErrNotFound
@@ -33,7 +39,7 @@ func (s Store) get(ctx context.Context, key hz.ObjectKey) ([]byte, error) {
 			Status: http.StatusInternalServerError,
 			Message: fmt.Sprintf(
 				"getting key %s: %s",
-				key,
+				rawKey,
 				err.Error(),
 			),
 		}

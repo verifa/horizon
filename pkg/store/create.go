@@ -55,7 +55,22 @@ func (s Store) create(
 ) error {
 	_, err := s.kv.Create(ctx, hz.KeyFromObject(key), data)
 	if err != nil {
-		return fmt.Errorf("creating object: %w", err)
+		if errors.Is(err, jetstream.ErrKeyExists) {
+			return &hz.Error{
+				Status: http.StatusConflict,
+				Message: fmt.Sprintf(
+					"object already exists: %q",
+					key,
+				),
+			}
+		}
+		return &hz.Error{
+			Status: http.StatusInternalServerError,
+			Message: fmt.Sprintf(
+				"creating object: %s",
+				err.Error(),
+			),
+		}
 	}
 	return nil
 }

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/verifa/horizon/pkg/managedfields"
+	"github.com/verifa/horizon/pkg/internal/managedfields"
 )
 
 // ExtractManagedFields creates an object containing the fields managed by the

@@ -2,7 +2,6 @@ package managedfields
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	tu "github.com/verifa/horizon/pkg/testutil"
@@ -10,11 +9,13 @@ import (
 
 func TestMergeManagedFields(t *testing.T) {
 	type test struct {
-		name          string
-		managedFields string
-		merge         string
-		expConflict   func(FieldsV1) []FieldsV1
-		expRemoved    func([]FieldManager) []FieldsV1
+		name             string
+		managedFields    string
+		merge            string
+		force            bool
+		expManagedFields string
+		expConflict      func(FieldsV1) []FieldsV1
+		expRemoved       func([]FieldManager) []FieldsV1
 	}
 	tests := []test{
 		{
@@ -42,6 +43,29 @@ func TestMergeManagedFields(t *testing.T) {
 					}
 				}
 			}`,
+			expManagedFields: `[
+				{
+					"manager": "m1",
+					"fieldsV1": {
+						"f:metadata": {
+							"f:name": {},
+							"f:labels": {
+								"f:app": {}
+							}
+						}
+					}
+				},
+				{
+					"manager": "m2",
+					"fieldsV1": {
+						"f:metadata": {
+							"f:labels": {
+								"f:test": {}
+							}
+						}
+					}
+				}
+			]`,
 			expConflict: func(fields FieldsV1) []FieldsV1 { return nil },
 			expRemoved:  func(fms []FieldManager) []FieldsV1 { return nil },
 		},
@@ -65,6 +89,24 @@ func TestMergeManagedFields(t *testing.T) {
 					}
 				}
 			}`,
+			expManagedFields: `[
+				{
+					"manager": "m1",
+					"fieldsV1": {
+						"f:slice": {
+							"k:{\"id\":\"1\"}": {}
+						}
+					}
+				},
+				{
+					"manager": "m2",
+					"fieldsV1": {
+						"f:slice": {
+							"k:{\"id\":\"2\"}": {}
+						}
+					}
+				}
+			]`,
 			expConflict: func(fields FieldsV1) []FieldsV1 { return nil },
 			expRemoved:  func(fms []FieldManager) []FieldsV1 { return nil },
 		},
@@ -91,6 +133,16 @@ func TestMergeManagedFields(t *testing.T) {
 					}
 				}
 			}`,
+			expManagedFields: `[
+				{
+					"manager": "m1",
+					"fieldsV1": {
+						"f:metadata": {
+							"f:name": {}
+						}
+					}
+				}
+			]`,
 			expConflict: func(fields FieldsV1) []FieldsV1 { return nil },
 			expRemoved: func(fms []FieldManager) []FieldsV1 {
 				return []FieldsV1{
@@ -119,6 +171,16 @@ func TestMergeManagedFields(t *testing.T) {
 					}
 				}
 			}`,
+			expManagedFields: `[
+				{
+					"manager": "m1",
+					"fieldsV1": {
+						"f:slice": {
+							"k:{\"id\":\"1\"}": {}
+						}
+					}
+				}
+			]`,
 			expConflict: func(fields FieldsV1) []FieldsV1 { return nil },
 			expRemoved: func(fms []FieldManager) []FieldsV1 {
 				return []FieldsV1{
@@ -156,6 +218,40 @@ func TestMergeManagedFields(t *testing.T) {
 				}
 			},
 			expRemoved: func(fms []FieldManager) []FieldsV1 { return nil },
+		},
+		{
+			name: "conflict object force",
+			managedFields: `[
+				{
+					"manager": "m1",
+					"fieldsV1": {
+						"f:metadata": {
+							"f:name": {}
+						}
+					}
+				}
+			]`,
+			merge: `{
+				"manager": "m2",
+				"fieldsV1": {
+					"f:metadata": {
+						"f:name": {}
+					}
+				}
+			}`,
+			expManagedFields: `[
+				{
+					"manager": "m2",
+					"fieldsV1": {
+						"f:metadata": {
+							"f:name": {}
+						}
+					}
+				}
+			]`,
+			force:       true,
+			expConflict: func(fields FieldsV1) []FieldsV1 { return nil },
+			expRemoved:  func(fms []FieldManager) []FieldsV1 { return nil },
 		},
 		{
 			name: "conflict array",
@@ -206,7 +302,7 @@ func TestMergeManagedFields(t *testing.T) {
 				}
 			}
 			expRm := tc.expRemoved(managedFields)
-			result, err := MergeManagedFields(managedFields, merge)
+			result, err := MergeManagedFields(managedFields, merge, tc.force)
 			tu.AssertEqual(t, expErr, err, cmpOptIgnoreParent)
 			tu.AssertEqual(
 				t,
@@ -214,68 +310,31 @@ func TestMergeManagedFields(t *testing.T) {
 				result.Removed,
 				cmpOptIgnoreParent,
 			)
+			if err == nil {
+				var expManagedFields []FieldManager
+				err := json.Unmarshal(
+					[]byte(tc.expManagedFields),
+					&expManagedFields,
+				)
+				tu.AssertNoError(t, err, "parsing exp managed fields json")
+				tu.AssertEqual(
+					t,
+					expManagedFields,
+					result.ManagedFields,
+					cmpOptIgnoreParent,
+				)
+			}
 		})
 	}
-	mf := []FieldManager{
-		{
-			Manager: "m1",
-			FieldsV1: FieldsV1{
-				Fields: map[FieldsV1Key]FieldsV1{
-					fkey("metadata"): {
-						Fields: map[FieldsV1Key]FieldsV1{
-							fkey("name"): {},
-						},
-					},
-					fkey("spec"): {
-						Fields: map[FieldsV1Key]FieldsV1{
-							fkey("replicas"): {},
-						},
-					},
-				},
-			},
-		},
-		{
-			Manager: "m2",
-			FieldsV1: FieldsV1{
-				Fields: map[FieldsV1Key]FieldsV1{
-					fkey("metadata"): {
-						Fields: map[FieldsV1Key]FieldsV1{
-							fkey("name"): {},
-						},
-					},
-					fkey("spec"): {
-						Fields: map[FieldsV1Key]FieldsV1{
-							fkey("field"): {},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	m2 := FieldManager{
-		Manager: "m2",
-		FieldsV1: FieldsV1{
-			Fields: map[FieldsV1Key]FieldsV1{
-				fkey("metadata"): {
-					Fields: map[FieldsV1Key]FieldsV1{
-						fkey("name"): {},
-					},
-				},
-			},
-		},
-	}
-
-	result, _ := MergeManagedFields(mf, m2)
-	fmt.Println(result.Removed)
 }
 
 func TestMergeObjects(t *testing.T) {
 	type test struct {
-		name string
-		dst  string
-		src  string
-		exp  string
+		name   string
+		dst    string
+		src    string
+		fields string
+		exp    string
 	}
 	tests := []test{
 		{
@@ -293,6 +352,14 @@ func TestMergeObjects(t *testing.T) {
 					"name": "test",
 					"labels": {
 						"test": "test"
+					}
+				}
+			}`,
+			fields: `{
+				"f:metadata": {
+					"f:name": {},
+					"f:labels": {
+						"f:test": {}
 					}
 				}
 			}`,
@@ -349,6 +416,25 @@ func TestMergeObjects(t *testing.T) {
 					}
 				]
 			}`,
+			fields: `{
+				"f:slice": {},
+				"f:objects": {
+					"k:{\"id\":\"1\"}": {
+						"f:field": {}
+					},
+					"k:{\"id\":\"2\"}": {
+						"f:field": {}
+					}
+				},
+				"f:nested": {
+					"k:{\"id\":\"1\"}": {
+						"f:slice": {},
+						"f:object": {
+							"f:b": {}
+						}
+					}
+				}
+			}`,
 			exp: `{
 				"slice": ["overwrite"],
 				"objects":[
@@ -404,6 +490,22 @@ func TestMergeObjects(t *testing.T) {
 					]
 				}
 			}`,
+			fields: `{
+				"f:metadata": {
+					"f:name": {},
+					"f:labels": {
+						"f:test": {}
+					}
+				},
+				"f:spec": {
+					"f:replicas": {},
+					"f:objslice": {
+						"k:{\"id\":\"2\"}": {
+							"f:field": {}
+						}
+					}
+				}
+			}`,
 			exp: `{
 				"metadata": {
 					"name": "test",
@@ -431,7 +533,10 @@ func TestMergeObjects(t *testing.T) {
 			tu.AssertNoError(t, err, "parsing src json")
 			err = json.Unmarshal([]byte(tc.exp), &exp)
 			tu.AssertNoError(t, err, "parsing exp json")
-			MergeObjects(dst, src)
+			var fields FieldsV1
+			err = json.Unmarshal([]byte(tc.fields), &fields)
+			tu.AssertNoError(t, err, "parsing fields json")
+			MergeObjects(dst, src, fields)
 			tu.AssertEqual(t, exp, dst)
 		})
 	}

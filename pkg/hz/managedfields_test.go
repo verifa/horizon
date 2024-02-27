@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/verifa/horizon/pkg/hz"
-	"github.com/verifa/horizon/pkg/managedfields"
+	"github.com/verifa/horizon/pkg/internal/managedfields"
 	tu "github.com/verifa/horizon/pkg/testutil"
 )
 

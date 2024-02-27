@@ -23,9 +23,10 @@ const (
 )
 
 const (
-	HeaderStatus        = "Hz-Status"
-	HeaderAuthorization = "Hz-Authorization"
-	HeaderFieldManager  = "Hz-Field-Manager"
+	HeaderStatus              = "Hz-Status"
+	HeaderAuthorization       = "Hz-Authorization"
+	HeaderApplyFieldManager   = "Hz-Apply-Field-Manager"
+	HeaderApplyForceConflicts = "Hz-Apply-Force-Conflicts"
 )
 
 const (
@@ -269,7 +270,6 @@ func SessionFromRequest(req *http.Request) string {
 	if sessionCookie, err := req.Cookie(CookieSession); err == nil {
 		return sessionCookie.Value
 	}
-	fmt.Println("REQ HEADER:", req.Header.Get(HeaderAuthorization))
 	return req.Header.Get(HeaderAuthorization)
 }
 
@@ -476,6 +476,7 @@ type applyOptions struct {
 	object    Objecter
 	data      []byte
 	objectKey ObjectKeyer
+	force     bool
 }
 
 func WithApplyObject(object Objecter) ApplyOption {
@@ -494,6 +495,12 @@ func WithApplyData(data []byte) ApplyOption {
 func WithApplyKey(key ObjectKeyer) ApplyOption {
 	return func(ao *applyOptions) {
 		ao.objectKey = key
+	}
+}
+
+func WithApplyForce(force bool) ApplyOption {
+	return func(ao *applyOptions) {
+		ao.force = force
 	}
 }
 
@@ -526,27 +533,26 @@ func (c Client) Apply(
 		if err != nil {
 			return fmt.Errorf("marshalling object: %w", err)
 		}
-		key, err = keyFromObjectStrict(ao.object)
+		key, err = KeyFromObjectConcrete(ao.object)
 		if err != nil {
 			return fmt.Errorf("invalid object: %w", err)
 		}
 	}
 	if ao.objectKey != nil {
 		var err error
-		key, err = keyFromObjectStrict(ao.objectKey)
+		key, err = KeyFromObjectConcrete(ao.objectKey)
 		if err != nil {
 			return fmt.Errorf("invalid object: %w", err)
 		}
 	}
-	fmt.Println("key:", key)
-
 	msg := nats.NewMsg(
 		c.SubjectPrefix() + fmt.Sprintf(
 			SubjectStoreApply,
 			key,
 		),
 	)
-	msg.Header.Set(HeaderFieldManager, c.Manager)
+	msg.Header.Set(HeaderApplyFieldManager, c.Manager)
+	msg.Header.Set(HeaderApplyForceConflicts, strconv.FormatBool(ao.force))
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	msg.Data = ao.data
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
