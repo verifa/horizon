@@ -174,3 +174,82 @@ func (c *HTTPClient) Apply(ctx context.Context, opts ...HTTPApplyOption) error {
 	}
 	return nil
 }
+
+type HTTPDeleteOption func(*httpDeleteOptions)
+
+func WithHTTPDeleteKey(key ObjectKeyer) HTTPDeleteOption {
+	return func(opt *httpDeleteOptions) {
+		opt.key = key
+	}
+}
+
+func WithHTTPDeleteData(data []byte) HTTPDeleteOption {
+	return func(opt *httpDeleteOptions) {
+		opt.data = data
+	}
+}
+
+type httpDeleteOptions struct {
+	key  ObjectKeyer
+	data []byte
+}
+
+func (c *HTTPClient) Delete(
+	ctx context.Context,
+	opts ...HTTPDeleteOption,
+) error {
+	opt := httpDeleteOptions{}
+	for _, o := range opts {
+		o(&opt)
+	}
+	var key ObjectKeyer
+	if opt.key != nil {
+		key = opt.key
+	}
+	if opt.data != nil {
+		key = &EmptyObjectWithMeta{}
+		if err := json.Unmarshal(opt.data, key); err != nil {
+			return fmt.Errorf("unmarshaling object: %w", err)
+		}
+	}
+	if key == nil {
+		return fmt.Errorf("delete: key required")
+	}
+
+	if _, err := KeyFromObjectConcrete(key); err != nil {
+		return fmt.Errorf("delete: invalid key: %w", err)
+	}
+	reqURL, err := url.JoinPath(
+		c.Server,
+		"v1",
+		"objects",
+		key.ObjectGroup(),
+		key.ObjectKind(),
+		key.ObjectAccount(),
+		key.ObjectName(),
+	)
+	if err != nil {
+		return fmt.Errorf("creating request url: %w", err)
+	}
+	req, err := http.NewRequest(
+		http.MethodDelete,
+		reqURL,
+		bytes.NewReader(opt.data),
+	)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add(HeaderAuthorization, c.Session)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("executing request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if err := ErrorFromHTTP(resp); err != nil {
+		return err
+	}
+	return nil
+}

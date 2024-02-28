@@ -727,7 +727,7 @@ func WithDeleteData(data []byte) DeleteOption {
 	}
 }
 
-func WithDeleteObjectKey(key ObjectKeyer) DeleteOption {
+func WithDeleteKey(key ObjectKeyer) DeleteOption {
 	return func(do *deleteOptions) {
 		do.key = key
 	}

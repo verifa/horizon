@@ -19,7 +19,7 @@ func (o *ObjectHandler) router() *chi.Mux {
 	r.Get("/", o.get)
 	r.Post("/", o.create)
 	r.Patch("/", o.apply)
-	r.Delete("/", o.delete)
+	r.Delete("/{group}/{kind}/{account}/{name}", o.delete)
 	return r
 }
 
@@ -87,5 +87,16 @@ func (o *ObjectHandler) apply(w http.ResponseWriter, r *http.Request) {
 }
 
 func (o *ObjectHandler) delete(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	key := hz.ObjectKey{
+		Group:   chi.URLParam(r, "group"),
+		Kind:    chi.URLParam(r, "kind"),
+		Account: chi.URLParam(r, "account"),
+		Name:    chi.URLParam(r, "name"),
+	}
+	client := hz.NewClient(o.Conn, hz.WithClientSessionFromRequest(r))
+	if err := client.Delete(r.Context(), hz.WithDeleteKey(key)); err != nil {
+		httpError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

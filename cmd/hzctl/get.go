@@ -75,53 +75,17 @@ to quickly create a Cobra application.`,
 		); err != nil {
 			return fmt.Errorf("list: %w", err)
 		}
-		// If using nats instead of http, below is how to create a nats client.
-		// Leaving it here as not sure which approach we are going with just yet
-		// (or maybe both!).
-		// creds, err := base64.StdEncoding.DecodeString(*hCtx.Credentials)
-		// if err != nil {
-		// 	return fmt.Errorf("decode credentials: %w", err)
-		// }
-		// userJWT, err := nkeys.ParseDecoratedJWT(creds)
-		// if err != nil {
-		// 	return fmt.Errorf("parse jwt: %w", err)
-		// }
-		// keyPair, err := nkeys.ParseDecoratedUserNKey(creds)
-		// if err != nil {
-		// 	return fmt.Errorf("parse nkey: %w", err)
-		// }
-		// seed, err := keyPair.Seed()
-		// if err != nil {
-		// 	return fmt.Errorf("get seed: %w", err)
-		// }
-		// conn, err := nats.Connect(
-		// 	hCtx.URL,
-		// 	nats.UserJWTAndSeed(userJWT, string(seed)),
-		// )
-		// if err != nil {
-		// 	return fmt.Errorf("connect to nats: %w", err)
-		// }
-		// client := hz.NewClient(
-		// 	conn,
-		// 	hz.WithClientManager("hzctl"),
-		// 	hz.WithClientSession(*hCtx.Session),
-		// )
-		// ctx := context.Background()
-		// resp := hz.GenericObjectList{}
-		// if err := client.List(ctx, hz.WithListKeyFromObject(key),
-		// hz.WithListResponseGenericObjects(&resp)); err != nil {
-		// 	return fmt.Errorf("list: %w", err)
-		// }
-		switch len(resp.Items) {
-		case 0:
+		if len(resp.Items) == 0 {
 			fmt.Println("No objects found")
-		case 1:
-			if err := printObject(resp.Items[0]); err != nil {
-				return fmt.Errorf("print object: %w", err)
-			}
-		default:
-			printObjects(resp.Items)
+			return nil
 		}
+
+		if key.Name == "" {
+			printObjects(resp.Items)
+		} else {
+			_ = printObject(resp.Items[0])
+		}
+
 		return nil
 	},
 }

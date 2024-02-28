@@ -46,7 +46,8 @@ func ErrorFromNATS(msg *nats.Msg) error {
 }
 
 func ErrorFromHTTP(resp *http.Response) error {
-	if resp.StatusCode == http.StatusOK {
+	if resp.StatusCode >= http.StatusOK &&
+		resp.StatusCode < http.StatusMultipleChoices {
 		return nil
 	}
 	body, err := io.ReadAll(resp.Body)
