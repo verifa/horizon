@@ -360,8 +360,10 @@ func (s *Server) checkRootAccountObject(
 	}
 	if _, err := accClient.Get(
 		ctx,
-		hz.WithGetAccount(hz.RootAccount),
-		hz.WithGetName(hz.RootAccount),
+		hz.WithGetKey(hz.ObjectKey{
+			Name:    hz.RootAccount,
+			Account: hz.RootAccount,
+		}),
 	); err != nil {
 		if !errors.Is(err, hz.ErrNotFound) {
 			return fmt.Errorf("get root account: %w", err)

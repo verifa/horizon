@@ -1,0 +1,30 @@
+-- {"cmd":"apply","manager":"m1"} --
+apiVersion: dummy/v1
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+spec:
+  text: test
+  object:
+    text: test
+    numbers: [1,2,3]
+-- {"cmd":"delete"} --
+apiVersion: dummy/v1
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+-- {"cmd":"assert_delete"} --
+apiVersion: dummy/v1
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+-- {"cmd":"assert", "status":404} --
+apiVersion: dummy/v1
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+

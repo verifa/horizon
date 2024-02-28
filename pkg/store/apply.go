@@ -179,7 +179,7 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 			),
 		}
 	}
-	if _, err := s.update(ctx, req.Key, bDst, *generic.Revision); err != nil {
+	if err := s.update(ctx, req.Key, bDst, *generic.Revision); err != nil {
 		if errors.Is(err, hz.ErrIncorrectRevision) {
 			return &hz.Error{
 				Status: http.StatusConflict,

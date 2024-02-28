@@ -20,8 +20,10 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	rootAccount, err := superAccountClient.Get(
 		r.Context(),
-		hz.WithGetName(hz.RootAccount),
-		hz.WithGetAccount(hz.RootAccount),
+		hz.WithGetKey(hz.ObjectKey{
+			Name:    hz.RootAccount,
+			Account: hz.RootAccount,
+		}),
 	)
 	if err != nil {
 		httpError(w, err)

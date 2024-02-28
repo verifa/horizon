@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -11,8 +12,7 @@ import (
 )
 
 type DeleteRequest struct {
-	Key     hz.ObjectKey
-	Manager string
+	Key hz.ObjectKey
 }
 
 func (s Store) Delete(ctx context.Context, req DeleteRequest) error {
@@ -20,6 +20,20 @@ func (s Store) Delete(ctx context.Context, req DeleteRequest) error {
 	if err != nil {
 		return err
 	}
+	var obj hz.EmptyObjectWithMeta
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return &hz.Error{
+			Status:  http.StatusInternalServerError,
+			Message: fmt.Sprintf("unmarshalling object: %s", err.Error()),
+		}
+	}
+	if obj.ObjectMeta.Revision == nil {
+		return &hz.Error{
+			Status:  http.StatusInternalServerError,
+			Message: "object revision is nil",
+		}
+	}
+	revision := *obj.ObjectMeta.Revision
 	deleteAt := hz.Time{Time: time.Now()}
 	data, err = sjson.SetBytes(data, "metadata.deletionTimestamp", deleteAt)
 	if err != nil {
@@ -28,9 +42,10 @@ func (s Store) Delete(ctx context.Context, req DeleteRequest) error {
 			Message: fmt.Sprintf("setting deletion timestamp: %s", err.Error()),
 		}
 	}
-	if err := s.Apply(ctx, ApplyRequest{
-		Data:    data,
-		Manager: req.Manager,
+	if err := s.Update(ctx, UpdateRequest{
+		Data:     data,
+		Key:      req.Key,
+		Revision: revision,
 	}); err != nil {
 		return err
 	}

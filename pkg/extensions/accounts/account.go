@@ -73,7 +73,7 @@ func (r *AccountReconciler) Reconcile(
 	accClient := hz.ObjectClient[Account]{Client: r.Client}
 	account, err := accClient.Get(
 		ctx,
-		hz.WithGetObjectKey(req.Key),
+		hz.WithGetKey(req.Key),
 	)
 	if err != nil {
 		return hz.Result{}, hz.IgnoreNotFound(err)

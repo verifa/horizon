@@ -17,7 +17,7 @@ func (r *GreetingReconciler) Reconcile(
 	ctx context.Context,
 	req hz.Request,
 ) (hz.Result, error) {
-	greeting, err := r.GreetingClient.Get(ctx, hz.WithGetObjectKey(req.Key))
+	greeting, err := r.GreetingClient.Get(ctx, hz.WithGetKey(req.Key))
 	if err != nil {
 		return hz.Result{}, hz.IgnoreNotFound(err)
 	}

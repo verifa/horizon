@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/verifa/horizon/pkg/hz"
@@ -44,9 +46,10 @@ func (r DummyApplyObject) ObjectKind() string {
 type testStepCommand string
 
 const (
-	testStepCommandError  testStepCommand = "error"
-	testStepCommandApply  testStepCommand = "apply"
-	testStepCommandAssert testStepCommand = "assert"
+	testStepCommandApply        testStepCommand = "apply"
+	testStepCommandDelete       testStepCommand = "delete"
+	testStepCommandAssert       testStepCommand = "assert"
+	testStepCommandAssertDelete testStepCommand = "assert_delete"
 )
 
 type testStep struct {
@@ -67,9 +70,8 @@ func parseTestFileName(t *testing.T, file string) testStep {
 	return ts
 }
 
-func TestApply(t *testing.T) {
+func TestStore(t *testing.T) {
 	ctx := context.Background()
-
 	ti := server.Test(t, ctx)
 	// SETUP DUMMY CONTROLLER
 	ctlr, err := hz.StartController(
@@ -84,16 +86,29 @@ func TestApply(t *testing.T) {
 		_ = ctlr.Stop()
 	})
 
+	txtarFiles, err := filepath.Glob("./testdata/*.txtar")
 	tu.AssertNoError(t, err)
+	for _, txtarFile := range txtarFiles {
+		t.Run(txtarFile, func(t *testing.T) {
+			ar, err := txtar.ParseFile(txtarFile)
+			tu.AssertNoError(t, err)
+			runTest(t, ctx, ti.Store, ar)
+		})
+	}
+}
 
-	ar, err := txtar.ParseFile("./testdata/apply/1.txtar")
-	tu.AssertNoError(t, err)
+func runTest(
+	t *testing.T,
+	ctx context.Context,
+	st *store.Store,
+	ar *txtar.Archive,
+) {
 	for i, file := range ar.Files {
 		ts := parseTestFileName(t, file.Name)
 		testName := fmt.Sprintf("%d:%s", i, ts.String())
 		t.Run(testName, func(t *testing.T) {
 			client := hz.NewClient(
-				ti.Conn,
+				st.Conn,
 				hz.WithClientInternal(true),
 				hz.WithClientManager(ts.Manager),
 			)
@@ -111,33 +126,83 @@ func TestApply(t *testing.T) {
 					hz.WithApplyForce(ts.Force),
 				)
 				if ts.Status == nil {
-					tu.AssertNoError(t, err, "client apply")
-					return
-				}
-				var applyErr *hz.Error
-				if errors.As(err, &applyErr) {
-					tu.AssertEqual(t, applyErr.Status, *ts.Status)
-					return
+					tu.AssertNoError(t, err, "client get")
 				} else {
-					t.Fatal("expected error status")
+					var getErr *hz.Error
+					if errors.As(err, &getErr) {
+						tu.AssertEqual(t, getErr.Status, *ts.Status)
+						return
+					} else {
+						t.Fatal("expected hz.Error")
+					}
 				}
+			case testStepCommandDelete:
+				jsonData, err := yaml.YAMLToJSON(file.Data)
+				tu.AssertNoError(t, err, "obj yaml to json")
+				obj := hz.GenericObject{}
+				err = json.Unmarshal(jsonData, &obj)
+				tu.AssertNoError(t, err, "unmarshal obj")
+
+				err = client.Delete(
+					ctx,
+					hz.WithDeleteObject(obj),
+				)
+				tu.AssertNoError(t, err, "client delete")
+
 			case testStepCommandAssert:
 				expJSONData, err := yaml.YAMLToJSON(file.Data)
 				tu.AssertNoError(t, err, "expObj yaml to json")
 				expObj := hz.GenericObject{}
 				err = json.Unmarshal(expJSONData, &expObj)
 				tu.AssertNoError(t, err, "unmarshal obj")
-				actObj, err := ti.Store.Get(ctx, store.GetRequest{Key: expObj})
-				tu.AssertNoError(t, err, "client get")
+				actObj, err := st.Get(ctx, store.GetRequest{Key: expObj})
+				if ts.Status == nil {
+					tu.AssertNoError(t, err, "client get")
+				} else {
+					var getErr *hz.Error
+					if errors.As(err, &getErr) {
+						tu.AssertEqual(t, getErr.Status, *ts.Status)
+						return
+					} else {
+						t.Fatal("expected hz.Error")
+					}
+				}
+
 				var exp, act interface{}
 				err = json.Unmarshal(expJSONData, &exp)
 				tu.AssertNoError(t, err, "unmarshal exp")
 				err = json.Unmarshal(actObj, &act)
 				tu.AssertNoError(t, err, "unmarshal act")
 				tu.AssertEqual(t, exp, act, cmpOptIgnoreRevision)
+			case testStepCommandAssertDelete:
+				expJSONData, err := yaml.YAMLToJSON(file.Data)
+				tu.AssertNoError(t, err, "expObj yaml to json")
+				expObj := hz.GenericObject{}
+				err = json.Unmarshal(expJSONData, &expObj)
+				tu.AssertNoError(t, err, "unmarshal obj")
 
-			case testStepCommandError:
-				t.Errorf("invalid test file name: %s", file.Name)
+				done := make(chan struct{})
+				watcher, err := hz.StartWatcher(
+					ctx,
+					st.Conn,
+					hz.WithWatcherForObject(expObj),
+					hz.WithWatcherFn(func(event hz.Event) (hz.Result, error) {
+						if event.Operation == hz.EventOperationPurge {
+							close(done)
+						}
+						return hz.Result{}, nil
+					}),
+				)
+				tu.AssertNoError(t, err, "start watcher")
+				t.Cleanup(func() {
+					watcher.Close()
+				})
+				select {
+				case <-done:
+				case <-time.After(time.Second * 5):
+					t.Fatal("timed out waiting for purge event")
+				}
+
 			default:
 				t.Errorf("invalid test file name: %s", file.Name)
 

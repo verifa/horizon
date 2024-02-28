@@ -150,6 +150,15 @@ func StartStore(
 		store.subs = append(store.subs, sub)
 	}
 
+	// Start garbage collector.
+	gc := &GarbageCollector{
+		Conn: conn,
+		KV:   kv,
+	}
+	if err := gc.Start(ctx); err != nil {
+		return nil, fmt.Errorf("start garbage collector: %w", err)
+	}
+
 	return &store, nil
 }
 
@@ -421,11 +430,13 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 		_ = hz.RespondOK(msg, data)
 		return
 	case StoreCommandDelete:
-		_ = hz.RespondError(msg, &hz.Error{
-			Status:  http.StatusNotImplemented,
-			Message: "todo: not implemented",
-		})
-		return
+		req := DeleteRequest{
+			Key: key,
+		}
+		if err := s.Delete(ctx, req); err != nil {
+			_ = hz.RespondError(msg, err)
+			return
+		}
 	default:
 		_ = hz.RespondError(msg, &hz.Error{
 			Status:  http.StatusBadRequest,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/nats-io/nats.go"
 )
@@ -27,6 +28,21 @@ func (e *Error) Is(err error) bool {
 		return false
 	}
 	return e.Status == target.Status && e.Message == target.Message
+}
+
+func ErrorFromNATS(msg *nats.Msg) error {
+	headerStatus := msg.Header.Get(HeaderStatus)
+	status, err := strconv.Atoi(headerStatus)
+	if err != nil {
+		return fmt.Errorf("invalid status header %q: %w", headerStatus, err)
+	}
+	if status == http.StatusOK {
+		return nil
+	}
+	return &Error{
+		Status:  status,
+		Message: string(msg.Data),
+	}
 }
 
 func ErrorFromHTTP(resp *http.Response) error {

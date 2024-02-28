@@ -10,10 +10,14 @@ import (
 	"github.com/verifa/horizon/pkg/hz"
 )
 
-type UpdateRequest struct{}
+type UpdateRequest struct {
+	Data     []byte
+	Key      hz.ObjectKey
+	Revision uint64
+}
 
 func (s Store) Update(ctx context.Context, req UpdateRequest) error {
-	return errors.New("TODO")
+	return s.update(ctx, req.Key, req.Data, req.Revision)
 }
 
 func (s Store) update(
@@ -21,10 +25,10 @@ func (s Store) update(
 	key hz.ObjectKey,
 	data []byte,
 	revision uint64,
-) (uint64, error) {
+) error {
 	rawKey, err := hz.KeyFromObjectConcrete(key)
 	if err != nil {
-		return 0, &hz.Error{
+		return &hz.Error{
 			Status: http.StatusBadRequest,
 			Message: fmt.Sprintf(
 				"invalid key: %q",
@@ -32,14 +36,13 @@ func (s Store) update(
 			),
 		}
 	}
-	newRevision, err := s.kv.Update(ctx, rawKey, data, revision)
-	if err != nil {
+	if _, err := s.kv.Update(ctx, rawKey, data, revision); err != nil {
 		if isErrWrongLastSequence(err) {
-			return 0, hz.ErrIncorrectRevision
+			return hz.ErrIncorrectRevision
 		}
-		return 0, fmt.Errorf("update: %w", err)
+		return fmt.Errorf("update: %w", err)
 	}
-	return newRevision, nil
+	return nil
 }
 
 // isErrWrongLastSequence returns true if the error is caused by a write

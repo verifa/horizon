@@ -44,12 +44,12 @@ func (s *Server) middlewareAccount(next http.Handler) http.Handler {
 			Conn:    s.Conn,
 			Session: hz.SessionFromRequest(r),
 		}
-		if _, err := client.Get(r.Context(), hz.ObjectKey{
+		if _, err := client.Get(r.Context(), hz.WithGetKey(hz.ObjectKey{
 			Name:    account,
 			Account: hz.RootAccount,
 			Kind:    accounts.ObjectKind,
 			Group:   accounts.ObjectGroup,
-		}); err != nil {
+		})); err != nil {
 			// TODO: display a pretty 404 page instead.
 			httpError(w, err)
 			return

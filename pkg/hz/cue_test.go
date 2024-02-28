@@ -87,6 +87,9 @@ func TestCueDefinition(t *testing.T) {
 				Name?:    string
 				Account?: string
 			}]
+			finalizers?: [...{
+				id: =~"^[a-zA-Z0-9-_]+$"
+			}]
 		}
 		spec?: {
 			embedField: string

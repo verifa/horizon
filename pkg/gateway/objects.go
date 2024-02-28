@@ -52,7 +52,7 @@ func (o *ObjectHandler) get(w http.ResponseWriter, r *http.Request) {
 	resp := bytes.Buffer{}
 	if err := client.List(
 		r.Context(),
-		hz.WithListKeyFromObject(key),
+		hz.WithListKey(key),
 		hz.WithListResponseWriter(&resp),
 	); err != nil {
 		httpError(w, err)

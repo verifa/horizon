@@ -291,11 +291,15 @@ func (c *Controller) startReconciler(
 		if kvop == jetstream.KeyValueDelete {
 			// If the operation is a KV delete, then the value has been
 			// deleted, so ack it.
+			// This is different from what horizon considers a delete operation.
+			// In horizon, a delete operation sets the
+			// metadata.deletionTimestamp. In the kv store, a delete operation
+			// means the whole object is gone (i.e. what horizon's considers
+			// a purge).
 			_ = msg.Ack()
 			return
 		}
 		key := keyFromMsgSubject(kv, msg)
-		isOwnerReconcile := false
 		go c.handleControlLoop(
 			ctx,
 			opt.reconciler,
@@ -304,7 +308,6 @@ func (c *Controller) startReconciler(
 			key,
 			msg,
 			ttl,
-			isOwnerReconcile,
 		)
 	})
 	if err != nil {
@@ -363,7 +366,6 @@ func (c *Controller) startReconciler(
 				Group:   ownerRef.Group,
 				Kind:    ownerRef.Kind,
 			})
-			isOwnerReconcile := true
 			go c.handleControlLoop(
 				ctx,
 				opt.reconciler,
@@ -372,7 +374,6 @@ func (c *Controller) startReconciler(
 				key,
 				msg,
 				ttl,
-				isOwnerReconcile,
 			)
 		})
 		if err != nil {
@@ -415,7 +416,6 @@ func (c *Controller) handleControlLoop(
 	key string,
 	msg jetstream.Msg,
 	ttl time.Duration,
-	isOwnerReconcile bool,
 ) {
 	slog.Info("control loop", "key", key)
 	// Check that the message is the last message for the subject.
@@ -540,32 +540,6 @@ func (c *Controller) handleControlLoop(
 
 	switch {
 	case reconcileResult.IsZero():
-		// If the reconcile loop is for an owner reference, we do NOT
-		// want to handle any cleanup logic.
-		// We leave this to the object's own reconcile loop.
-		if !isOwnerReconcile {
-			// Check if the object is being deleted, because then we want to
-			// actually delete it in the KV now.
-			var eo EmptyObjectWithMeta
-			if err := json.Unmarshal(msg.Data(), &eo); err != nil {
-				slog.Error("unmarshal msg to empty object", "error", err)
-				_ = msg.NakWithDelay(time.Second)
-				return
-			}
-			if eo.ObjectMeta.DeletionTimestamp != nil &&
-				eo.ObjectMeta.DeletionTimestamp.Before(time.Now()) {
-				slog.Info("control loop delete", "key", req.Key)
-				// Delete the object and ack the message.
-				if err := kv.Delete(ctx, KeyFromObject(req.Key)); err != nil {
-					slog.Error("deleting object", "error", err)
-					_ = msg.NakWithDelay(time.Second)
-					return
-				}
-				_ = msg.Ack()
-				return
-			}
-		}
-
 		slog.Info("result zero", "key", req.Key)
 		// TODO: make this configurable. Default is to ACK the message
 		// so that it never reconciles. It reconciles again when the object

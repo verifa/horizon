@@ -41,12 +41,10 @@ var (
 		Message: "not found",
 	}
 	ErrApplyManagerRequired       = errors.New("apply: field manager required")
-	ErrApplyObjectOrDataRequired  = errors.New("apply: object or data required")
-	ErrApplyObjectOrKeyRequired   = errors.New("apply: object or key required")
-	ErrCreateObjectOrDataRequired = errors.New(
-		"create: object or data required",
+	ErrClientObjectOrDataRequired = errors.New(
+		"client: object or data required",
 	)
-	ErrCreateObjectOrKeyRequired = errors.New("create: object or key required")
+	ErrClientObjectOrKeyRequired = errors.New("client: object or key required")
 
 	ErrClientNoSession = errors.New("client: no session")
 
@@ -70,7 +68,7 @@ const (
 	SubjectInternalBrokerIndexName    = 6
 	SubjectInternalBrokerIndexAction  = 7
 	SubjectInternalBrokerLength       = 8
-	SubjectBrokeRun                   = "broker.%s.%s.%s.%s.%s"
+	SubjectBrokeRun                   = "broker.%s.%s"
 
 	// format:
 	// HZ.internal.actor.advertise.<group><kind>.<account>.<name>.<action>
@@ -88,6 +86,7 @@ const (
 	SubjectStoreApply    = "store.apply.%s"
 	SubjectStoreCreate   = "store.create.%s"
 	SubjectStoreGet      = "store.get.%s"
+	SubjectStoreDelete   = "store.delete.%s"
 	SubjectStoreList     = "store.list.%s"
 )
 
@@ -111,32 +110,6 @@ func (oc ObjectClient[T]) Apply(
 	return oc.Client.Apply(ctx, opts...)
 }
 
-type GetOption func(*getOptions)
-
-func WithGetName(name string) GetOption {
-	return func(opt *getOptions) {
-		opt.name = name
-	}
-}
-
-func WithGetAccount(account string) GetOption {
-	return func(opt *getOptions) {
-		opt.account = account
-	}
-}
-
-func WithGetObjectKey(objectKey ObjectKeyer) GetOption {
-	return func(opt *getOptions) {
-		opt.name = objectKey.ObjectName()
-		opt.account = objectKey.ObjectAccount()
-	}
-}
-
-type getOptions struct {
-	name    string
-	account string
-}
-
 func (oc ObjectClient[T]) Get(
 	ctx context.Context,
 	opts ...GetOption,
@@ -147,12 +120,13 @@ func (oc ObjectClient[T]) Get(
 	}
 	var object T
 	key := ObjectKey{
-		Name:    opt.name,
-		Account: opt.account,
+		Name:    opt.key.ObjectName(),
+		Account: opt.key.ObjectAccount(),
 		Group:   object.ObjectGroup(),
 		Kind:    object.ObjectKind(),
 	}
-	data, err := oc.Client.Get(ctx, key)
+	opts = append(opts, WithGetKey(key))
+	data, err := oc.Client.Get(ctx, opts...)
 	if err != nil {
 		return object, fmt.Errorf("getting object %q: %w", key, err)
 	}
@@ -171,13 +145,17 @@ func (oc ObjectClient[T]) List(
 		o(&opt)
 	}
 
-	if opt.key == "" {
-		var t T
-		key := KeyFromObject(t)
-		opts = append(opts, WithListKey(key))
+	var t T
+	key := ObjectKey{
+		Group: t.ObjectGroup(),
+		Kind:  t.ObjectKind(),
+	}
+	if opt.key != nil {
+		key.Name = opt.key.ObjectName()
+		key.Account = opt.key.ObjectAccount()
 	}
 	resp := bytes.Buffer{}
-	opts = append(opts, WithListResponseWriter(&resp))
+	opts = append(opts, WithListKey(key), WithListResponseWriter(&resp))
 	if err := oc.Client.List(ctx, opts...); err != nil {
 		return nil, fmt.Errorf("listing objects: %w", err)
 	}
@@ -473,16 +451,15 @@ func (c Client) Validate(
 type ApplyOption func(*applyOptions)
 
 type applyOptions struct {
-	object    Objecter
-	data      []byte
-	objectKey ObjectKeyer
-	force     bool
+	object Objecter
+	data   []byte
+	key    ObjectKeyer
+	force  bool
 }
 
 func WithApplyObject(object Objecter) ApplyOption {
 	return func(ao *applyOptions) {
 		ao.object = object
-		ao.objectKey = object
 	}
 }
 
@@ -494,7 +471,7 @@ func WithApplyData(data []byte) ApplyOption {
 
 func WithApplyKey(key ObjectKeyer) ApplyOption {
 	return func(ao *applyOptions) {
-		ao.objectKey = key
+		ao.key = key
 	}
 }
 
@@ -519,17 +496,13 @@ func (c Client) Apply(
 	if c.Manager == "" {
 		return ErrApplyManagerRequired
 	}
-	if ao.object == nil && ao.data == nil {
-		return ErrApplyObjectOrDataRequired
-	}
-	if ao.object == nil && ao.objectKey == nil {
-		return ErrApplyObjectOrKeyRequired
-	}
-
-	var key string
+	var (
+		key  string
+		data []byte
+	)
 	if ao.object != nil {
 		var err error
-		ao.data, err = c.marshalObjectWithTypeFields(ao.object)
+		data, err = c.marshalObjectWithTypeFields(ao.object)
 		if err != nil {
 			return fmt.Errorf("marshalling object: %w", err)
 		}
@@ -538,12 +511,30 @@ func (c Client) Apply(
 			return fmt.Errorf("invalid object: %w", err)
 		}
 	}
-	if ao.objectKey != nil {
+	if ao.key != nil {
 		var err error
-		key, err = KeyFromObjectConcrete(ao.objectKey)
+		key, err = KeyFromObjectConcrete(ao.key)
 		if err != nil {
 			return fmt.Errorf("invalid object: %w", err)
 		}
+	}
+	if ao.data != nil {
+		var obj EmptyObjectWithMeta
+		if err := json.Unmarshal(ao.data, &obj); err != nil {
+			return fmt.Errorf("unmarshalling data: %w", err)
+		}
+		var err error
+		key, err = KeyFromObjectConcrete(obj)
+		if err != nil {
+			return fmt.Errorf("invalid data: %w", err)
+		}
+		data = ao.data
+	}
+	if key == "" {
+		return fmt.Errorf("apply: %w", ErrClientObjectOrKeyRequired)
+	}
+	if data == nil {
+		return fmt.Errorf("apply: %w", ErrClientObjectOrDataRequired)
 	}
 	msg := nats.NewMsg(
 		c.SubjectPrefix() + fmt.Sprintf(
@@ -554,7 +545,7 @@ func (c Client) Apply(
 	msg.Header.Set(HeaderApplyFieldManager, c.Manager)
 	msg.Header.Set(HeaderApplyForceConflicts, strconv.FormatBool(ao.force))
 	msg.Header.Set(HeaderAuthorization, c.Session)
-	msg.Data = ao.data
+	msg.Data = data
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	reply, err := c.Conn.RequestMsgWithContext(ctx, msg)
@@ -568,27 +559,15 @@ func (c Client) Apply(
 		}
 		return fmt.Errorf("applying object: %w", err)
 	}
-	statusText := reply.Header.Get(HeaderStatus)
-	status, err := strconv.Atoi(statusText)
-	if err != nil {
-		return fmt.Errorf("invalid status header %q: %w", statusText, err)
-	}
-	if status == http.StatusOK {
-		return nil
-	}
-	return &Error{
-		Status:  status,
-		Message: string(reply.Data),
-	}
+	return ErrorFromNATS(reply)
 }
 
 type CreateOption func(*createOptions)
 
 type createOptions struct {
-	object    Objecter
-	data      []byte
-	objectKey *ObjectKey
-	key       string
+	object Objecter
+	data   []byte
+	key    *ObjectKey
 }
 
 func WithCreateObject(object Objecter) CreateOption {
@@ -603,9 +582,9 @@ func WithCreateData(data []byte) CreateOption {
 	}
 }
 
-func WithCreateObjectKey(objectKey ObjectKey) CreateOption {
+func WithCreateKey(objectKey ObjectKey) CreateOption {
 	return func(ao *createOptions) {
-		ao.objectKey = &objectKey
+		ao.key = &objectKey
 	}
 }
 
@@ -621,29 +600,52 @@ func (c *Client) Create(
 		opt(&co)
 	}
 
-	if co.object == nil && co.data == nil {
-		return ErrCreateObjectOrDataRequired
-	}
-	if co.object == nil && co.objectKey == nil {
-		return ErrCreateObjectOrKeyRequired
-	}
-
+	var (
+		key  string
+		data []byte
+	)
 	if co.object != nil {
 		var err error
-		co.data, err = c.marshalObjectWithTypeFields(co.object)
+		key, err = KeyFromObjectConcrete(co.object)
+		if err != nil {
+			return fmt.Errorf("invalid object: %w", err)
+		}
+
+		data, err = c.marshalObjectWithTypeFields(co.object)
 		if err != nil {
 			return fmt.Errorf("marshalling object: %w", err)
 		}
-		co.key = KeyFromObject(co.object)
 	}
-	if co.objectKey != nil {
-		co.key = KeyFromObject(co.objectKey)
+	if co.key != nil {
+		var err error
+		key, err = KeyFromObjectConcrete(co.key)
+		if err != nil {
+			return fmt.Errorf("invalid key: %w", err)
+		}
+	}
+	if co.data != nil {
+		var obj EmptyObjectWithMeta
+		if err := json.Unmarshal(co.data, &obj); err != nil {
+			return fmt.Errorf("unmarshalling data: %w", err)
+		}
+		var err error
+		key, err = KeyFromObjectConcrete(obj)
+		if err != nil {
+			return fmt.Errorf("invalid data: %w", err)
+		}
+		data = co.data
+	}
+	if key == "" {
+		return fmt.Errorf("create: %w", ErrClientObjectOrKeyRequired)
+	}
+	if data == nil {
+		return fmt.Errorf("create: %w", ErrClientObjectOrDataRequired)
 	}
 
 	msg := nats.NewMsg(
-		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreCreate, co.key),
+		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreCreate, key),
 	)
-	msg.Data = co.data
+	msg.Data = data
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
@@ -657,28 +659,43 @@ func (c *Client) Create(
 		}
 		return fmt.Errorf("making request to store: %w", err)
 	}
-	status, err := strconv.Atoi(reply.Header.Get(HeaderStatus))
-	if err != nil {
-		return fmt.Errorf("invalid status header: %w", err)
+	return ErrorFromNATS(reply)
+}
+
+type GetOption func(*getOptions)
+
+func WithGetKey(key ObjectKeyer) GetOption {
+	return func(opt *getOptions) {
+		opt.key = key
 	}
-	if status == http.StatusOK {
-		return nil
-	}
-	return &Error{
-		Status:  status,
-		Message: string(reply.Data),
-	}
+}
+
+type getOptions struct {
+	key ObjectKeyer
 }
 
 func (c *Client) Get(
 	ctx context.Context,
-	key ObjectKeyer,
+	opts ...GetOption,
 ) ([]byte, error) {
 	if err := c.checkSession(); err != nil {
 		return nil, err
 	}
+	opt := getOptions{}
+	for _, o := range opts {
+		o(&opt)
+	}
+	var key string
+	if opt.key != nil {
+		var err error
+		key, err = KeyFromObjectConcrete(opt.key)
+		if err != nil {
+			return nil, fmt.Errorf("invalid key: %w", err)
+		}
+	}
+
 	msg := nats.NewMsg(
-		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreGet, KeyFromObject(key)),
+		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreGet, key),
 	)
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
@@ -693,28 +710,97 @@ func (c *Client) Get(
 		}
 		return nil, fmt.Errorf("making request to store: %w", err)
 	}
-	status, err := strconv.Atoi(reply.Header.Get(HeaderStatus))
+	return reply.Data, ErrorFromNATS(reply)
+}
+
+type DeleteOption func(*deleteOptions)
+
+func WithDeleteObject(object Objecter) DeleteOption {
+	return func(do *deleteOptions) {
+		do.object = object
+	}
+}
+
+func WithDeleteData(data []byte) DeleteOption {
+	return func(do *deleteOptions) {
+		do.data = data
+	}
+}
+
+func WithDeleteObjectKey(key ObjectKeyer) DeleteOption {
+	return func(do *deleteOptions) {
+		do.key = key
+	}
+}
+
+type deleteOptions struct {
+	key    ObjectKeyer
+	object Objecter
+	data   []byte
+}
+
+func (c *Client) Delete(
+	ctx context.Context,
+	opts ...DeleteOption,
+) error {
+	if err := c.checkSession(); err != nil {
+		return err
+	}
+	do := deleteOptions{}
+	for _, opt := range opts {
+		opt(&do)
+	}
+	var key string
+	if do.object != nil {
+		var err error
+		key, err = KeyFromObjectConcrete(do.object)
+		if err != nil {
+			return fmt.Errorf("invalid object: %w", err)
+		}
+	}
+	if do.key != nil {
+		var err error
+		key, err = KeyFromObjectConcrete(do.key)
+		if err != nil {
+			return fmt.Errorf("invalid key: %w", err)
+		}
+	}
+	if do.data != nil {
+		var obj EmptyObjectWithMeta
+		if err := json.Unmarshal(do.data, &obj); err != nil {
+			return fmt.Errorf("unmarshalling data: %w", err)
+		}
+		var err error
+		key, err = KeyFromObjectConcrete(obj)
+		if err != nil {
+			return fmt.Errorf("invalid data: %w", err)
+		}
+	}
+	if key == "" {
+		return fmt.Errorf("delete: key required")
+	}
+	msg := nats.NewMsg(
+		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreDelete, key),
+	)
+	msg.Header.Set(HeaderAuthorization, c.Session)
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	reply, err := c.Conn.RequestMsgWithContext(
+		ctx,
+		msg,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("invalid status header: %w", err)
+		if errors.Is(err, nats.ErrNoResponders) {
+			return ErrStoreNotResponding
+		}
+		return fmt.Errorf("making request to store: %w", err)
 	}
-	if status == http.StatusOK {
-		return reply.Data, nil
-	}
-	return nil, &Error{
-		Status:  status,
-		Message: string(reply.Data),
-	}
+	return ErrorFromNATS(reply)
 }
 
-func WithListKey(key string) ListOption {
+func WithListKey(obj ObjectKeyer) ListOption {
 	return func(lo *listOption) {
-		lo.key = key
-	}
-}
-
-func WithListKeyFromObject(obj ObjectKeyer) ListOption {
-	return func(lo *listOption) {
-		lo.key = KeyFromObject(obj)
+		lo.key = obj
 	}
 }
 
@@ -733,7 +819,7 @@ func WithListResponseGenericObjects(resp *GenericObjectList) ListOption {
 type ListOption func(*listOption)
 
 type listOption struct {
-	key string
+	key ObjectKeyer
 
 	responseWriter            io.Writer
 	responseGenericObjectList *GenericObjectList
@@ -750,7 +836,11 @@ func (c *Client) List(
 	for _, opt := range opts {
 		opt(&lo)
 	}
-	if lo.key == "" {
+	var key string
+	if lo.key != nil {
+		key = KeyFromObject(lo.key)
+	}
+	if key == "" {
 		return fmt.Errorf("list: key required")
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
@@ -805,48 +895,15 @@ func WithRunLabelSelector(ls LabelSelector) RunOption {
 	}
 }
 
-func WithRunGroup(group string) RunOption {
+func WithRunObjecter(key ObjectKeyer) RunOption {
 	return func(ro *runOption) {
-		ro.group = group
-	}
-}
-
-func WithRunKind(kind string) RunOption {
-	return func(ro *runOption) {
-		ro.kind = kind
-	}
-}
-
-func WithRunAccount(account string) RunOption {
-	return func(ro *runOption) {
-		ro.account = account
-	}
-}
-
-func WithRunName(name string) RunOption {
-	return func(ro *runOption) {
-		ro.name = name
-	}
-}
-
-func WithRunObjecter(object ObjectKeyer) RunOption {
-	return func(ro *runOption) {
-		ro.group = object.ObjectGroup()
-		ro.kind = object.ObjectKind()
-		ro.account = object.ObjectAccount()
-		ro.name = object.ObjectName()
-	}
-}
-
-func WithRunAction(action string) RunOption {
-	return func(ro *runOption) {
-		ro.action = action
+		ro.key = key
 	}
 }
 
 func WithRunActioner(action Actioner) RunOption {
 	return func(ro *runOption) {
-		ro.action = action.Action()
+		ro.actioner = action
 	}
 }
 
@@ -854,14 +911,12 @@ var runOptionDefault = runOption{
 	timeout: time.Second * 5,
 }
 
+// TODO: use key
 type runOption struct {
 	timeout       time.Duration
 	labelSelector LabelSelector
-	group         string
-	kind          string
-	account       string
-	name          string
-	action        string
+	key           ObjectKeyer
+	actioner      Actioner
 }
 
 func (c *Client) Run(
@@ -876,13 +931,30 @@ func (c *Client) Run(
 	for _, opt := range opts {
 		opt(&ro)
 	}
+	var (
+		key    string
+		action string
+	)
+	if ro.key != nil {
+		var err error
+		key, err = KeyFromObjectConcrete(ro.key)
+		if err != nil {
+			return nil, fmt.Errorf("invalid key: %w", err)
+		}
+	}
+	if ro.actioner != nil {
+		action = ro.actioner.Action()
+	}
+	if key == "" {
+		return nil, fmt.Errorf("run: key required")
+	}
+	if action == "" {
+		return nil, fmt.Errorf("run: action required")
+	}
 	subject := c.SubjectPrefix() + fmt.Sprintf(
 		SubjectBrokeRun,
-		ro.group,
-		ro.kind,
-		ro.account,
-		ro.name,
-		ro.action,
+		key,
+		action,
 	)
 
 	runMsg := RunMsg{

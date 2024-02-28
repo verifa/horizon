@@ -149,19 +149,11 @@ func (o ObjectKey) String() string {
 	return o.ObjectGroup() + "." + o.ObjectKind() + "." + o.ObjectAccount() + "." + o.ObjectName()
 }
 
+var _ Objecter = (*EmptyObjectWithMeta)(nil)
+
 type EmptyObjectWithMeta struct {
+	TypeMeta   `json:",inline"`
 	ObjectMeta `json:"metadata"`
-
-	Spec   struct{} `json:"spec,omitempty"`
-	Status struct{} `json:"status,omitempty"`
-}
-
-func (o EmptyObjectWithMeta) ObjectKind() string {
-	return "EmptyObjectWithMeta"
-}
-
-func (o EmptyObjectWithMeta) ObjectGroup() string {
-	return "hz-internal"
 }
 
 type ObjectMeta struct {
@@ -175,6 +167,12 @@ type ObjectMeta struct {
 	OwnerReferences   []OwnerReference            `json:"ownerReferences,omitempty" cue:",opt"`
 	DeletionTimestamp *Time                       `json:"deletionTimestamp,omitempty" cue:"-"`
 	ManagedFields     managedfields.ManagedFields `json:"managedFields,omitempty" cue:"-"`
+	// Finalizers are a way for controllers to prevent garbage collection of
+	// objects. The GC will not delete an object unless it has no finalizers.
+	// Hence, it is the responsibility of the controller to remove the
+	// finalizers once the object has been marked for deletion (by setting the
+	// deletionTimestamp).
+	Finalizers []Finalizer `json:"finalizers,omitempty" cue:",opt"`
 }
 
 func (o ObjectMeta) ObjectName() string {
@@ -221,6 +219,31 @@ func (o ObjectMeta) ObjectManagedFields() managedfields.ManagedFields {
 	return o.ManagedFields
 }
 
+type TypeMeta struct {
+	APIVersion string `json:"apiVersion,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+}
+
+func (t TypeMeta) ObjectKind() string {
+	return t.Kind
+}
+
+func (t TypeMeta) ObjectGroup() string {
+	parts := strings.Split(t.APIVersion, "/")
+	if len(parts) != 2 {
+		return ""
+	}
+	return parts[0]
+}
+
+func (t TypeMeta) ObjectVersion() string {
+	parts := strings.Split(t.APIVersion, "/")
+	if len(parts) != 2 {
+		return ""
+	}
+	return parts[1]
+}
+
 func OwnerReferenceFromObject(object Objecter) *OwnerReference {
 	return &OwnerReference{
 		Group:   object.ObjectGroup(),
@@ -262,6 +285,10 @@ func (o OwnerReference) IsOwnedBy(owner Objecter) bool {
 		o.Account == owner.ObjectAccount()
 }
 
+type Finalizer struct {
+	ID string `json:"id,omitempty" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
+}
+
 type Time struct {
 	time.Time
 }
@@ -269,33 +296,11 @@ type Time struct {
 var _ Objecter = (*GenericObject)(nil)
 
 type GenericObject struct {
+	TypeMeta   `json:",inline"`
 	ObjectMeta `json:"metadata,omitempty"`
-
-	APIVersion string `json:"apiVersion,omitempty"`
-	Kind       string `json:"kind,omitempty"`
 
 	Spec   json.RawMessage `json:"spec,omitempty"`
 	Status json.RawMessage `json:"status,omitempty"`
-}
-
-func (r GenericObject) ObjectKind() string {
-	return r.Kind
-}
-
-func (r GenericObject) ObjectGroup() string {
-	parts := strings.Split(r.APIVersion, "/")
-	if len(parts) != 2 {
-		return ""
-	}
-	return parts[0]
-}
-
-func (r GenericObject) ObjectVersion() string {
-	parts := strings.Split(r.APIVersion, "/")
-	if len(parts) != 2 {
-		return ""
-	}
-	return parts[1]
 }
 
 type GenericObjectList struct {

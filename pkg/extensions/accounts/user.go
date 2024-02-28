@@ -89,8 +89,10 @@ func (a *UserCreateAction) userCreate(ctx context.Context, user *User) error {
 	accClient := hz.ObjectClient[Account]{Client: a.Client}
 	account, err := accClient.Get(
 		ctx,
-		hz.WithGetAccount(hz.RootAccount),
-		hz.WithGetName(user.Account),
+		hz.WithGetKey(hz.ObjectKey{
+			Name:    hz.RootAccount,
+			Account: hz.RootAccount,
+		}),
 	)
 	if err != nil {
 		return fmt.Errorf("get account: %w", err)

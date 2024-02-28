@@ -20,6 +20,20 @@ func WithWatcherForObject(obj ObjectKeyer) WatcherOption {
 	}
 }
 
+// WithWatcherDurable sets the durable name for the nats consumer.
+// In short, if you want to "load balance" the watcher across multiple
+// instances, you can set the durable name to the same value for each.
+// If you want each instance of the watcher to be completely independent,
+// do not set the durable name of the consumer.
+//
+// Read more about consumers:
+// https://docs.nats.io/nats-concepts/jetstream/consumers
+func WithWatcherDurable(name string) WatcherOption {
+	return func(o *watcherOptions) {
+		o.durable = name
+	}
+}
+
 func WithWatcherFn(
 	fn func(event Event) (Result, error),
 ) WatcherOption {
@@ -36,6 +50,7 @@ func WithWatcherCh(ch chan Event) WatcherOption {
 
 type watcherOptions struct {
 	forObject ObjectKeyer
+	durable   string
 	ackWait   time.Duration
 	fn        func(event Event) (Result, error)
 	ch        chan Event
@@ -119,7 +134,7 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 		close(w.Init)
 	}
 	con, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Description:    "Watcher for " + opt.forObject.ObjectKind(),
+		Description:    "Watcher for " + KeyFromObject(opt.forObject),
 		AckPolicy:      jetstream.AckExplicitPolicy,
 		DeliverPolicy:  jetstream.DeliverLastPerSubjectPolicy,
 		FilterSubjects: []string{subject},
@@ -285,7 +300,14 @@ type EventResult struct {
 type EventOperation int
 
 const (
+	// EventOperationPut indicates that the object has been created or updated.
 	EventOperationPut EventOperation = iota
+	// EventOperationDelete indicates that the object has been marked for
+	// deletion by setting the metadata.deletionTimestamp field.
+	// It does not mean that the deleteionTimestamp has been reached yet,
+	// so the deletionTimestamp may be in the future.
 	EventOperationDelete
+	// EventOperationPurge indicates that the object no longer exists in the kv
+	// store.
 	EventOperationPurge
 )
