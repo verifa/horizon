@@ -170,7 +170,7 @@ func (a *Auth) List(
 	}
 	filteredObjects := make([]json.RawMessage, 0)
 	for _, rawObj := range req.ObjectList.Items {
-		var obj hz.EmptyObjectWithMeta
+		var obj hz.MetaOnlyObject
 		if err := json.Unmarshal(rawObj, &obj); err != nil {
 			return fmt.Errorf("unmarshaling object: %w", err)
 		}

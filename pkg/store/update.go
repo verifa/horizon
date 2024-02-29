@@ -12,7 +12,7 @@ import (
 
 type UpdateRequest struct {
 	Data     []byte
-	Key      hz.ObjectKey
+	Key      hz.ObjectKeyer
 	Revision uint64
 }
 
@@ -22,11 +22,11 @@ func (s Store) Update(ctx context.Context, req UpdateRequest) error {
 
 func (s Store) update(
 	ctx context.Context,
-	key hz.ObjectKey,
+	key hz.ObjectKeyer,
 	data []byte,
 	revision uint64,
 ) error {
-	rawKey, err := hz.KeyFromObjectConcrete(key)
+	rawKey, err := hz.KeyFromObjectStrict(key)
 	if err != nil {
 		return &hz.Error{
 			Status: http.StatusBadRequest,

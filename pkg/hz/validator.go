@@ -11,6 +11,10 @@ import (
 )
 
 type Validator interface {
+	// TODO: implement ValidateCreate, ValidateUpdate, ValidateDelete
+	// to allow for more fine-grained validation.
+	// Example:
+	// https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html#implementing-defaultingvalidating-webhooks
 	Validate(ctx context.Context, data []byte) error
 }
 

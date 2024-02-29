@@ -25,30 +25,6 @@ func WithHTTPListKey(key ObjectKey) HTTPListOption {
 	}
 }
 
-func WithHTTPListName(name string) HTTPListOption {
-	return func(opt *httpGetOptions) {
-		opt.key.Name = name
-	}
-}
-
-func WithHTTPListAccount(account string) HTTPListOption {
-	return func(opt *httpGetOptions) {
-		opt.key.Account = account
-	}
-}
-
-func WithHTTPListKind(kind string) HTTPListOption {
-	return func(opt *httpGetOptions) {
-		opt.key.Kind = kind
-	}
-}
-
-func WithHTTPListGroup(group string) HTTPListOption {
-	return func(opt *httpGetOptions) {
-		opt.key.Group = group
-	}
-}
-
 func WithHTTPListResponseWriter(w io.Writer) HTTPListOption {
 	return func(opt *httpGetOptions) {
 		opt.respWriter = w
@@ -84,17 +60,17 @@ func (c *HTTPClient) List(ctx context.Context, opts ...HTTPListOption) error {
 	req.Header.Set(HeaderAuthorization, c.Session)
 
 	q := req.URL.Query()
+	if opt.key.Group != "" {
+		q.Add("group", opt.key.Group)
+	}
+	if opt.key.Kind != "" {
+		q.Add("kind", opt.key.Kind)
+	}
 	if opt.key.Account != "" {
 		q.Add("account", opt.key.Account)
 	}
 	if opt.key.Name != "" {
 		q.Add("name", opt.key.Name)
-	}
-	if opt.key.Kind != "" {
-		q.Add("kind", opt.key.Kind)
-	}
-	if opt.key.Group != "" {
-		q.Add("group", opt.key.Group)
 	}
 	req.URL.RawQuery = q.Encode()
 
@@ -207,16 +183,17 @@ func (c *HTTPClient) Delete(
 		key = opt.key
 	}
 	if opt.data != nil {
-		key = &EmptyObjectWithMeta{}
-		if err := json.Unmarshal(opt.data, key); err != nil {
+		var obj MetaOnlyObject
+		if err := json.Unmarshal(opt.data, &obj); err != nil {
 			return fmt.Errorf("unmarshaling object: %w", err)
 		}
+		key = obj
 	}
 	if key == nil {
 		return fmt.Errorf("delete: key required")
 	}
 
-	if _, err := KeyFromObjectConcrete(key); err != nil {
+	if _, err := KeyFromObjectStrict(key); err != nil {
 		return fmt.Errorf("delete: invalid key: %w", err)
 	}
 	reqURL, err := url.JoinPath(
@@ -224,6 +201,7 @@ func (c *HTTPClient) Delete(
 		"v1",
 		"objects",
 		key.ObjectGroup(),
+		key.ObjectVersion(),
 		key.ObjectKind(),
 		key.ObjectAccount(),
 		key.ObjectName(),

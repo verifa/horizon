@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
+	"net/http"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -20,30 +20,35 @@ func (s Store) Validate(ctx context.Context, req ValidateRequest) error {
 
 func (s Store) validate(
 	ctx context.Context,
-	key hz.ObjectKey,
+	key hz.ObjectKeyer,
 	data []byte,
 ) error {
-	subject := fmt.Sprintf("CTLR.validate.%s.%s", key.Group, key.Kind)
+	subject := fmt.Sprintf(
+		hz.SubjectCtlrValidate,
+		key.ObjectGroup(),
+		key.ObjectVersion(),
+		key.ObjectKind(),
+	)
 	slog.Info("validate", "subject", subject)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	reply, err := s.Conn.RequestWithContext(ctx, subject, data)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
-			return errors.New("controller not responding")
+			return &hz.Error{
+				Status:  http.StatusBadGateway,
+				Message: fmt.Sprintf("no responders for %q", subject),
+			}
 		}
-		return fmt.Errorf("request: %w", err)
+		return &hz.Error{
+			Status:  http.StatusInternalServerError,
+			Message: fmt.Sprintf("requesting %q: %s", subject, err.Error()),
+		}
 	}
 
 	if len(reply.Data) == 0 {
 		return nil
 	}
 
-	var vErr hz.Error
-	vErr.Status, err = strconv.Atoi(reply.Header.Get(hz.HeaderStatus))
-	if err != nil {
-		return fmt.Errorf("invalid status header: %w", err)
-	}
-	vErr.Message = string(reply.Data)
-	return &vErr
+	return hz.ErrorFromNATS(reply)
 }

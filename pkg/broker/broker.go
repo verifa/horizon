@@ -87,8 +87,9 @@ func (b *Broker) handleAPIMessage(ctx context.Context, msg *nats.Msg) {
 		return
 	}
 	key := hz.ObjectKey{
-		Kind:    tokens[hz.SubjectInternalBrokerIndexKind],
 		Group:   tokens[hz.SubjectInternalBrokerIndexGroup],
+		Version: tokens[hz.SubjectInternalBrokerIndexVersion],
+		Kind:    tokens[hz.SubjectInternalBrokerIndexKind],
 		Account: tokens[hz.SubjectInternalBrokerIndexAccount],
 		Name:    tokens[hz.SubjectInternalBrokerIndexName],
 	}
@@ -143,8 +144,9 @@ func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
 	}
 
 	key := hz.ObjectKey{
-		Kind:    tokens[hz.SubjectInternalBrokerIndexKind],
 		Group:   tokens[hz.SubjectInternalBrokerIndexGroup],
+		Version: tokens[hz.SubjectInternalBrokerIndexVersion],
+		Kind:    tokens[hz.SubjectInternalBrokerIndexKind],
 		Account: tokens[hz.SubjectInternalBrokerIndexAccount],
 		Name:    tokens[hz.SubjectInternalBrokerIndexName],
 	}
@@ -153,6 +155,7 @@ func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
 	advertiseSubject := fmt.Sprintf(
 		hz.SubjectActorAdvertiseFmt,
 		key.Group,
+		key.Version,
 		key.Kind,
 		key.Account,
 		key.Name,
@@ -247,6 +250,7 @@ func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
 	runSubject := fmt.Sprintf(
 		hz.SubjectActorRunFmt,
 		key.Group,
+		key.Version,
 		key.Kind,
 		key.Account,
 		key.Name,

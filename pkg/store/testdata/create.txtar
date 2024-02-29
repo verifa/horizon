@@ -1,0 +1,33 @@
+-- {"cmd":"create"} --
+apiVersion: dummy/v1
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+spec:
+  text: test
+  object:
+    text: test
+    numbers: [1,2,3]
+-- {"cmd":"assert"} --
+apiVersion: dummy/v1
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+spec:
+  text: test
+  object:
+    text: test
+    numbers: [1,2,3]
+-- {"cmd":"create","status":409} --
+apiVersion: dummy/v1
+kind: DummyApplyObject
+metadata:
+  name: test
+  account: test
+spec:
+  text: test
+  object:
+    text: test
+    numbers: [1,2,3]

@@ -12,7 +12,7 @@ import (
 )
 
 type DeleteRequest struct {
-	Key hz.ObjectKey
+	Key hz.ObjectKeyer
 }
 
 func (s Store) Delete(ctx context.Context, req DeleteRequest) error {
@@ -20,7 +20,7 @@ func (s Store) Delete(ctx context.Context, req DeleteRequest) error {
 	if err != nil {
 		return err
 	}
-	var obj hz.EmptyObjectWithMeta
+	var obj hz.MetaOnlyObject
 	if err := json.Unmarshal(data, &obj); err != nil {
 		return &hz.Error{
 			Status:  http.StatusInternalServerError,

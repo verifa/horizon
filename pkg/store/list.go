@@ -11,7 +11,7 @@ import (
 )
 
 type ListRequest struct {
-	Key hz.ObjectKey `json:"key,omitempty"`
+	Key hz.ObjectKeyer `json:"key,omitempty"`
 }
 
 // type ListResponse struct {

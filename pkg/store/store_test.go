@@ -47,6 +47,7 @@ type testStepCommand string
 
 const (
 	testStepCommandApply        testStepCommand = "apply"
+	testStepCommandCreate       testStepCommand = "create"
 	testStepCommandDelete       testStepCommand = "delete"
 	testStepCommandAssert       testStepCommand = "assert"
 	testStepCommandAssertDelete testStepCommand = "assert_delete"
@@ -72,23 +73,22 @@ func parseTestFileName(t *testing.T, file string) testStep {
 
 func TestStore(t *testing.T) {
 	ctx := context.Background()
-	ti := server.Test(t, ctx)
-	// SETUP DUMMY CONTROLLER
-	ctlr, err := hz.StartController(
-		ctx,
-		ti.Conn,
-		hz.WithControllerFor(DummyApplyObject{}),
-		hz.WithControllerValidatorCUE(false),
-		hz.WithControllerValidatorForceNone(),
-	)
-	tu.AssertNoError(t, err)
-	t.Cleanup(func() {
-		_ = ctlr.Stop()
-	})
-
 	txtarFiles, err := filepath.Glob("./testdata/*.txtar")
 	tu.AssertNoError(t, err)
 	for _, txtarFile := range txtarFiles {
+		ti := server.Test(t, ctx)
+		// SETUP DUMMY CONTROLLER
+		ctlr, err := hz.StartController(
+			ctx,
+			ti.Conn,
+			hz.WithControllerFor(DummyApplyObject{}),
+			hz.WithControllerValidatorCUE(false),
+			hz.WithControllerValidatorForceNone(),
+		)
+		tu.AssertNoError(t, err)
+		t.Cleanup(func() {
+			_ = ctlr.Stop()
+		})
 		t.Run(txtarFile, func(t *testing.T) {
 			ar, err := txtar.ParseFile(txtarFile)
 			tu.AssertNoError(t, err)
@@ -126,7 +126,7 @@ func runTest(
 					hz.WithApplyForce(ts.Force),
 				)
 				if ts.Status == nil {
-					tu.AssertNoError(t, err, "client get")
+					tu.AssertNoError(t, err)
 				} else {
 					var getErr *hz.Error
 					if errors.As(err, &getErr) {
@@ -136,6 +136,22 @@ func runTest(
 						t.Fatal("expected hz.Error")
 					}
 				}
+			case testStepCommandCreate:
+				jsonData, err := yaml.YAMLToJSON(file.Data)
+				tu.AssertNoError(t, err, "obj yaml to json")
+				err = client.Create(ctx, hz.WithCreateData(jsonData))
+				if ts.Status == nil {
+					tu.AssertNoError(t, err)
+				} else {
+					var getErr *hz.Error
+					if errors.As(err, &getErr) {
+						tu.AssertEqual(t, getErr.Status, *ts.Status)
+						return
+					} else {
+						t.Fatal("expected hz.Error")
+					}
+				}
+
 			case testStepCommandDelete:
 				jsonData, err := yaml.YAMLToJSON(file.Data)
 				tu.AssertNoError(t, err, "obj yaml to json")
@@ -147,7 +163,17 @@ func runTest(
 					ctx,
 					hz.WithDeleteObject(obj),
 				)
-				tu.AssertNoError(t, err, "client delete")
+				if ts.Status == nil {
+					tu.AssertNoError(t, err)
+				} else {
+					var getErr *hz.Error
+					if errors.As(err, &getErr) {
+						tu.AssertEqual(t, getErr.Status, *ts.Status)
+						return
+					} else {
+						t.Fatal("expected hz.Error")
+					}
+				}
 
 			case testStepCommandAssert:
 				expJSONData, err := yaml.YAMLToJSON(file.Data)
@@ -157,7 +183,7 @@ func runTest(
 				tu.AssertNoError(t, err, "unmarshal obj")
 				actObj, err := st.Get(ctx, store.GetRequest{Key: expObj})
 				if ts.Status == nil {
-					tu.AssertNoError(t, err, "client get")
+					tu.AssertNoError(t, err)
 				} else {
 					var getErr *hz.Error
 					if errors.As(err, &getErr) {

@@ -19,7 +19,7 @@ func (o *ObjectHandler) router() *chi.Mux {
 	r.Get("/", o.get)
 	r.Post("/", o.create)
 	r.Patch("/", o.apply)
-	r.Delete("/{group}/{kind}/{account}/{name}", o.delete)
+	r.Delete("/{group}/{version}/{kind}/{account}/{name}", o.delete)
 	return r
 }
 
@@ -44,6 +44,7 @@ func (o *ObjectHandler) create(w http.ResponseWriter, r *http.Request) {
 func (o *ObjectHandler) get(w http.ResponseWriter, r *http.Request) {
 	key := hz.ObjectKey{
 		Group:   r.URL.Query().Get("group"),
+		Version: r.URL.Query().Get("version"),
 		Kind:    r.URL.Query().Get("kind"),
 		Name:    r.URL.Query().Get("name"),
 		Account: r.URL.Query().Get("account"),
@@ -89,6 +90,7 @@ func (o *ObjectHandler) apply(w http.ResponseWriter, r *http.Request) {
 func (o *ObjectHandler) delete(w http.ResponseWriter, r *http.Request) {
 	key := hz.ObjectKey{
 		Group:   chi.URLParam(r, "group"),
+		Version: chi.URLParam(r, "version"),
 		Kind:    chi.URLParam(r, "kind"),
 		Account: chi.URLParam(r, "account"),
 		Name:    chi.URLParam(r, "name"),

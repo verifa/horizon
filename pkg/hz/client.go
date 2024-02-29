@@ -41,12 +41,8 @@ var (
 		Message: "not found",
 	}
 	ErrApplyManagerRequired       = errors.New("apply: field manager required")
-	ErrClientObjectOrDataRequired = errors.New(
-		"client: object or data required",
-	)
-	ErrClientObjectOrKeyRequired = errors.New("client: object or key required")
-
-	ErrClientNoSession = errors.New("client: no session")
+	ErrClientObjectOrDataRequired = errors.New("object or data required")
+	ErrClientNoSession            = errors.New("client: no session")
 
 	ErrStoreNotResponding = errors.New("store: not responding")
 
@@ -59,35 +55,44 @@ var (
 const (
 	SubjectAPIAllowAll = "HZ.api.>"
 
-	// format: HZ.api.broker.<group>.<kind>.<account>.<name>.<action>
-	SubjectAPIBroker                  = "HZ.api.broker.*.*.*.*.*"
-	SubjectInternalBroker             = "HZ.internal.broker.*.*.*.*.*"
+	// format: HZ.api.broker.<group>.<version>.<kind>.<account>.<name>.<action>
+	SubjectAPIBroker                  = "HZ.api.broker.*.*.*.*.*.*"
+	SubjectInternalBroker             = "HZ.internal.broker.*.*.*.*.*.*"
 	SubjectInternalBrokerIndexGroup   = 3
-	SubjectInternalBrokerIndexKind    = 4
-	SubjectInternalBrokerIndexAccount = 5
-	SubjectInternalBrokerIndexName    = 6
-	SubjectInternalBrokerIndexAction  = 7
-	SubjectInternalBrokerLength       = 8
-	SubjectBrokeRun                   = "broker.%s.%s"
+	SubjectInternalBrokerIndexVersion = 4
+	SubjectInternalBrokerIndexKind    = 5
+	SubjectInternalBrokerIndexAccount = 6
+	SubjectInternalBrokerIndexName    = 7
+	SubjectInternalBrokerIndexAction  = 8
+	SubjectInternalBrokerLength       = 9
+	SubjectBrokerRun                  = "broker.%s.%s.%s.%s.%s.%s"
 
 	// format:
-	// HZ.internal.actor.advertise.<group><kind>.<account>.<name>.<action>
-	SubjectActorAdvertise    = "HZ.internal.actor.advertise.%s.%s.*.*.%s"
-	SubjectActorAdvertiseFmt = "HZ.internal.actor.advertise.%s.%s.%s.%s.%s"
+	// HZ.internal.actor.advertise.<group>.<version>.<kind>.<account>.<name>.<action>
+	SubjectActorAdvertise    = "HZ.internal.actor.advertise.%s.%s.%s.*.*.%s"
+	SubjectActorAdvertiseFmt = "HZ.internal.actor.advertise.%s.%s.%s.%s.%s.%s"
 	// format:
-	// HZ.internal.actor.run.<group>.<kind>.<account>.<name>.<action>.<actor_uuid>
-	SubjectActorRun    = "HZ.internal.actor.run.%s.%s.*.*.%s.%s"
-	SubjectActorRunFmt = "HZ.internal.actor.run.%s.%s.%s.%s.%s.%s"
+	// HZ.internal.actor.run.<group>.<version>.<kind>.<account>.<name>.<action>.<actor_uuid>
+	SubjectActorRun    = "HZ.internal.actor.run.%s.%s.%s.*.*.%s.%s"
+	SubjectActorRunFmt = "HZ.internal.actor.run.%s.%s.%s.%s.%s.%s.%s"
 )
 
 const (
-	SubjectStoreSchema   = "store.schema.%s.%s"
-	SubjectStoreValidate = "store.validate.%s.%s"
-	SubjectStoreApply    = "store.apply.%s"
-	SubjectStoreCreate   = "store.create.%s"
-	SubjectStoreGet      = "store.get.%s"
-	SubjectStoreDelete   = "store.delete.%s"
-	SubjectStoreList     = "store.list.%s"
+	// format: HZ.internal.controller.schema.<group>.<version>.<kind>
+	SubjectCtlrSchema   = "HZ.internal.controller.schema.%s.%s.%s"
+	SubjectCtlrValidate = "HZ.internal.controller.validate.%s.%s.%s"
+)
+
+const (
+	// Format: store.<cmd>.<group>.<version>.<kind>
+	SubjectStoreSchema   = "store.schema.%s.%s.%s"
+	SubjectStoreValidate = "store.validate.%s.%s.%s"
+	// Format: store.<cmd>.<group>.<version>.<kind>.<account>.<name>
+	SubjectStoreApply  = "store.apply.%s.%s.%s.%s.%s"
+	SubjectStoreCreate = "store.create.%s.%s.%s.%s.%s"
+	SubjectStoreGet    = "store.get.%s.%s.%s.%s.%s"
+	SubjectStoreDelete = "store.delete.%s.%s.%s.%s.%s"
+	SubjectStoreList   = "store.list.%s.%s.%s.%s.%s"
 )
 
 type ObjectClient[T Objecter] struct {
@@ -120,10 +125,15 @@ func (oc ObjectClient[T]) Get(
 	}
 	var object T
 	key := ObjectKey{
-		Name:    opt.key.ObjectName(),
-		Account: opt.key.ObjectAccount(),
+		// Get APIVersion and Kind from the object.
 		Group:   object.ObjectGroup(),
+		Version: object.ObjectVersion(),
 		Kind:    object.ObjectKind(),
+	}
+	if opt.key != nil {
+		// Get account and name from the user-provided key.
+		key.Account = opt.key.ObjectAccount()
+		key.Name = opt.key.ObjectName()
 	}
 	opts = append(opts, WithGetKey(key))
 	data, err := oc.Client.Get(ctx, opts...)
@@ -147,8 +157,9 @@ func (oc ObjectClient[T]) List(
 
 	var t T
 	key := ObjectKey{
-		Group: t.ObjectGroup(),
-		Kind:  t.ObjectKind(),
+		Group:   t.ObjectGroup(),
+		Version: t.ObjectVersion(),
+		Kind:    t.ObjectKind(),
 	}
 	if opt.key != nil {
 		key.Name = opt.key.ObjectName()
@@ -168,40 +179,12 @@ func (oc ObjectClient[T]) List(
 	return result.Items, nil
 }
 
-// func (oc ObjectClient[T]) Delete(
-// 	ctx context.Context,
-// 	object T,
-// ) error {
-// 	// TODO: do not DELETE the object, but add the
-// 	// metadata.deleteTimestamp field.
-// 	// The controller then needs to handle deleting the object.
-// 	// Make sure the NakWithDelay() is set to reocncile once the deleteTimestamp
-// 	// has passed.
-// 	// And once it has, and there are no finalizers or whatevever,
-// 	// *then* delete the object.
-// 	//
-// 	// Then remove all the funky logic around the KV store for getting deleted
-// 	// objects. Because once they are deleted in the KV store, they are deleted
-// 	// in NCP. Current state is not that. Current state is deleted in KV
-// 	// means "marked for deletion" in NCP, and deleteTimestamp will replace
-// 	// this.
-// 	kve, err := oc.Client.kv.Get(ctx, KeyForObject(object))
-// 	if err != nil {
-// 		return fmt.Errorf("get: %w", err)
-// 	}
-// 	// Prevent a double delete.
-// 	if kve.Operation() == jetstream.KeyValueDelete {
-// 		return nil
-// 	}
-// 	var t T
-// 	if err := oc.Client.toObjectWithRevision(kve, &t); err != nil {
-// 		return fmt.Errorf("unmarshal: %w", err)
-// 	}
-// 	// TODO: an object can/should be read only, so need to add this another way.
-// 	t.ObjectDeleteAt(Time{Time: time.Now()})
-// 	_, err = oc.Update(ctx, t)
-// 	return err
-// }
+func (oc ObjectClient[T]) Delete(
+	ctx context.Context,
+	object T,
+) error {
+	return oc.Client.Delete(ctx, WithDeleteObject(object))
+}
 
 func (oc ObjectClient[T]) Validate(
 	ctx context.Context,
@@ -225,16 +208,11 @@ func (oc ObjectClient[T]) Run(
 	}
 
 	var newObj T
-	data, err := json.Marshal(object)
-	if err != nil {
-		return newObj, fmt.Errorf("marshalling object: %w", err)
-	}
-
 	runOpts := append([]RunOption{
-		WithRunObjecter(object),
+		WithRunObject(object),
 		WithRunActioner(actioner),
 	}, opts...)
-	reply, err := oc.Client.Run(ctx, data, runOpts...)
+	reply, err := oc.Client.Run(ctx, runOpts...)
 	if err != nil {
 		return newObj, fmt.Errorf("running: %w", err)
 	}
@@ -353,6 +331,7 @@ func (c Client) Schema(
 	subject := c.SubjectPrefix() + fmt.Sprintf(
 		SubjectStoreSchema,
 		key.ObjectGroup(),
+		key.ObjectVersion(),
 		key.ObjectKind(),
 	)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
@@ -403,30 +382,31 @@ func (c Client) Validate(
 	for _, opt := range opts {
 		opt(&vo)
 	}
-	var key ObjectKeyer
+	var obj Objecter
 	if vo.obj != nil {
 		var err error
 		vo.data, err = c.marshalObjectWithTypeFields(vo.obj)
 		if err != nil {
 			return fmt.Errorf("marshalling object: %w", err)
 		}
-		key = vo.obj
+		obj = vo.obj
 	}
 	if vo.data == nil {
 		return fmt.Errorf("validate: data required")
 	}
 	// Get key from data if it is not set.
-	if key == nil {
+	if obj == nil {
 		var metaObj MetaOnlyObject
 		if err := json.Unmarshal(vo.data, &metaObj); err != nil {
 			return fmt.Errorf("unmarshalling meta only object: %w", err)
 		}
-		key = metaObj
+		obj = metaObj
 	}
 	subject := c.SubjectPrefix() + fmt.Sprintf(
 		SubjectStoreValidate,
-		key.ObjectGroup(),
-		key.ObjectKind(),
+		obj.ObjectGroup(),
+		obj.ObjectVersion(),
+		obj.ObjectKind(),
 	)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
@@ -453,7 +433,6 @@ type ApplyOption func(*applyOptions)
 type applyOptions struct {
 	object Objecter
 	data   []byte
-	key    ObjectKeyer
 	force  bool
 }
 
@@ -466,12 +445,6 @@ func WithApplyObject(object Objecter) ApplyOption {
 func WithApplyData(data []byte) ApplyOption {
 	return func(ao *applyOptions) {
 		ao.data = data
-	}
-}
-
-func WithApplyKey(key ObjectKeyer) ApplyOption {
-	return func(ao *applyOptions) {
-		ao.key = key
 	}
 }
 
@@ -497,7 +470,7 @@ func (c Client) Apply(
 		return ErrApplyManagerRequired
 	}
 	var (
-		key  string
+		key  ObjectKeyer
 		data []byte
 	)
 	if ao.object != nil {
@@ -506,32 +479,18 @@ func (c Client) Apply(
 		if err != nil {
 			return fmt.Errorf("marshalling object: %w", err)
 		}
-		key, err = KeyFromObjectConcrete(ao.object)
-		if err != nil {
-			return fmt.Errorf("invalid object: %w", err)
-		}
-	}
-	if ao.key != nil {
-		var err error
-		key, err = KeyFromObjectConcrete(ao.key)
-		if err != nil {
-			return fmt.Errorf("invalid object: %w", err)
-		}
+		key = ao.object
 	}
 	if ao.data != nil {
-		var obj EmptyObjectWithMeta
+		var obj MetaOnlyObject
 		if err := json.Unmarshal(ao.data, &obj); err != nil {
 			return fmt.Errorf("unmarshalling data: %w", err)
 		}
-		var err error
-		key, err = KeyFromObjectConcrete(obj)
-		if err != nil {
-			return fmt.Errorf("invalid data: %w", err)
-		}
+		key = obj
 		data = ao.data
 	}
-	if key == "" {
-		return fmt.Errorf("apply: %w", ErrClientObjectOrKeyRequired)
+	if key == nil {
+		return fmt.Errorf("apply: %w", ErrClientObjectOrDataRequired)
 	}
 	if data == nil {
 		return fmt.Errorf("apply: %w", ErrClientObjectOrDataRequired)
@@ -539,7 +498,11 @@ func (c Client) Apply(
 	msg := nats.NewMsg(
 		c.SubjectPrefix() + fmt.Sprintf(
 			SubjectStoreApply,
-			key,
+			key.ObjectGroup(),
+			key.ObjectVersion(),
+			key.ObjectKind(),
+			key.ObjectAccount(),
+			key.ObjectName(),
 		),
 	)
 	msg.Header.Set(HeaderApplyFieldManager, c.Manager)
@@ -567,7 +530,6 @@ type CreateOption func(*createOptions)
 type createOptions struct {
 	object Objecter
 	data   []byte
-	key    *ObjectKey
 }
 
 func WithCreateObject(object Objecter) CreateOption {
@@ -579,12 +541,6 @@ func WithCreateObject(object Objecter) CreateOption {
 func WithCreateData(data []byte) CreateOption {
 	return func(ao *createOptions) {
 		ao.data = data
-	}
-}
-
-func WithCreateKey(objectKey ObjectKey) CreateOption {
-	return func(ao *createOptions) {
-		ao.key = &objectKey
 	}
 }
 
@@ -601,49 +557,41 @@ func (c *Client) Create(
 	}
 
 	var (
-		key  string
+		key  ObjectKeyer
 		data []byte
 	)
 	if co.object != nil {
 		var err error
-		key, err = KeyFromObjectConcrete(co.object)
-		if err != nil {
-			return fmt.Errorf("invalid object: %w", err)
-		}
-
 		data, err = c.marshalObjectWithTypeFields(co.object)
 		if err != nil {
 			return fmt.Errorf("marshalling object: %w", err)
 		}
-	}
-	if co.key != nil {
-		var err error
-		key, err = KeyFromObjectConcrete(co.key)
-		if err != nil {
-			return fmt.Errorf("invalid key: %w", err)
-		}
+		key = co.object
 	}
 	if co.data != nil {
-		var obj EmptyObjectWithMeta
+		var obj MetaOnlyObject
 		if err := json.Unmarshal(co.data, &obj); err != nil {
 			return fmt.Errorf("unmarshalling data: %w", err)
 		}
-		var err error
-		key, err = KeyFromObjectConcrete(obj)
-		if err != nil {
-			return fmt.Errorf("invalid data: %w", err)
-		}
+		key = obj
 		data = co.data
 	}
-	if key == "" {
-		return fmt.Errorf("create: %w", ErrClientObjectOrKeyRequired)
+	if key == nil {
+		return fmt.Errorf("create: %w", ErrClientObjectOrDataRequired)
 	}
 	if data == nil {
 		return fmt.Errorf("create: %w", ErrClientObjectOrDataRequired)
 	}
 
 	msg := nats.NewMsg(
-		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreCreate, key),
+		c.SubjectPrefix() + fmt.Sprintf(
+			SubjectStoreCreate,
+			key.ObjectGroup(),
+			key.ObjectVersion(),
+			key.ObjectKind(),
+			key.ObjectAccount(),
+			key.ObjectName(),
+		),
 	)
 	msg.Data = data
 	msg.Header.Set(HeaderAuthorization, c.Session)
@@ -685,17 +633,24 @@ func (c *Client) Get(
 	for _, o := range opts {
 		o(&opt)
 	}
-	var key string
+	var key ObjectKeyer
 	if opt.key != nil {
-		var err error
-		key, err = KeyFromObjectConcrete(opt.key)
-		if err != nil {
-			return nil, fmt.Errorf("invalid key: %w", err)
-		}
+		key = opt.key
+	}
+
+	if key == nil {
+		return nil, fmt.Errorf("get: key required")
 	}
 
 	msg := nats.NewMsg(
-		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreGet, key),
+		c.SubjectPrefix() + fmt.Sprintf(
+			SubjectStoreGet,
+			key.ObjectGroup(),
+			key.ObjectVersion(),
+			key.ObjectKind(),
+			key.ObjectAccount(),
+			key.ObjectName(),
+		),
 	)
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
@@ -750,37 +705,32 @@ func (c *Client) Delete(
 	for _, opt := range opts {
 		opt(&do)
 	}
-	var key string
+	var key ObjectKeyer
 	if do.object != nil {
-		var err error
-		key, err = KeyFromObjectConcrete(do.object)
-		if err != nil {
-			return fmt.Errorf("invalid object: %w", err)
-		}
+		key = do.object
 	}
 	if do.key != nil {
-		var err error
-		key, err = KeyFromObjectConcrete(do.key)
-		if err != nil {
-			return fmt.Errorf("invalid key: %w", err)
-		}
+		key = do.key
 	}
 	if do.data != nil {
-		var obj EmptyObjectWithMeta
+		var obj MetaOnlyObject
 		if err := json.Unmarshal(do.data, &obj); err != nil {
 			return fmt.Errorf("unmarshalling data: %w", err)
 		}
-		var err error
-		key, err = KeyFromObjectConcrete(obj)
-		if err != nil {
-			return fmt.Errorf("invalid data: %w", err)
-		}
+		key = obj
 	}
-	if key == "" {
+	if key == nil {
 		return fmt.Errorf("delete: key required")
 	}
 	msg := nats.NewMsg(
-		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreDelete, key),
+		c.SubjectPrefix() + fmt.Sprintf(
+			SubjectStoreDelete,
+			key.ObjectGroup(),
+			key.ObjectVersion(),
+			key.ObjectKind(),
+			key.ObjectAccount(),
+			key.ObjectName(),
+		),
 	)
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
@@ -836,17 +786,24 @@ func (c *Client) List(
 	for _, opt := range opts {
 		opt(&lo)
 	}
-	var key string
+	var key ObjectKeyer
 	if lo.key != nil {
-		key = KeyFromObject(lo.key)
+		key = lo.key
 	}
-	if key == "" {
+	if key == nil {
 		return fmt.Errorf("list: key required")
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	msg := nats.NewMsg(
-		c.SubjectPrefix() + fmt.Sprintf(SubjectStoreList, lo.key),
+		c.SubjectPrefix() + fmt.Sprintf(
+			SubjectStoreList,
+			key.ObjectGroup(),
+			key.ObjectVersion(),
+			key.ObjectKind(),
+			key.ObjectAccount(),
+			key.ObjectName(),
+		),
 	)
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	reply, err := c.Conn.RequestMsgWithContext(ctx, msg)
@@ -895,9 +852,15 @@ func WithRunLabelSelector(ls LabelSelector) RunOption {
 	}
 }
 
-func WithRunObjecter(key ObjectKeyer) RunOption {
+func WithRunObject(object Objecter) RunOption {
 	return func(ro *runOption) {
-		ro.key = key
+		ro.object = object
+	}
+}
+
+func WithRunData(data []byte) RunOption {
+	return func(ro *runOption) {
+		ro.data = data
 	}
 }
 
@@ -915,13 +878,13 @@ var runOptionDefault = runOption{
 type runOption struct {
 	timeout       time.Duration
 	labelSelector LabelSelector
-	key           ObjectKeyer
+	object        Objecter
+	data          []byte
 	actioner      Actioner
 }
 
 func (c *Client) Run(
 	ctx context.Context,
-	data []byte,
 	opts ...RunOption,
 ) ([]byte, error) {
 	if err := c.checkSession(); err != nil {
@@ -932,28 +895,45 @@ func (c *Client) Run(
 		opt(&ro)
 	}
 	var (
-		key    string
+		key    ObjectKeyer
+		data   []byte
 		action string
 	)
-	if ro.key != nil {
+	if ro.object != nil {
 		var err error
-		key, err = KeyFromObjectConcrete(ro.key)
+		data, err = c.marshalObjectWithTypeFields(ro.object)
 		if err != nil {
-			return nil, fmt.Errorf("invalid key: %w", err)
+			return nil, fmt.Errorf("marshalling object: %w", err)
 		}
+		key = ro.object
+	}
+	if ro.data != nil {
+		var obj MetaOnlyObject
+		if err := json.Unmarshal(ro.data, &obj); err != nil {
+			return nil, fmt.Errorf("unmarshalling data: %w", err)
+		}
+		key = obj
+		data = ro.data
 	}
 	if ro.actioner != nil {
 		action = ro.actioner.Action()
 	}
-	if key == "" {
+	if key == nil {
 		return nil, fmt.Errorf("run: key required")
+	}
+	if data == nil {
+		return nil, fmt.Errorf("run: %w", ErrClientObjectOrDataRequired)
 	}
 	if action == "" {
 		return nil, fmt.Errorf("run: action required")
 	}
 	subject := c.SubjectPrefix() + fmt.Sprintf(
-		SubjectBrokeRun,
-		key,
+		SubjectBrokerRun,
+		key.ObjectGroup(),
+		key.ObjectVersion(),
+		key.ObjectKind(),
+		key.ObjectAccount(),
+		key.ObjectName(),
 		action,
 	)
 

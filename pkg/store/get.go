@@ -20,7 +20,7 @@ func (s Store) Get(ctx context.Context, req GetRequest) ([]byte, error) {
 }
 
 func (s Store) get(ctx context.Context, key hz.ObjectKeyer) ([]byte, error) {
-	rawKey, err := hz.KeyFromObjectConcrete(key)
+	rawKey, err := hz.KeyFromObjectStrict(key)
 	if err != nil {
 		return nil, &hz.Error{
 			Status: http.StatusBadRequest,

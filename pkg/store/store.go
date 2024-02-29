@@ -21,14 +21,15 @@ import (
 const (
 	// Format: HZ.<internal/api>.store.<command>.<group>.<kind>.<account>.<name>
 
-	subjectInternalStore = "HZ.internal.store.*.*.*.*.*"
-	subjectAPIStore      = "HZ.api.store.*.*.*.*.*"
+	subjectInternalStore = "HZ.internal.store.*.*.*.*.*.*"
+	subjectAPIStore      = "HZ.api.store.*.*.*.*.*.*"
 	subjectIndexCommand  = 3
 	subjectIndexGroup    = 4
-	subjectIndexKind     = 5
-	subjectIndexAccount  = 6
-	subjectIndexName     = 7
-	subjectLength        = 8
+	subjectIndexVersion  = 5
+	subjectIndexKind     = 6
+	subjectIndexAccount  = 7
+	subjectIndexName     = 8
+	subjectLength        = 9
 )
 
 type StoreCommand string
@@ -244,10 +245,11 @@ func (s Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
 	cmd := StoreCommand(parts[subjectIndexCommand])
 
 	key := hz.ObjectKey{
-		Name:    parts[subjectIndexName],
-		Account: parts[subjectIndexAccount],
-		Kind:    parts[subjectIndexKind],
 		Group:   parts[subjectIndexGroup],
+		Version: parts[subjectIndexVersion],
+		Kind:    parts[subjectIndexKind],
+		Account: parts[subjectIndexAccount],
+		Name:    parts[subjectIndexName],
 	}
 
 	req := auth.CheckRequest{
@@ -324,10 +326,11 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 	cmd := StoreCommand(parts[subjectIndexCommand])
 
 	key := hz.ObjectKey{
-		Name:    parts[subjectIndexName],
-		Account: parts[subjectIndexAccount],
-		Kind:    parts[subjectIndexKind],
 		Group:   parts[subjectIndexGroup],
+		Version: parts[subjectIndexVersion],
+		Kind:    parts[subjectIndexKind],
+		Account: parts[subjectIndexAccount],
+		Name:    parts[subjectIndexName],
 	}
 
 	data, err := removeReadOnlyFields(msg.Data)

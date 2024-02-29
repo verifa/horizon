@@ -11,7 +11,7 @@ import (
 )
 
 type CreateRequest struct {
-	Key  hz.ObjectKey
+	Key  hz.ObjectKeyer
 	Data []byte
 }
 
@@ -50,7 +50,7 @@ func (s Store) Create(ctx context.Context, req CreateRequest) error {
 
 func (s Store) create(
 	ctx context.Context,
-	key hz.ObjectKey,
+	key hz.ObjectKeyer,
 	data []byte,
 ) error {
 	_, err := s.kv.Create(ctx, hz.KeyFromObject(key), data)

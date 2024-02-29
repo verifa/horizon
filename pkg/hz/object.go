@@ -17,15 +17,15 @@ type Objecter interface {
 	ObjectOwnerReferences() []OwnerReference
 	ObjectOwnerReference(Objecter) (OwnerReference, bool)
 	ObjectManagedFields() managedfields.ManagedFields
-	ObjectVersion() string
 }
 
 // ObjectKeyer is an interface that can produce a unique key for an object.
 type ObjectKeyer interface {
-	ObjectName() string
-	ObjectAccount() string
-	ObjectKind() string
 	ObjectGroup() string
+	ObjectVersion() string
+	ObjectKind() string
+	ObjectAccount() string
+	ObjectName() string
 }
 
 // KeyFromObject takes an ObjectKeyer and returns a string key.
@@ -34,9 +34,21 @@ type ObjectKeyer interface {
 //
 // If performing an action on a specific object (e.g. get, create, apply) the
 // key cannot contain "*".
-// In this case you can use [KeyFromObjectConcrete] which makes sure the
+// In this case you can use [KeyFromObjectStrict] which makes sure the
 // ObjectKeyer is concrete.
 func KeyFromObject(obj ObjectKeyer) string {
+	group := "*"
+	if obj.ObjectGroup() != "" {
+		group = obj.ObjectGroup()
+	}
+	version := "*"
+	if obj.ObjectVersion() != "" {
+		version = obj.ObjectVersion()
+	}
+	kind := "*"
+	if obj.ObjectKind() != "" {
+		kind = obj.ObjectKind()
+	}
 	account := "*"
 	if obj.ObjectAccount() != "" {
 		account = obj.ObjectAccount()
@@ -45,40 +57,39 @@ func KeyFromObject(obj ObjectKeyer) string {
 	if obj.ObjectName() != "" {
 		name = obj.ObjectName()
 	}
-	group := "*"
-	if obj.ObjectGroup() != "" {
-		group = obj.ObjectGroup()
-	}
-	kind := "*"
-	if obj.ObjectKind() != "" {
-		kind = obj.ObjectKind()
-	}
 	return fmt.Sprintf(
-		"%s.%s.%s.%s",
+		"%s.%s.%s.%s.%s",
 		group,
+		version,
 		kind,
 		account,
 		name,
 	)
 }
 
-// KeyFromObjectConcrete takes an ObjectKeyer and returns a string key.
-// It returns an error if any of the fields are empty.
+// KeyFromObjectStrict takes an ObjectKeyer and returns a string key.
+// It returns an error if any of the fields are empty (except APIVersion).
 // This is useful when you want to ensure the key is concrete when performing
 // operations on specific objects (e.g. get, create, apply).
-func KeyFromObjectConcrete(obj ObjectKeyer) (string, error) {
+func KeyFromObjectStrict(obj ObjectKeyer) (string, error) {
 	var errs error
-	if obj.ObjectAccount() == "" {
-		errs = errors.Join(errs, fmt.Errorf("account is required"))
+	isEmptyOrStar := func(s string) bool {
+		return s == "" || s == "*"
 	}
-	if obj.ObjectName() == "" {
-		errs = errors.Join(errs, fmt.Errorf("name is required"))
+	if isEmptyOrStar(obj.ObjectGroup()) {
+		errs = errors.Join(errs, fmt.Errorf("group is required"))
 	}
-	if obj.ObjectKind() == "" {
+	if isEmptyOrStar(obj.ObjectVersion()) {
+		errs = errors.Join(errs, fmt.Errorf("version is required"))
+	}
+	if isEmptyOrStar(obj.ObjectKind()) {
 		errs = errors.Join(errs, fmt.Errorf("kind is required"))
 	}
-	if obj.ObjectGroup() == "" {
-		errs = errors.Join(errs, fmt.Errorf("group is required"))
+	if isEmptyOrStar(obj.ObjectAccount()) {
+		errs = errors.Join(errs, fmt.Errorf("account is required"))
+	}
+	if isEmptyOrStar(obj.ObjectName()) {
+		errs = errors.Join(errs, fmt.Errorf("name is required"))
 	}
 	if errs != nil {
 		return "", errs
@@ -88,33 +99,57 @@ func KeyFromObjectConcrete(obj ObjectKeyer) (string, error) {
 
 func objectKeyFromKey(key string) (ObjectKey, error) {
 	parts := strings.Split(key, ".")
-	if len(parts) != 4 {
+	if len(parts) != 5 {
 		return ObjectKey{}, fmt.Errorf("invalid key: %q", key)
 	}
 	return ObjectKey{
 		Group:   parts[0],
-		Kind:    parts[1],
-		Account: parts[2],
-		Name:    parts[3],
+		Version: parts[1],
+		Kind:    parts[2],
+		Account: parts[3],
+		Name:    parts[4],
 	}, nil
 }
 
 func ObjectKeyFromObject(object Objecter) ObjectKey {
 	return ObjectKey{
-		Name:    object.ObjectName(),
-		Account: object.ObjectAccount(),
-		Kind:    object.ObjectKind(),
 		Group:   object.ObjectGroup(),
+		Version: object.ObjectVersion(),
+		Kind:    object.ObjectKind(),
+		Account: object.ObjectAccount(),
+		Name:    object.ObjectName(),
 	}
 }
 
 var _ ObjectKeyer = (*ObjectKey)(nil)
 
 type ObjectKey struct {
-	Name    string
-	Account string
-	Kind    string
 	Group   string
+	Version string
+	Kind    string
+	Account string
+	Name    string
+}
+
+func (o ObjectKey) ObjectGroup() string {
+	if o.Group == "" {
+		return "*"
+	}
+	return o.Group
+}
+
+func (o ObjectKey) ObjectVersion() string {
+	if o.Version == "" {
+		return "*"
+	}
+	return o.Version
+}
+
+func (o ObjectKey) ObjectKind() string {
+	if o.Kind == "" {
+		return "*"
+	}
+	return o.Kind
 }
 
 func (o ObjectKey) ObjectAccount() string {
@@ -131,29 +166,15 @@ func (o ObjectKey) ObjectName() string {
 	return o.Name
 }
 
-func (o ObjectKey) ObjectKind() string {
-	if o.Kind == "" {
-		return "*"
-	}
-	return o.Kind
-}
-
-func (o ObjectKey) ObjectGroup() string {
-	if o.Group == "" {
-		return "*"
-	}
-	return o.Group
-}
-
 func (o ObjectKey) String() string {
-	return o.ObjectGroup() + "." + o.ObjectKind() + "." + o.ObjectAccount() + "." + o.ObjectName()
-}
-
-var _ Objecter = (*EmptyObjectWithMeta)(nil)
-
-type EmptyObjectWithMeta struct {
-	TypeMeta   `json:",inline"`
-	ObjectMeta `json:"metadata"`
+	return fmt.Sprintf(
+		"%s.%s.%s.%s.%s",
+		o.ObjectGroup(),
+		o.ObjectVersion(),
+		o.ObjectKind(),
+		o.ObjectAccount(),
+		o.ObjectName(),
+	)
 }
 
 type ObjectMeta struct {
@@ -172,7 +193,7 @@ type ObjectMeta struct {
 	// Hence, it is the responsibility of the controller to remove the
 	// finalizers once the object has been marked for deletion (by setting the
 	// deletionTimestamp).
-	Finalizers []Finalizer `json:"finalizers,omitempty" cue:",opt"`
+	Finalizers []string `json:"finalizers,omitempty" cue:",opt"`
 }
 
 func (o ObjectMeta) ObjectName() string {
@@ -247,21 +268,29 @@ func (t TypeMeta) ObjectVersion() string {
 func OwnerReferenceFromObject(object Objecter) *OwnerReference {
 	return &OwnerReference{
 		Group:   object.ObjectGroup(),
+		Version: object.ObjectVersion(),
 		Kind:    object.ObjectKind(),
 		Name:    object.ObjectName(),
 		Account: object.ObjectAccount(),
 	}
 }
 
+var _ ObjectKeyer = (*OwnerReference)(nil)
+
 type OwnerReference struct {
-	Group   string
-	Kind    string
-	Name    string
-	Account string
+	Group   string `json:"group,omitempty" cue:""`
+	Version string `json:"version,omitempty" cue:""`
+	Kind    string `json:"kind,omitempty" cue:""`
+	Account string `json:"account,omitempty" cue:""`
+	Name    string `json:"name,omitempty" cue:""`
 }
 
 func (o OwnerReference) ObjectGroup() string {
 	return o.Group
+}
+
+func (o OwnerReference) ObjectVersion() string {
+	return o.Version
 }
 
 func (o OwnerReference) ObjectKind() string {
@@ -280,17 +309,24 @@ func (o OwnerReference) IsOwnedBy(owner Objecter) bool {
 	if owner == nil {
 		return false
 	}
-	return o.Kind == owner.ObjectKind() &&
+	return o.Group == owner.ObjectGroup() &&
+		o.Version == owner.ObjectVersion() &&
+		o.Kind == owner.ObjectKind() &&
 		o.Name == owner.ObjectName() &&
 		o.Account == owner.ObjectAccount()
 }
 
-type Finalizer struct {
-	ID string `json:"id,omitempty" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
-}
-
 type Time struct {
 	time.Time
+}
+
+var _ Objecter = (*MetaOnlyObject)(nil)
+
+// MetaOnlyObject is an object that has no spec or status.
+// It is used for unmarshalling objects from the store to read metadata.
+type MetaOnlyObject struct {
+	TypeMeta   `json:",inline"`
+	ObjectMeta `json:"metadata"`
 }
 
 var _ Objecter = (*GenericObject)(nil)
@@ -313,27 +349,4 @@ type ObjectList struct {
 
 type TypedObjectList[T Objecter] struct {
 	Items []*T `json:"items,omitempty"`
-}
-
-var _ Objecter = (*MetaOnlyObject)(nil)
-
-// MetaOnlyObject is an object that has no spec or status.
-// It is used for unmarshalling objects from the store to read metadata.
-type MetaOnlyObject struct {
-	ObjectMeta `json:"metadata,omitempty"`
-	Kind       string `json:"kind,omitempty"`
-	Group      string `json:"group,omitempty"`
-	APIVersion string `json:"apiVersion,omitempty"`
-}
-
-func (r MetaOnlyObject) ObjectKind() string {
-	return r.Kind
-}
-
-func (r MetaOnlyObject) ObjectGroup() string {
-	return r.Group
-}
-
-func (r MetaOnlyObject) ObjectVersion() string {
-	return r.APIVersion
 }

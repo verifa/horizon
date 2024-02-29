@@ -81,13 +81,16 @@ func TestReconciler(t *testing.T) {
 			Name:    "child",
 			OwnerReferences: []hz.OwnerReference{
 				{
+					Group:   do.ObjectGroup(),
+					Version: do.ObjectVersion(),
 					Kind:    do.ObjectKind(),
-					Name:    do.Name,
 					Account: do.Account,
+					Name:    do.Name,
 				},
 			},
 		},
 	}
+
 	err = childClient.Create(ctx, co)
 	tu.AssertNoError(t, err)
 
@@ -315,6 +318,8 @@ func TestReconcilerConcurrent(t *testing.T) {
 			Name:    "child",
 			OwnerReferences: []hz.OwnerReference{
 				{
+					Group:   do.ObjectGroup(),
+					Version: do.ObjectVersion(),
 					Kind:    do.ObjectKind(),
 					Name:    do.Name,
 					Account: do.Account,

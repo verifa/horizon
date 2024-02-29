@@ -174,8 +174,9 @@ func (c *Controller) startSchema(
 		return fmt.Errorf("marshalling schema: %w", err)
 	}
 	subject := fmt.Sprintf(
-		"CTLR.schema.%s.%s",
+		SubjectCtlrSchema,
 		obj.ObjectGroup(),
+		obj.ObjectVersion(),
 		obj.ObjectKind(),
 	)
 	sub, err := c.Conn.QueueSubscribe(subject, "schema", func(msg *nats.Msg) {
@@ -194,8 +195,9 @@ func (c *Controller) startValidators(
 ) error {
 	obj := opt.forObject
 	subject := fmt.Sprintf(
-		"CTLR.validate.%s.%s",
+		SubjectCtlrValidate,
 		obj.ObjectGroup(),
+		obj.ObjectVersion(),
 		obj.ObjectKind(),
 	)
 	sub, err := c.Conn.QueueSubscribe(
@@ -344,7 +346,7 @@ func (c *Controller) startReconciler(
 			// This consumer is for the child objects of the parent object.
 			// Hence, check if the child object (msg) is owned by the parent
 			// for which the reconciler is running.
-			var emptyObject EmptyObjectWithMeta
+			var emptyObject MetaOnlyObject
 			if err := json.Unmarshal(msg.Data(), &emptyObject); err != nil {
 				slog.Error("unmarshal msg to empty object", "error", err)
 				_ = msg.Term()
@@ -361,10 +363,10 @@ func (c *Controller) startReconciler(
 			}
 			// Key for the owner (parent) object.
 			key := KeyFromObject(ObjectKey{
-				Name:    ownerRef.Name,
-				Account: ownerRef.Account,
 				Group:   ownerRef.Group,
 				Kind:    ownerRef.Kind,
+				Name:    ownerRef.Name,
+				Account: ownerRef.Account,
 			})
 			go c.handleControlLoop(
 				ctx,

@@ -30,6 +30,10 @@ type RoleBindingSpec struct {
 }
 
 type RoleRef struct {
+	// Group is the api group of the Role being referenced.
+	Group string `json:"group" cue:""`
+	// Kind is the type of the Role being referenced.
+	Kind string `json:"kind" cue:""`
 	// Name is the name of the Role to which this RoleBinding refers.
 	Name string `json:"name" cue:""`
 }

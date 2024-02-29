@@ -18,7 +18,7 @@ type ApplyRequest struct {
 	Manager string
 	// Force will force the apply to happen even if there are conflicts.
 	Force bool
-	Key   hz.ObjectKey
+	Key   hz.ObjectKeyer
 }
 
 func (s Store) Apply(ctx context.Context, req ApplyRequest) error {

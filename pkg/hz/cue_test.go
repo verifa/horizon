@@ -82,14 +82,13 @@ func TestCueDefinition(t *testing.T) {
 				[string]: string
 			}
 			ownerReferences?: [...{
-				Group?:   string
-				Kind?:    string
-				Name?:    string
-				Account?: string
+				group:   string
+				version: string
+				kind:    string
+				account: string
+				name:    string
 			}]
-			finalizers?: [...{
-				id: =~"^[a-zA-Z0-9-_]+$"
-			}]
+			finalizers?: [...string]
 		}
 		spec?: {
 			embedField: string

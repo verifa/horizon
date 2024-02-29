@@ -127,11 +127,6 @@ type Permissions struct {
 	Deny  []Verbs `json:"deny"`
 }
 
-// ListObjects will return the list of objects a user has access to read.
-func (r *RBAC) ListObjects() []hz.Objecter {
-	return nil
-}
-
 type AccountRequest struct {
 	User    string
 	Groups  []string
@@ -252,13 +247,13 @@ func checkVerbFilter(vf *VerbFilter, obj hz.ObjectKeyer) bool {
 	if vf == nil {
 		return false
 	}
-	if !checkStringPattern(vf.Name, obj.ObjectName()) {
+	if !checkStringPattern(vf.Group, obj.ObjectGroup()) {
 		return false
 	}
 	if !checkStringPattern(vf.Kind, obj.ObjectKind()) {
 		return false
 	}
-	if !checkStringPattern(vf.Group, obj.ObjectGroup()) {
+	if !checkStringPattern(vf.Name, obj.ObjectName()) {
 		return false
 	}
 
@@ -372,10 +367,11 @@ func (r *RBAC) refresh() {
 			}
 
 			roleKey := hz.KeyFromObject(hz.ObjectKey{
-				Name:    roleBinding.Spec.RoleRef.Name,
-				Group:   "hz-internal",
-				Kind:    "Role",
+				Group:   roleBinding.Spec.RoleRef.Group,
+				Version: "v1",
+				Kind:    roleBinding.Spec.RoleRef.Kind,
 				Account: roleBinding.Account,
+				Name:    roleBinding.Spec.RoleRef.Name,
 			})
 			// Get the role key. It should exist.
 			// A RoleBinding cannot be created with the Role.

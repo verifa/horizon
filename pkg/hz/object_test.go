@@ -13,10 +13,6 @@ type DummyObject struct {
 	Status struct{} `json:"status,omitempty"`
 }
 
-func (o DummyObject) ObjectKind() string {
-	return "DummyObject"
-}
-
 func (o DummyObject) ObjectGroup() string {
 	return "DummyGroup"
 }
@@ -25,14 +21,14 @@ func (o DummyObject) ObjectVersion() string {
 	return "v1"
 }
 
+func (o DummyObject) ObjectKind() string {
+	return "DummyObject"
+}
+
 type ChildObject struct {
 	hz.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec struct{} `json:"spec,omitempty" cue:",opt"`
-}
-
-func (o ChildObject) ObjectKind() string {
-	return "ChildObject"
 }
 
 func (o ChildObject) ObjectGroup() string {
@@ -41,4 +37,8 @@ func (o ChildObject) ObjectGroup() string {
 
 func (o ChildObject) ObjectVersion() string {
 	return "v1"
+}
+
+func (o ChildObject) ObjectKind() string {
+	return "ChildObject"
 }

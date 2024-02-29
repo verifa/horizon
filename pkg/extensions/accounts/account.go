@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	ObjectKind  = "Account"
-	ObjectGroup = "hz-internal"
+	ObjectKind    = "Account"
+	ObjectGroup   = "hz-internal"
+	ObjectVersion = "v1"
 )
 
 type Account struct {
@@ -26,7 +27,7 @@ type Account struct {
 }
 
 func (a Account) ObjectVersion() string {
-	return "v1"
+	return ObjectVersion
 }
 
 func (a Account) ObjectGroup() string {

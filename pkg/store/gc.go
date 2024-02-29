@@ -52,7 +52,7 @@ func (gc *GarbageCollector) garbageCollect(
 	if event.Operation != hz.EventOperationDelete {
 		return hz.Result{}, nil
 	}
-	var obj hz.EmptyObjectWithMeta
+	var obj hz.MetaOnlyObject
 	if err := json.Unmarshal(event.Data, &obj); err != nil {
 		return hz.Result{}, fmt.Errorf("unmarshal object: %w", err)
 	}
@@ -89,7 +89,7 @@ func (gc *GarbageCollector) garbageCollect(
 
 func (gc *GarbageCollector) deleteObjectCascading(
 	ctx context.Context,
-	obj hz.EmptyObjectWithMeta,
+	obj hz.MetaOnlyObject,
 ) (DeleteResult, error) {
 	// If the object has finalizers, it's not ready to be deleted.
 	if len(obj.ObjectMeta.Finalizers) > 0 {
@@ -104,13 +104,13 @@ func (gc *GarbageCollector) deleteObjectCascading(
 	defer func() {
 		_ = watcher.Stop()
 	}()
-	children := []hz.EmptyObjectWithMeta{}
+	children := []hz.MetaOnlyObject{}
 	for entry := range watcher.Updates() {
 		// Nil entry is sent once all updates have been processed.
 		if entry == nil {
 			break
 		}
-		var child hz.EmptyObjectWithMeta
+		var child hz.MetaOnlyObject
 		if err := json.Unmarshal(entry.Value(), &child); err != nil {
 			return DeleteResultError, fmt.Errorf(
 				"unmarshal child object: %w",

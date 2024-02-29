@@ -25,10 +25,10 @@ func (s *Server) middlewareAccount(next http.Handler) http.Handler {
 			Session: hz.SessionFromRequest(r),
 			Verb:    auth.VerbRead,
 			Object: hz.ObjectKey{
-				Name:    account,
-				Account: hz.RootAccount,
-				Kind:    accounts.ObjectKind,
 				Group:   accounts.ObjectGroup,
+				Kind:    accounts.ObjectKind,
+				Account: hz.RootAccount,
+				Name:    account,
 			},
 		})
 		if err != nil {
@@ -45,10 +45,11 @@ func (s *Server) middlewareAccount(next http.Handler) http.Handler {
 			Session: hz.SessionFromRequest(r),
 		}
 		if _, err := client.Get(r.Context(), hz.WithGetKey(hz.ObjectKey{
-			Name:    account,
-			Account: hz.RootAccount,
-			Kind:    accounts.ObjectKind,
 			Group:   accounts.ObjectGroup,
+			Version: accounts.ObjectVersion,
+			Kind:    accounts.ObjectKind,
+			Account: hz.RootAccount,
+			Name:    account,
 		})); err != nil {
 			// TODO: display a pretty 404 page instead.
 			httpError(w, err)
