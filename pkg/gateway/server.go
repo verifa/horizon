@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/verifa/horizon/pkg/auth"
-	"github.com/verifa/horizon/pkg/extensions/accounts"
 	"github.com/verifa/horizon/pkg/gateway/dummyoidc"
 	"github.com/verifa/horizon/pkg/gateway/dummyoidc/storage"
 	"github.com/verifa/horizon/pkg/hz"
@@ -210,17 +209,28 @@ func (s *Server) start(
 	if err != nil {
 		return fmt.Errorf("oidc auth middleware: %w", err)
 	}
+	//
+	// Unprotected routes.
+	//
 	r.Get("/login", oidcHandler.login)
 	r.Get("/logout", oidcHandler.logout)
 	r.Get("/loggedout", s.serveLoggedOut)
 	r.Get("/auth/callback", oidcHandler.authCallback)
 
+	// This should be passable as an option to the server, allowing users to
+	// override the default handler.
+	var h GatewayHandler = &DefaultHandler{
+		Conn: s.Conn,
+	}
+	//
+	// Protected routes.
+	//
 	r.Group(func(r chi.Router) {
 		r.Use(oidcHandler.authMiddleware)
-		r.Get("/", s.serveHome)
-		r.Get("/accounts/new", s.serveAccountsNew)
-		r.Post("/accounts", s.postAccounts)
-		r.Post("/auth/login", s.handleAuthLogin)
+		r.Get("/", h.GetHome)
+		r.Get("/accounts", h.GetAccounts)
+		r.Get("/accounts/new", h.GetAccountsNew)
+		r.Post("/accounts", h.PostAccounts)
 	})
 
 	accountsHandler := AccountsHandler{
@@ -238,7 +248,9 @@ func (s *Server) start(
 	objRouter := objHandler.router()
 	r.Mount("/v1/objects", objRouter)
 
-	// TODO: these /dist paths should not be protected...
+	//
+	// Static files.
+	//
 	r.Get("/dist/htmx.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "text/javascript")
 		w.Write(htmxJS)
@@ -339,60 +351,9 @@ func (s *Server) handlePortalEvent(
 	return hz.Result{}, nil
 }
 
-func (s *Server) serveHome(w http.ResponseWriter, r *http.Request) {
-	userInfo, ok := r.Context().Value(authContext).(auth.UserInfo)
-	if !ok {
-		http.Error(w, "no auth context", http.StatusUnauthorized)
-		return
-	}
-	client := hz.Client{
-		Conn:    s.Conn,
-		Session: hz.SessionFromRequest(r),
-	}
-	accClient := hz.ObjectClient[accounts.Account]{Client: client}
-	accounts, err := accClient.List(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	body := accountsPage(accounts)
-	layout("Accounts", &userInfo, body).Render(r.Context(), w)
-}
-
 func (s *Server) serveLoggedOut(w http.ResponseWriter, r *http.Request) {
 	body := loggedOutPage()
 	layout("Logged Out", nil, body).Render(r.Context(), w)
-}
-
-func (s *Server) serveAccountsNew(w http.ResponseWriter, r *http.Request) {
-	userInfo, ok := r.Context().Value(authContext).(auth.UserInfo)
-	if !ok {
-		http.Error(w, "no auth context", http.StatusUnauthorized)
-		return
-	}
-	body := accountsNewPage()
-	layout("New Account", &userInfo, body).Render(r.Context(), w)
-}
-
-func (s *Server) postAccounts(w http.ResponseWriter, r *http.Request) {
-	name := r.FormValue("account-name")
-	client := hz.Client{
-		Conn:    s.Conn,
-		Session: hz.SessionFromRequest(r),
-	}
-	accClient := hz.ObjectClient[accounts.Account]{Client: client}
-	account := accounts.Account{
-		ObjectMeta: hz.ObjectMeta{
-			Name:    name,
-			Account: hz.RootAccount,
-		},
-	}
-	err := accClient.Create(r.Context(), account)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Add("HX-Redirect", "/accounts/"+name)
 }
 
 func validateOneTrue(b ...bool) bool {

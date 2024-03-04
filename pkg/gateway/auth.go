@@ -13,8 +13,8 @@ import (
 	"github.com/verifa/horizon/pkg/natsutil"
 )
 
-// handleAuthLogin generates nats user credentials for the root nats account.
-func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+// postAuthLogin generates nats user credentials for the root nats account.
+func (s *Server) postAuthLogin(w http.ResponseWriter, r *http.Request) {
 	superAccountClient := hz.ObjectClient[accounts.Account]{
 		Client: hz.NewClient(s.Conn, hz.WithClientInternal(true)),
 	}

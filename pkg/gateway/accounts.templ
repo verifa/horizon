@@ -1,0 +1,55 @@
+package gateway
+
+import (
+	// "fmt"
+	"github.com/verifa/horizon/pkg/extensions/accounts"
+	// "github.com/verifa/horizon/pkg/hz"
+	// "github.com/verifa/horizon/pkg/auth"
+)
+
+templ home() {
+	<div class="prose prose-a:no-underline mx-auto max-w-7xl px-8 py-8">
+		<h1>Horizon</h1>
+		<p>Welcome to Horizon, the gateway to your infrastructure.</p>
+		<h2>Accounts</h2>
+		<p>Horizon is a multi-tenant system. Each tenant is represented by an account. You can create new accounts, and manage users and resources within each account.</p>
+		<a role="button" href="/accounts" class="btn">To Accounts</a>
+	</div>
+}
+
+templ accountsPage(accounts []accounts.Account) {
+	<div class="prose prose-a:no-underline mx-auto max-w-7xl px-8 py-8">
+		<h1>Accounts</h1>
+		if len(accounts) > 0 {
+			<ul role="list" class="divide-y divide-gray-100">
+				for _, account := range accounts {
+					<li class="py-4"><a href={ templ.URL("/accounts/" + account.Name) }>{ account.Name }</a></li>
+				}
+			</ul>
+		} else {
+			<p>No accounts found</p>
+		}
+		<a role="button" href="/accounts/new" class="btn">New Account</a>
+	</div>
+}
+
+templ accountPage() {
+	<h1>Dashboard!</h1>
+}
+
+templ accountUsersPage(account string) {
+	<h1>Users</h1>
+	<form hx-post={ "/accounts/" + account + "/userconfig" } hx-target="#user-creds">
+		<label class="label"><span class="label-text">Name</span></label>
+		<input type="text" placeholder="e.g. bob" id="user-name" name="user-name" class="input input-bordered w-full max-w-xs"/>
+		<button type="submit" class="btn">Submit</button>
+		<div id="user-creds" class="whitespace-pre-wrap"></div>
+	</form>
+}
+
+templ accountsNewPage() {
+	<div class="prose prose-a:no-underline mx-auto max-w-7xl px-8 py-8">
+		<h1>New Account</h1>
+		<form hx-post="/accounts"><label class="label"><span class="label-text">Name</span></label><input type="text" placeholder="e.g. team-123" id="account-name" name="account-name" class="input input-bordered w-full max-w-xs"/><button type="submit" class="btn">Submit</button></form>
+	</div>
+}
