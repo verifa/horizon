@@ -22,20 +22,6 @@ func TestAccount(t *testing.T) {
 		hz.WithClientInternal(true),
 		hz.WithClientManager("test"),
 	)
-	// recon := accounts.AccountReconciler{
-	// 	Client:            client,
-	// 	Conn:              ti.Conn,
-	// 	OpKeyPair:         ti.NS.Auth.Operator.SigningKey.KeyPair,
-	// 	RootAccountPubKey: ti.NS.Auth.RootAccount.PublicKey,
-	// }
-	// ctlr, err := hz.StartController(
-	// 	ctx,
-	// 	ti.Conn,
-	// 	hz.WithControllerReconciler(&recon),
-	// 	hz.WithControllerFor(&accounts.Account{}),
-	// )
-	// tu.AssertNoError(t, err)
-	// defer ctlr.Stop()
 
 	account := accounts.Account{
 		ObjectMeta: hz.ObjectMeta{
@@ -56,7 +42,7 @@ func TestAccount(t *testing.T) {
 	watcher, err := hz.StartWatcher(
 		ctx,
 		ti.Conn,
-		hz.WithWatcherForObject(account),
+		hz.WithWatcherFor(account),
 		hz.WithWatcherFn(
 			func(event hz.Event) (hz.Result, error) {
 				t.Log("watch event for account")

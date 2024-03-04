@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -29,7 +28,6 @@ func (s Store) validate(
 		key.ObjectVersion(),
 		key.ObjectKind(),
 	)
-	slog.Info("validate", "subject", subject)
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	reply, err := s.Conn.RequestWithContext(ctx, subject, data)

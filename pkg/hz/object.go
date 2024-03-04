@@ -184,10 +184,10 @@ type ObjectMeta struct {
 	Labels map[string]string `json:"labels,omitempty" cue:",opt"`
 
 	// Revision is the revision number of the object.
-	Revision          *uint64                     `json:"revision,omitempty" cue:"-"`
+	Revision          *uint64                     `json:"revision,omitempty" cue:",opt"`
 	OwnerReferences   []OwnerReference            `json:"ownerReferences,omitempty" cue:",opt"`
 	DeletionTimestamp *Time                       `json:"deletionTimestamp,omitempty" cue:"-"`
-	ManagedFields     managedfields.ManagedFields `json:"managedFields,omitempty" cue:"-"`
+	ManagedFields     managedfields.ManagedFields `json:"managedFields,omitempty" cue:",opt"`
 	// Finalizers are a way for controllers to prevent garbage collection of
 	// objects. The GC will not delete an object unless it has no finalizers.
 	// Hence, it is the responsibility of the controller to remove the
@@ -320,6 +320,13 @@ type Time struct {
 	time.Time
 }
 
+func (t *Time) IsPast() bool {
+	if t == nil {
+		return false
+	}
+	return t.Before(time.Now())
+}
+
 var _ Objecter = (*MetaOnlyObject)(nil)
 
 // MetaOnlyObject is an object that has no spec or status.
@@ -348,5 +355,5 @@ type ObjectList struct {
 }
 
 type TypedObjectList[T Objecter] struct {
-	Items []*T `json:"items,omitempty"`
+	Items []T `json:"items,omitempty"`
 }

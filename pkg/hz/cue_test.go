@@ -81,12 +81,18 @@ func TestCueDefinition(t *testing.T) {
 			labels?: {
 				[string]: string
 			}
+			revision?: uint64
 			ownerReferences?: [...{
 				group:   string
 				version: string
 				kind:    string
 				account: string
 				name:    string
+			}]
+			managedFields?: [...{
+				manager:    =~"^[a-zA-Z0-9-_]+$"
+				fieldsType: =~"^FieldsV1$"
+				fieldsV1: _
 			}]
 			finalizers?: [...string]
 		}

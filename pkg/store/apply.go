@@ -22,17 +22,11 @@ type ApplyRequest struct {
 }
 
 func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
-	// TODO: validate should come once we have merged the object.
-	if err := s.validate(ctx, req.Key, req.Data); err != nil {
-		return &hz.Error{
-			Status: http.StatusBadRequest,
-			Message: fmt.Sprintf(
-				"validating object %q: %s",
-				req.Key,
-				err.Error(),
-			),
-		}
-	}
+	// For apply, do not validate the request data straight away.
+	// An apply might be a patch on an existing object, and as such,
+	// validate the end result.
+	// If apply is a create, it will get validated.
+	// If apply is a patch, validate the merged result.
 
 	// Create managed fields for the request data.
 	fieldsV1, err := managedfields.ManagedFieldsV1(req.Data)
@@ -79,7 +73,11 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 				),
 			}
 		}
-		if err := s.create(ctx, req.Key, bGeneric); err != nil {
+		// Create and validate the object.
+		if err := s.Create(ctx, CreateRequest{
+			Key:  req.Key,
+			Data: bGeneric,
+		}); err != nil {
 			return err
 		}
 		return nil
@@ -179,7 +177,11 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 			),
 		}
 	}
-	if err := s.update(ctx, req.Key, bDst, *generic.Revision); err != nil {
+	if err := s.Update(ctx, UpdateRequest{
+		Data:     bDst,
+		Key:      req.Key,
+		Revision: *generic.Revision,
+	}); err != nil {
 		if errors.Is(err, hz.ErrIncorrectRevision) {
 			return &hz.Error{
 				Status: http.StatusConflict,

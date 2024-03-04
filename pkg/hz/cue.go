@@ -12,6 +12,7 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/format"
+	"github.com/verifa/horizon/pkg/internal/managedfields"
 )
 
 func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
@@ -75,20 +76,6 @@ func cueEncodeStruct(cCtx *cue.Context, t reflect.Type) (cue.Value, error) {
 	// [Time] in the ObjectMeta struct.
 	if t.NumField() == 1 && t.Field(0).Anonymous {
 		return cueEncodeStruct(cCtx, t.Field(0).Type)
-	}
-
-	// Handle special structs.
-	iVal := reflect.New(t).Elem().Interface()
-	if _, ok := iVal.(time.Time); ok {
-		// This was the best attempt at getting formatting for time, but it
-		// involves importing stuff and complicated things a lot right now.
-		// 	importTime := ast.NewImport(nil, "time")
-		// 	vtime := &ast.Ident{Name: "time", Node: importTime}
-		// 	return cCtx.BuildExpr(ast.NewCall(ast.NewSel(vtime, "Format"),
-		// 	ast.NewSel(vtime, "RFC3339"))), nil
-		//
-		// So we just go with string for now.
-		return cCtx.BuildExpr(ast.NewIdent("string")), nil
 	}
 
 	val := cCtx.CompileString("{}")
@@ -167,8 +154,23 @@ func cueEncodeField(
 
 	// Handle special types.
 	iVal := reflect.New(fieldType).Elem().Interface()
-	if _, ok := iVal.(json.RawMessage); ok {
+	switch iVal.(type) {
+	case time.Time:
+		// This was the best attempt at getting formatting for time, but it
+		// involves importing stuff and complicated things a lot right now.
+		// 	importTime := ast.NewImport(nil, "time")
+		// 	vtime := &ast.Ident{Name: "time", Node: importTime}
+		// 	return cCtx.BuildExpr(ast.NewCall(ast.NewSel(vtime, "Format"),
+		// 	ast.NewSel(vtime, "RFC3339"))), nil
+		//
+		// So we just go with string for now.
+		return cCtx.BuildExpr(ast.NewIdent("string")), nil
+	case json.RawMessage:
 		// Use lattice type for raw message.
+		return cCtx.BuildExpr(ast.NewIdent("_")), nil
+	case managedfields.FieldsV1:
+		// Use lattice type for fieldsv1 because it is recursive.
+		// Would be nice to "solve" recursion in the future...
 		return cCtx.BuildExpr(ast.NewIdent("_")), nil
 	}
 

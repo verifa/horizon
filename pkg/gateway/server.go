@@ -20,7 +20,7 @@ import (
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/httplog"
+	"github.com/go-chi/httplog/v2"
 	"github.com/nats-io/nats.go"
 )
 
@@ -29,6 +29,9 @@ var htmxJS []byte
 
 //go:embed dist/htmx-ext-response-targets-1.9.8.js
 var htmxExtResponseTargetsJS []byte
+
+//go:embed dist/htmx-ext-sse-1.9.8.js
+var htmxExtSSEJS []byte
 
 //go:embed dist/_hyperscript-0.9.12.min.js
 var hyperscriptJS []byte
@@ -127,7 +130,7 @@ func (s *Server) start(
 	watcher, err := hz.StartWatcher(
 		ctx,
 		s.Conn,
-		hz.WithWatcherForObject(hz.Portal{}),
+		hz.WithWatcherFor(hz.Portal{}),
 		hz.WithWatcherFn(s.handlePortalEvent),
 	)
 	if err != nil {
@@ -136,12 +139,29 @@ func (s *Server) start(
 	s.watcher = watcher
 
 	logger := httplog.NewLogger("horizon", httplog.Options{
-		JSON:     false,
-		LogLevel: "error",
+		JSON:             false,
+		LogLevel:         slog.LevelInfo,
+		Concise:          true,
+		RequestHeaders:   true,
+		MessageFieldName: "message",
+		// TimeFieldFormat: time.RFC850,
+		QuietDownRoutes: []string{
+			"/",
+			"/ping",
+		},
+		QuietDownPeriod: 10 * time.Second,
 	})
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(httplog.RequestLogger(logger))
+	r.Use(httplog.RequestLogger(
+		logger,
+		[]string{
+			"/dist/tailwind.css",
+			"/dist/htmx.js",
+			"/dist/htmx-ext-response-targets.js",
+			"/dist/htmx-ext-sse.js",
+		}),
+	)
 	r.Use(middleware.Recoverer)
 
 	if !validateOneTrue(
@@ -203,27 +223,16 @@ func (s *Server) start(
 		r.Post("/auth/login", s.handleAuthLogin)
 	})
 
-	r.Group(func(r chi.Router) {
-		// Check account exists and user has permission.
-		r.Use(s.middlewareAccount)
-		r.Get("/accounts/{account}", s.serveAccount)
-		r.Get("/accounts/{account}/users", s.serveAccountUsers)
-		r.Post("/accounts/{account}/users", s.postAccountUsers)
-		r.Post("/accounts/{account}/userconfig", s.postAccountUserConfig)
-		r.Get("/accounts/{account}/{portal}", s.servePortal)
-		r.Get("/accounts/{account}/{portal}/*", s.servePortal)
-		// Actor endpoints triggered by hx-get
-		r.HandleFunc(
-			"/portal/{account}/{portal}",
-			s.handlePortal,
-		)
-		r.HandleFunc(
-			"/portal/{account}/{portal}/*",
-			s.handlePortal,
-		)
-	})
+	accountsHandler := AccountsHandler{
+		Middleware: chi.Middlewares{oidcHandler.authMiddleware},
+		Auth:       s.Auth,
+		Conn:       s.Conn,
+		Portals:    s.portals,
+	}
+	accountsRouter := accountsHandler.Router()
+	r.Mount("/accounts/{account}", accountsRouter)
 
-	objHandler := ObjectHandler{
+	objHandler := ObjectsHandler{
 		Conn: s.Conn,
 	}
 	objRouter := objHandler.router()
@@ -239,6 +248,13 @@ func (s *Server) start(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Add("Content-Type", "text/javascript")
 			w.Write(htmxExtResponseTargetsJS)
+		},
+	)
+	r.Get(
+		"/dist/htmx-ext-sse.js",
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Add("Content-Type", "text/javascript")
+			w.Write(htmxExtSSEJS)
 		},
 	)
 	r.Get(
@@ -262,6 +278,7 @@ func (s *Server) start(
 	}
 
 	srv := http.Server{
+		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadTimeout:       5 * time.Second,
 		WriteTimeout:      5 * time.Second,
 		IdleTimeout:       30 * time.Second,

@@ -13,7 +13,6 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/tidwall/sjson"
 	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/hz"
 )
@@ -312,7 +311,8 @@ func (s Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
 
 // handleInternalMsg handles messages for the internal (unprotected) nats
 // subjects.
-// TODO: internal messages still honour the user's authorization (if present).
+// Even though it is unprotected, some commands (like list) still honour the
+// authz for a user session, if provided.
 func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 	// Parse subject to get details.
 	parts := strings.Split(msg.Subject, ".")
@@ -333,20 +333,11 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 		Name:    parts[subjectIndexName],
 	}
 
-	data, err := removeReadOnlyFields(msg.Data)
-	if err != nil {
-		_ = hz.RespondError(msg, &hz.Error{
-			Status:  http.StatusInternalServerError,
-			Message: "deleting read-only fields: " + err.Error(),
-		})
-		return
-	}
-
 	switch cmd {
 	case StoreCommandCreate:
 		req := CreateRequest{
 			Key:  key,
-			Data: data,
+			Data: msg.Data,
 		}
 		if err := s.Create(ctx, req); err != nil {
 			_ = hz.RespondError(msg, err)
@@ -377,7 +368,7 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			return
 		}
 		req := ApplyRequest{
-			Data:    data,
+			Data:    msg.Data,
 			Manager: manager,
 			Key:     key,
 			Force:   force,
@@ -449,15 +440,4 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 	}
 
 	_ = hz.RespondOK(msg, nil)
-}
-
-func removeReadOnlyFields(data []byte) ([]byte, error) {
-	var errs error
-	var err error
-	data, err = sjson.DeleteBytes(data, "metadata.revision")
-	errs = errors.Join(errs, err)
-	data, err = sjson.DeleteBytes(data, "metadata.managedFields")
-	errs = errors.Join(errs, err)
-
-	return data, errs
 }

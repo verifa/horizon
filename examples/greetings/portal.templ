@@ -1,0 +1,93 @@
+package greetings
+
+import "github.com/verifa/horizon/pkg/hz"
+
+templ (r *PortalRenderer) home() {
+	<div class="prose md:prose-lg lg:prose-xl xl:prose-2xl">
+		<h1>Welcome to the Greetings Extension</h1>
+		<p>
+			The greetings extension is a pointless extension that gives greetings to people.
+			The extension was developed to not speak with strangers and only recognises a few common Finnish names.
+		</p>
+		<p>
+			You can run an action (stateless, synchronous) or create an object (stateful, asynchronous) to get a greeting.
+		</p>
+		<p>
+			Try it out!
+		</p>
+		<h2>Say hello with an action</h2>
+		@r.greetingsActorForm("", nil, nil)
+		<h2>Say hello with an object</h2>
+		@r.greetingsControllerForm("", nil)
+		<table class="table">
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Status</th>
+					<th>Response</th>
+				</tr>
+			</thead>
+			<tbody hx-get={ r.URL() } hx-trigger="load, every 5s, newGreeting from:body" hx-swap="innerHTML"></tbody>
+		</table>
+	</div>
+}
+
+templ (r *PortalRenderer) greetingsActorForm(name string, status *GreetingStatus, err error) {
+	<form hx-post={ r.URL("greet") } hx-swap="outerHTML">
+		<label class="label">
+			<span class="label-text">Name</span>
+		</label>
+		<input type="text" name="name" placeholder="Say hello to..." value={ name } class="input input-bordered w-full max-w-xs"/>
+		<button type="submit" class="btn">Say Hello</button>
+		if status != nil {
+			if status.Ready {
+				<p class="text-success">{ status.Response }</p>
+			} else {
+				<p class="text-warning">{ status.FailureMessage }</p>
+			}
+		}
+		if err != nil {
+			<p class="text-error">{ "Error: " + err.Error() }</p>
+		}
+	</form>
+}
+
+templ (r *PortalRenderer) greetingsControllerForm(name string, err error) {
+	<form hx-post={ r.URL() } hx-swap="outerHTML">
+		<label class="label">
+			<span class="label-text">Name</span>
+		</label>
+		<input type="text" name="name" placeholder="Say hello to..." value={ name } class={ "input input-bordered w-full max-w-xs", templ.KV("input-error", err != nil) }/>
+		<button type="submit" class="btn">Say Hello</button>
+		if err != nil {
+			<p class="text-error">{ "Error: "+ err.Error() }</p>
+		}
+	</form>
+}
+
+templ (r *PortalRenderer) greetingsTable(greetings []Greeting) {
+	if len(greetings) == 0 {
+		<tr>
+			<td colSpan="3" class="text-center">No greetings yet</td>
+		</tr>
+	}
+	for _, greeting := range greetings {
+		<tr id={ hz.KeyFromObject(greeting) }>
+			<td>{ greeting.ObjectMeta.Name }</td>
+			if greeting.Status == nil {
+				<td>Not ready</td>
+				<td>N/A</td>
+			} else {
+				<td>{ readyString(greeting.Status.Ready) }</td>
+				<td>{ greeting.Status.Response }</td>
+			}
+		</tr>
+	}
+}
+
+func readyString(ready bool) string {
+	if ready {
+		return "Ready"
+	}
+	return "Not ready"
+}

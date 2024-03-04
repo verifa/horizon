@@ -16,6 +16,7 @@ templ layout(title string, userInfo *auth.UserInfo, body templ.Component) {
 			<title>{ title }</title>
 			<script src="/dist/htmx.js"></script>
 			<script src="/dist/htmx-ext-response-targets.js"></script>
+			<script src="/dist/htmx-ext-sse.js"></script>
 			<script src="/dist/_hyperscript.js"></script>
 			<link href="/dist/tailwind.css" rel="stylesheet"/>
 		</head>
@@ -54,9 +55,9 @@ templ accountLayout(account string, portals map[string]hz.Portal, body templ.Com
 					</a>
 				</li>
 				<hr class="my-2"/>
-				for name, ext := range portals {
+				for _, ext := range portals {
 					<li>
-						<a href={ templ.URL("/accounts/" + account + "/" + name) }>
+						<a href={ templ.URL("/accounts/" + account + "/" + ext.ObjectMeta.Name) }>
 							@iconRender(ext.Spec.Icon)
 							{ ext.Spec.DisplayName }
 						</a>
@@ -78,7 +79,7 @@ templ nav(userInfo *auth.UserInfo) {
 	</div>
 }
 
-templ accountsPage(accounts []*accounts.Account) {
+templ accountsPage(accounts []accounts.Account) {
 	<div class="prose prose-a:no-underline mx-auto max-w-7xl px-8 py-8">
 		<h1>Accounts</h1>
 		if len(accounts) > 0 {
@@ -117,9 +118,9 @@ templ accountsNewPage() {
 
 templ actorProxyPage(account string, actor string, subpath string) {
 	if subpath == "" {
-		<div hx-get={ fmt.Sprintf("/actors/%s/%s", account, actor) } hx-trigger="load"><span class="loading loading-infinity loading-lg"></span></div>
+		<div hx-get={ fmt.Sprintf("/accounts/%s/%s", account, actor) } hx-headers='{"HZ-Portal-Load-Request": "true"}' hx-trigger="load" hx-swap="outerHTML"><span class="loading loading-infinity loading-lg"></span></div>
 	} else {
-		<div hx-get={ fmt.Sprintf("/actors/%s/%s/%s", account, actor, subpath) } hx-trigger="load"><span class="loading loading-infinity loading-lg"></span></div>
+		<div hx-get={ fmt.Sprintf("/accounts/%s/%s/%s", account, actor, subpath) } hx-headers='{"HZ-Portal-Load-Request": "true"}' hx-trigger="load" hx-swap="outerHTML"><span class="loading loading-infinity loading-lg"></span></div>
 	}
 }
 

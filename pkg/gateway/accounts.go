@@ -2,9 +2,10 @@ package gateway
 
 import (
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httputil"
+	"strings"
 
 	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/extensions/accounts"
@@ -12,16 +13,36 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/nats-io/jwt/v2"
+	"github.com/nats-io/nats.go"
 )
 
-func (s *Server) middlewareAccount(next http.Handler) http.Handler {
+type AccountsHandler struct {
+	Middleware chi.Middlewares
+	Conn       *nats.Conn
+	Auth       *auth.Auth
+	Portals    map[string]hz.Portal
+}
+
+func (h *AccountsHandler) Router() *chi.Mux {
+	r := chi.NewRouter()
+	r.Use(h.Middleware...)
+	r.Use(h.middlewareAccount)
+	r.Get("/", h.getAccount)
+	r.Get("/users", h.serveAccountUsers)
+	r.Post("/userconfig", h.postAccountUserConfig)
+	r.HandleFunc("/{portal}", h.servePortal)
+	r.HandleFunc("/{portal}/*", h.servePortal)
+	return r
+}
+
+func (h *AccountsHandler) middlewareAccount(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		account := chi.URLParam(r, "account")
 		if account == "" {
 			http.Error(w, "account not found", http.StatusNotFound)
 			return
 		}
-		ok, err := s.Auth.Check(r.Context(), auth.CheckRequest{
+		ok, err := h.Auth.Check(r.Context(), auth.CheckRequest{
 			Session: hz.SessionFromRequest(r),
 			Verb:    auth.VerbRead,
 			Object: hz.ObjectKey{
@@ -41,7 +62,7 @@ func (s *Server) middlewareAccount(next http.Handler) http.Handler {
 			return
 		}
 		client := hz.Client{
-			Conn:    s.Conn,
+			Conn:    h.Conn,
 			Session: hz.SessionFromRequest(r),
 		}
 		if _, err := client.Get(r.Context(), hz.WithGetKey(hz.ObjectKey{
@@ -59,66 +80,32 @@ func (s *Server) middlewareAccount(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) serveAccount(w http.ResponseWriter, r *http.Request) {
+func (h *AccountsHandler) getAccount(w http.ResponseWriter, r *http.Request) {
 	userInfo, ok := r.Context().Value(authContext).(auth.UserInfo)
 	if !ok {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return
 	}
 	account := chi.URLParam(r, "account")
-	body := accountLayout(account, s.portals, accountPage())
+	body := accountLayout(account, h.Portals, accountPage())
 	layout("Account", &userInfo, body).Render(r.Context(), w)
 }
 
-func (s *Server) serveAccountUsers(w http.ResponseWriter, r *http.Request) {
+func (h *AccountsHandler) serveAccountUsers(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	userInfo, ok := r.Context().Value(authContext).(auth.UserInfo)
 	if !ok {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return
 	}
 	account := chi.URLParam(r, "account")
-	body := accountLayout(account, s.portals, accountUsersPage(account))
+	body := accountLayout(account, h.Portals, accountUsersPage(account))
 	layout("Users", &userInfo, body).Render(r.Context(), w)
 }
 
-func (s *Server) postAccountUsers(
-	w http.ResponseWriter,
-	r *http.Request,
-) {
-	// TODO: should we use accounts.User here?
-	// Would be easy, what about double account??
-	// This starts to lean heavily on RBAC implementation.
-	account := chi.URLParam(r, "account")
-	user := accounts.User{
-		ObjectMeta: hz.ObjectMeta{
-			Name:    "TODO",
-			Account: account,
-		},
-	}
-	client := hz.Client{
-		Conn:    s.Conn,
-		Session: hz.SessionFromRequest(r),
-	}
-	userClient := hz.ObjectClient[accounts.User]{Client: client}
-	reply, err := userClient.Run(
-		r.Context(),
-		&accounts.UserCreateAction{},
-		user,
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	b, err := json.Marshal(reply)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Add("Content-Type", "application/json")
-	w.Write(b)
-}
-
-func (s *Server) postAccountUserConfig(
+func (h *AccountsHandler) postAccountUserConfig(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
@@ -130,13 +117,8 @@ func (s *Server) postAccountUserConfig(
 			Account: account,
 		},
 	}
-	fmt.Println("")
-	fmt.Println("")
-	fmt.Println("user: ", user)
-	fmt.Println("")
-	fmt.Println("")
 	client := hz.Client{
-		Conn:    s.Conn,
+		Conn:    h.Conn,
 		Session: hz.SessionFromRequest(r),
 	}
 	userClient := hz.ObjectClient[accounts.User]{Client: client}
@@ -146,7 +128,7 @@ func (s *Server) postAccountUserConfig(
 		user,
 	)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpError(w, err)
 		return
 	}
 	creds, err := jwt.FormatUserConfig(
@@ -158,4 +140,55 @@ func (s *Server) postAccountUserConfig(
 		return
 	}
 	w.Write(creds)
+}
+
+func (h *AccountsHandler) servePortal(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	userInfo, ok := r.Context().Value(authContext).(auth.UserInfo)
+	if !ok {
+		http.Error(w, "no auth context", http.StatusUnauthorized)
+		return
+	}
+
+	account := chi.URLParam(r, "account")
+	portal := chi.URLParam(r, "portal")
+	subpath := chi.URLParam(r, "*")
+
+	// If the request accepts text/event-stream it is an SSE connection request.
+	// SSE connection requests should be handled by the portal.
+	isEventStream := r.Header.Get("Accept") == "text/event-stream"
+	// If the request is an HX request, it should be handled by the portal.
+	isHXRequest := r.Header.Get("HX-Request") == "true"
+	isHZPortalLoad := r.Header.Get("HZ-Portal-Load-Request") == "true"
+
+	if isHXRequest || isEventStream {
+		if isHZPortalLoad {
+			r.Header.Del("HX-Request")
+			r.Header.Del("HZ-Portal-Load-Request")
+		}
+		proxy := httputil.ReverseProxy{}
+		proxy.Rewrite = func(req *httputil.ProxyRequest) {
+			// Remove prefix from the request URL.
+			prefix := fmt.Sprintf("/accounts/%s/%s", account, portal)
+			req.Out.URL.Path = strings.TrimPrefix(req.Out.URL.Path, prefix)
+			req.Out.Header.Set(hz.RequestAccount, account)
+			req.Out.Header.Set(hz.RequestPortal, portal)
+			req.SetXForwarded()
+		}
+		proxy.Transport = &NATSHTTPTransport{
+			conn:    h.Conn,
+			subject: fmt.Sprintf(hz.SubjectPortalRender, portal),
+			account: account,
+		}
+		proxy.ServeHTTP(w, r)
+		return
+	}
+	body := accountLayout(
+		account,
+		h.Portals,
+		actorProxyPage(account, portal, subpath),
+	)
+	layout(portal, &userInfo, body).Render(r.Context(), w)
 }

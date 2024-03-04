@@ -18,6 +18,7 @@ type CreateRequest struct {
 func (s Store) Create(ctx context.Context, req CreateRequest) error {
 	// Check if the object already exists and return a meaningful error.
 	if _, err := s.kv.Get(ctx, hz.KeyFromObject(req.Key)); err != nil {
+		// If we get a non ErrKeyNotFound error, something went wrong...
 		if !errors.Is(err, jetstream.ErrKeyNotFound) {
 			return &hz.Error{
 				Status: http.StatusInternalServerError,
@@ -28,14 +29,11 @@ func (s Store) Create(ctx context.Context, req CreateRequest) error {
 			}
 		}
 		if err := s.validate(ctx, req.Key, req.Data); err != nil {
-			return &hz.Error{
-				Status: http.StatusBadRequest,
-				Message: fmt.Sprintf(
-					"validating object %q: %s",
-					req.Key,
-					err.Error(),
-				),
-			}
+			return hz.ErrorWrap(
+				err,
+				http.StatusInternalServerError,
+				fmt.Sprintf("validating object: %q", req.Key),
+			)
 		}
 		return s.create(ctx, req.Key, req.Data)
 	}

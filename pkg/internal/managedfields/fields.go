@@ -34,9 +34,9 @@ type FieldManager struct {
 	Manager string `json:"manager" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
 	// FieldsType is the type of fields that are managed.
 	// Only supported type is right now is "FieldsV1".
-	FieldsType FieldsType `json:"fieldsType" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
+	FieldsType FieldsType `json:"fieldsType" cue:"=~\"^FieldsV1$\""`
 	// FieldsV1 is the actual fields that are managed.
-	FieldsV1 FieldsV1 `json:"fieldsV1"`
+	FieldsV1 FieldsV1 `json:"fieldsV1" cue:""`
 }
 
 // FieldsV1 is the actual fields that are managed.

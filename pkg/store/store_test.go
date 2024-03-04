@@ -211,7 +211,7 @@ func runTest(
 				watcher, err := hz.StartWatcher(
 					ctx,
 					st.Conn,
-					hz.WithWatcherForObject(expObj),
+					hz.WithWatcherFor(expObj),
 					hz.WithWatcherFn(func(event hz.Event) (hz.Result, error) {
 						if event.Operation == hz.EventOperationPurge {
 							close(done)

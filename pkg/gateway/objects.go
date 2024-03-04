@@ -10,11 +10,11 @@ import (
 	"github.com/verifa/horizon/pkg/hz"
 )
 
-type ObjectHandler struct {
+type ObjectsHandler struct {
 	Conn *nats.Conn
 }
 
-func (o *ObjectHandler) router() *chi.Mux {
+func (o *ObjectsHandler) router() *chi.Mux {
 	r := chi.NewRouter()
 	r.Get("/", o.get)
 	r.Post("/", o.create)
@@ -23,7 +23,7 @@ func (o *ObjectHandler) router() *chi.Mux {
 	return r
 }
 
-func (o *ObjectHandler) create(w http.ResponseWriter, r *http.Request) {
+func (o *ObjectsHandler) create(w http.ResponseWriter, r *http.Request) {
 	client := hz.NewClient(o.Conn, hz.WithClientSessionFromRequest(r))
 	var obj hz.GenericObject
 	if err := json.NewDecoder(r.Body).Decode(&obj); err != nil {
@@ -41,7 +41,7 @@ func (o *ObjectHandler) create(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (o *ObjectHandler) get(w http.ResponseWriter, r *http.Request) {
+func (o *ObjectsHandler) get(w http.ResponseWriter, r *http.Request) {
 	key := hz.ObjectKey{
 		Group:   r.URL.Query().Get("group"),
 		Version: r.URL.Query().Get("version"),
@@ -64,7 +64,7 @@ func (o *ObjectHandler) get(w http.ResponseWriter, r *http.Request) {
 	w.Write(resp.Bytes())
 }
 
-func (o *ObjectHandler) apply(w http.ResponseWriter, r *http.Request) {
+func (o *ObjectsHandler) apply(w http.ResponseWriter, r *http.Request) {
 	manager := r.Header.Get(hz.HeaderApplyFieldManager)
 	client := hz.NewClient(
 		o.Conn,
@@ -87,7 +87,7 @@ func (o *ObjectHandler) apply(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (o *ObjectHandler) delete(w http.ResponseWriter, r *http.Request) {
+func (o *ObjectsHandler) delete(w http.ResponseWriter, r *http.Request) {
 	key := hz.ObjectKey{
 		Group:   chi.URLParam(r, "group"),
 		Version: chi.URLParam(r, "version"),

@@ -12,13 +12,18 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+const (
+	RequestPortal  = "HZ-Request-Portal"
+	RequestAccount = "HZ-Request-Account"
+)
+
 var _ Objecter = (*Portal)(nil)
 
 type Portal struct {
-	ObjectMeta `json:"metadata,omitempty"`
+	ObjectMeta `json:"metadata,omitempty" cue:""`
 
-	Spec   PortalSpec   `json:"spec,omitempty"`
-	Status PortalStatus `json:"status,omitempty"`
+	Spec   *PortalSpec   `json:"spec,omitempty" cue:""`
+	Status *PortalStatus `json:"status,omitempty" cue:",opt"`
 }
 
 func (e Portal) ObjectVersion() string {
@@ -47,7 +52,7 @@ func StartPortal(
 	handler http.Handler,
 ) (*PortalHandler, error) {
 	e := PortalHandler{
-		nc:      nc,
+		conn:    nc,
 		ext:     ext,
 		handler: handler,
 	}
@@ -66,7 +71,7 @@ func StartPortal(
 // PortalHandler is a NATS to HTTP proxy handler for a portal extension.
 // It subscribes to NATS and proxies the requests to the given handler.
 type PortalHandler struct {
-	nc      *nats.Conn
+	conn    *nats.Conn
 	ext     Portal
 	handler http.Handler
 
@@ -77,7 +82,8 @@ type PortalHandler struct {
 // and then subscribes to NATS to handle the requests.
 func (e *PortalHandler) Start(ctx context.Context) error {
 	client := NewClient(
-		e.nc,
+		e.conn,
+		WithClientInternal(true),
 		WithClientManager("TODO"),
 	)
 	extClient := ObjectClient[Portal]{Client: client}
@@ -87,8 +93,8 @@ func (e *PortalHandler) Start(ctx context.Context) error {
 	}
 
 	// Subscribe to nats to receive http requests and proxy them to the handler.
-	subject := fmt.Sprintf(ActorSubjectHTTPRender, e.ext.Name)
-	sub, err := e.nc.QueueSubscribe(
+	subject := fmt.Sprintf(SubjectPortalRender, e.ext.Name)
+	sub, err := e.conn.QueueSubscribe(
 		subject,
 		e.ext.Name,
 		func(msg *nats.Msg) {
@@ -110,17 +116,15 @@ func (e *PortalHandler) Start(ctx context.Context) error {
 					return
 				}
 			}
-			rr := ResponseRecorder{}
-			e.handler.ServeHTTP(&rr, req)
-			bResp, err := rr.Response()
-			if err != nil {
-				slog.Error("getting response", "error", err)
-				return
+			outReq := req.WithContext(ctx)
+			rr := NATSResponseWriter{
+				conn:    e.conn,
+				subject: msg.Reply,
 			}
-			if err := msg.Respond(bResp); err != nil {
-				slog.Error("responding", "error", err)
-				return
-			}
+			go func() {
+				defer rr.Flush()
+				e.handler.ServeHTTP(&rr, outReq)
+			}()
 		},
 	)
 	if err != nil {

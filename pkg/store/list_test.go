@@ -12,9 +12,6 @@ import (
 )
 
 var cmpOptIgnoreMetaRevision = cmp.FilterPath(func(p cmp.Path) bool {
-	if len(p) != 4 {
-		return false
-	}
 	return p.Last().String() == ".Revision" &&
 		p.Last().Type() == reflect.TypeOf(new(uint64))
 }, cmp.Ignore())
@@ -64,6 +61,6 @@ func TestList(t *testing.T) {
 	objs, err = client.List(ctx)
 	tu.AssertNoError(t, err)
 	tu.AssertEqual(t, 2, len(objs))
-	tu.AssertEqual(t, &obj1, objs[0], cmpOptIgnoreMetaRevision)
-	tu.AssertEqual(t, &obj2, objs[1], cmpOptIgnoreMetaRevision)
+	tu.AssertEqual(t, obj1, objs[0], cmpOptIgnoreMetaRevision)
+	tu.AssertEqual(t, obj2, objs[1], cmpOptIgnoreMetaRevision)
 }

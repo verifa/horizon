@@ -14,8 +14,6 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-const ActorSubjectHTTPRender = "actor.%s.http.render"
-
 type Actioner interface {
 	Action() string
 }

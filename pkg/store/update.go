@@ -17,6 +17,13 @@ type UpdateRequest struct {
 }
 
 func (s Store) Update(ctx context.Context, req UpdateRequest) error {
+	if err := s.validate(ctx, req.Key, req.Data); err != nil {
+		return hz.ErrorWrap(
+			err,
+			http.StatusInternalServerError,
+			fmt.Sprintf("validating object: %q", req.Key),
+		)
+	}
 	return s.update(ctx, req.Key, req.Data, req.Revision)
 }
 

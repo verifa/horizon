@@ -24,7 +24,7 @@ func (gc *GarbageCollector) Start(ctx context.Context) error {
 		ctx,
 		gc.Conn,
 		// Watch all objects.
-		hz.WithWatcherForObject(hz.ObjectKey{}),
+		hz.WithWatcherFor(hz.ObjectKey{}),
 		hz.WithWatcherDurable("horizon-garbage-collector"),
 		hz.WithWatcherFn(func(event hz.Event) (hz.Result, error) {
 			return gc.garbageCollect(ctx, event)

@@ -14,7 +14,7 @@ import (
 
 type WatcherOption func(*watcherOptions)
 
-func WithWatcherForObject(obj ObjectKeyer) WatcherOption {
+func WithWatcherFor(obj ObjectKeyer) WatcherOption {
 	return func(o *watcherOptions) {
 		o.forObject = obj
 	}
@@ -48,6 +48,13 @@ func WithWatcherCh(ch chan Event) WatcherOption {
 	}
 }
 
+func WithWatcherFromNow() WatcherOption {
+	return func(o *watcherOptions) {
+		now := time.Now()
+		o.startTime = &now
+	}
+}
+
 type watcherOptions struct {
 	forObject ObjectKeyer
 	durable   string
@@ -55,6 +62,7 @@ type watcherOptions struct {
 	fn        func(event Event) (Result, error)
 	ch        chan Event
 	backoff   time.Duration
+	startTime *time.Time
 }
 
 var defaultWatcherOptions = watcherOptions{
@@ -133,12 +141,19 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 		w.isInit = true
 		close(w.Init)
 	}
+
+	deliverPolicy := jetstream.DeliverLastPerSubjectPolicy
+	if opt.startTime != nil {
+		deliverPolicy = jetstream.DeliverByStartTimePolicy
+	}
 	con, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 		Description:    "Watcher for " + KeyFromObject(opt.forObject),
 		AckPolicy:      jetstream.AckExplicitPolicy,
-		DeliverPolicy:  jetstream.DeliverLastPerSubjectPolicy,
+		DeliverPolicy:  deliverPolicy,
+		OptStartTime:   opt.startTime,
 		FilterSubjects: []string{subject},
 		MaxAckPending:  -1,
+
 		// AckWait specifies how long a consumer waits before considering a
 		// message delivered to a consumer as lost.
 		// Hence, the consumer needs to ack/nak or mark the msg as in progress

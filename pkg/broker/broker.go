@@ -115,25 +115,6 @@ func (b *Broker) handleAPIMessage(ctx context.Context, msg *nats.Msg) {
 }
 
 func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
-	var runMsg hz.RunMsg
-	if err := json.Unmarshal(msg.Data, &runMsg); err != nil {
-		_ = hz.RespondError(msg, &hz.Error{
-			Status:  http.StatusBadRequest,
-			Message: fmt.Sprintf("unmarshalling run message: %s", err.Error()),
-		})
-		return
-	}
-	adMsg := hz.AdvertiseMsg{
-		LabelSelector: runMsg.LabelSelector,
-	}
-	bAdMsg, err := json.Marshal(adMsg)
-	if err != nil {
-		_ = hz.RespondError(msg, &hz.Error{
-			Status:  http.StatusInternalServerError,
-			Message: fmt.Sprintf("marshal advertise message: %s", err.Error()),
-		})
-		return
-	}
 	tokens := strings.Split(msg.Subject, ".")
 	if len(tokens) != hz.SubjectInternalBrokerLength {
 		_ = hz.RespondError(msg, &hz.Error{
@@ -151,6 +132,27 @@ func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
 		Name:    tokens[hz.SubjectInternalBrokerIndexName],
 	}
 	action := tokens[hz.SubjectInternalBrokerIndexAction]
+
+	var runMsg hz.RunMsg
+	if err := json.Unmarshal(msg.Data, &runMsg); err != nil {
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusBadRequest,
+			Message: fmt.Sprintf("unmarshalling run message: %s", err.Error()),
+		})
+		return
+	}
+
+	adMsg := hz.AdvertiseMsg{
+		LabelSelector: runMsg.LabelSelector,
+	}
+	bAdMsg, err := json.Marshal(adMsg)
+	if err != nil {
+		_ = hz.RespondError(msg, &hz.Error{
+			Status:  http.StatusInternalServerError,
+			Message: fmt.Sprintf("marshal advertise message: %s", err.Error()),
+		})
+		return
+	}
 
 	advertiseSubject := fmt.Sprintf(
 		hz.SubjectActorAdvertiseFmt,

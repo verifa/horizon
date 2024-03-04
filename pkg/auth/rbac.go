@@ -66,7 +66,7 @@ func (r *RBAC) Start(ctx context.Context) error {
 	roleWatcher, err := hz.StartWatcher(
 		ctx,
 		r.Conn,
-		hz.WithWatcherForObject(Role{}),
+		hz.WithWatcherFor(Role{}),
 		hz.WithWatcherCh(r.eventCh),
 	)
 	if err != nil {
@@ -79,7 +79,7 @@ func (r *RBAC) Start(ctx context.Context) error {
 	roleBindingWatcher, err := hz.StartWatcher(
 		ctx,
 		r.Conn,
-		hz.WithWatcherForObject(RoleBinding{}),
+		hz.WithWatcherFor(RoleBinding{}),
 		hz.WithWatcherCh(r.eventCh),
 	)
 	if err != nil {

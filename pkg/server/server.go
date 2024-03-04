@@ -25,6 +25,7 @@ func WithDevMode() ServerOption {
 
 		o.runAccountsController = true
 		o.runUsersActor = true
+		o.runPortalController = true
 	}
 }
 
@@ -125,6 +126,7 @@ type serverOptions struct {
 	runGateway            bool
 	runAccountsController bool
 	runUsersActor         bool
+	runPortalController   bool
 
 	natsOptions               []natsutil.ServerOption
 	authOptions               []auth.Option
@@ -142,6 +144,7 @@ type Server struct {
 	Store        *store.Store
 	Gateway      *gateway.Server
 	CtlrAccounts *hz.Controller
+	CltrPortals  *hz.Controller
 	ActorUsers   *hz.Actor[accounts.User]
 }
 
@@ -171,7 +174,7 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 			return fmt.Errorf("creating nats server: %w", err)
 		}
 		if err := ts.StartUntilReady(); err != nil {
-			return fmt.Errorf("starting test server: %w", err)
+			return fmt.Errorf("starting nats server: %w", err)
 		}
 		if err := ts.PublishRootAccount(); err != nil {
 			return fmt.Errorf("publishing root horizon account: %w", err)
@@ -279,6 +282,18 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		s.ActorUsers = userActor
 	}
 
+	if opt.runPortalController {
+		ctlr, err := hz.StartController(
+			ctx,
+			s.Conn,
+			hz.WithControllerFor(hz.Portal{}),
+		)
+		if err != nil {
+			return fmt.Errorf("starting portal controller: %w", err)
+		}
+		s.CltrPortals = ctlr
+	}
+
 	// Check that the root account exists as an object.
 	// This is a little bit fidgety, because the root account *will* exist in
 	// NATS, but we want it to exist as a horizon object in the store.
@@ -295,6 +310,11 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 
 func (s *Server) Close() error {
 	var errs error
+	if s.CltrPortals != nil {
+		if err := s.CltrPortals.Stop(); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
 	if s.CtlrAccounts != nil {
 		if err := s.CtlrAccounts.Stop(); err != nil {
 			errs = errors.Join(errs, err)

@@ -7,16 +7,16 @@ var _ hz.Objecter = (*Greeting)(nil)
 type Greeting struct {
 	hz.ObjectMeta `json:"metadata"`
 
-	Spec   GreetingSpec   `json:"spec"`
-	Status GreetingStatus `json:"status"`
-}
-
-func (s Greeting) ObjectVersion() string {
-	return "v1"
+	Spec   *GreetingSpec   `json:"spec,omitempty"`
+	Status *GreetingStatus `json:"status,omitempty"`
 }
 
 func (s Greeting) ObjectGroup() string {
 	return "hz-examples"
+}
+
+func (s Greeting) ObjectVersion() string {
+	return "v1"
 }
 
 func (s Greeting) ObjectKind() string {
@@ -33,6 +33,8 @@ type GreetingStatus struct {
 	Phase          StatusPhase `json:"phase"`
 	FailureReason  string      `json:"failureReason"`
 	FailureMessage string      `json:"failureMessage"`
+
+	Response string `json:"response,omitempty"`
 }
 
 type StatusPhase string

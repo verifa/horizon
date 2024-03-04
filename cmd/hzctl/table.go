@@ -26,8 +26,9 @@ func printObject(object hz.GenericObject) error {
 	buf.WriteString("meta:\n")
 	buf.WriteString(fmt.Sprintf("\taccount: %s\n", object.Account))
 	buf.WriteString(fmt.Sprintf("\tname: %s\n", object.Name))
+	oMF, _ := json.MarshalIndent(object.ManagedFields, "\t", "  ")
 	buf.WriteString(
-		fmt.Sprintf("\tmanagedFields: %s\n", object.ManagedFields),
+		fmt.Sprintf("\tmanagedFields: %s\n", oMF),
 	)
 	buf.WriteString(fmt.Sprintf("\tlabels: %s\n", object.Labels))
 	buf.WriteString("spec:\n")

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -83,6 +82,8 @@ const (
 	SubjectCtlrValidate = "HZ.internal.controller.validate.%s.%s.%s"
 )
 
+const SubjectPortalRender = "HZ.internal.portal.%s.http.render"
+
 const (
 	// Format: store.<cmd>.<group>.<version>.<kind>
 	SubjectStoreSchema   = "store.schema.%s.%s.%s"
@@ -149,7 +150,7 @@ func (oc ObjectClient[T]) Get(
 func (oc ObjectClient[T]) List(
 	ctx context.Context,
 	opts ...ListOption,
-) ([]*T, error) {
+) ([]T, error) {
 	opt := listOption{}
 	for _, o := range opts {
 		o(&opt)
@@ -246,6 +247,12 @@ func WithClientSession(session string) ClientOption {
 func WithClientSessionFromRequest(req *http.Request) ClientOption {
 	return func(co *clientOpts) {
 		co.session = SessionFromRequest(req)
+	}
+}
+
+func WithClientDefaultManager() ClientOption {
+	return func(co *clientOpts) {
+		co.manager = "hzctl"
 	}
 }
 
@@ -927,7 +934,7 @@ func (c *Client) Run(
 	if action == "" {
 		return nil, fmt.Errorf("run: action required")
 	}
-	subject := c.SubjectPrefix() + fmt.Sprintf(
+	msg := nats.NewMsg(c.SubjectPrefix() + fmt.Sprintf(
 		SubjectBrokerRun,
 		key.ObjectGroup(),
 		key.ObjectVersion(),
@@ -935,7 +942,8 @@ func (c *Client) Run(
 		key.ObjectAccount(),
 		key.ObjectName(),
 		action,
-	)
+	))
+	msg.Header.Set(HeaderAuthorization, c.Session)
 
 	runMsg := RunMsg{
 		Timeout:       ro.timeout,
@@ -946,10 +954,10 @@ func (c *Client) Run(
 	if err != nil {
 		return nil, fmt.Errorf("marshalling run message: %w", err)
 	}
-	slog.Info("run", "subject", subject)
+	msg.Data = bRunMsg
 	ctx, cancel := context.WithTimeout(ctx, ro.timeout)
 	defer cancel()
-	reply, err := c.Conn.RequestWithContext(ctx, subject, bRunMsg)
+	reply, err := c.Conn.RequestMsgWithContext(ctx, msg)
 	if err != nil {
 		switch {
 		case errors.Is(err, nats.ErrNoResponders):
