@@ -182,13 +182,17 @@ func (h *AccountsHandler) servePortal(
 			subject: fmt.Sprintf(hz.SubjectPortalRender, portal),
 			account: account,
 		}
+		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			w.WriteHeader(http.StatusOK)
+			_ = portalError(err).Render(r.Context(), w)
+		}
 		proxy.ServeHTTP(w, r)
 		return
 	}
 	body := accountLayout(
 		account,
 		h.Portals,
-		actorProxyPage(account, portal, subpath),
+		portalProxy(account, portal, subpath),
 	)
 	layout(portal, &userInfo, body).Render(r.Context(), w)
 }

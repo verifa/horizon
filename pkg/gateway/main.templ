@@ -116,7 +116,7 @@ templ accountsNewPage() {
 	</div>
 }
 
-templ actorProxyPage(account string, actor string, subpath string) {
+templ portalProxy(account string, actor string, subpath string) {
 	if subpath == "" {
 		<div hx-get={ fmt.Sprintf("/accounts/%s/%s", account, actor) } hx-headers='{"HZ-Portal-Load-Request": "true"}' hx-trigger="load" hx-swap="outerHTML"><span class="loading loading-infinity loading-lg"></span></div>
 	} else {
@@ -128,5 +128,12 @@ templ loggedOutPage() {
 	<div class="prose prose-a:no-underline mx-auto max-w-7xl px-8 py-8">
 		<h1>Logged out</h1>
 		<p>You have been logged out.</p>
+	</div>
+}
+
+templ portalError(err error) {
+	<div class="max-w-none prose md:prose-lg lg:prose-xl xl:prose-2xl">
+		<h1>Error</h1>
+		<pre>{ err.Error() }</pre>
 	</div>
 }
