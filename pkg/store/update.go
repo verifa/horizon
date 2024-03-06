@@ -43,6 +43,16 @@ func (s Store) update(
 			),
 		}
 	}
+	data, err = removeReadOnlyFields(data)
+	if err != nil {
+		return &hz.Error{
+			Status: http.StatusInternalServerError,
+			Message: fmt.Sprintf(
+				"removing read-only fields: %s",
+				err.Error(),
+			),
+		}
+	}
 	if _, err := s.kv.Update(ctx, rawKey, data, revision); err != nil {
 		if isErrWrongLastSequence(err) {
 			return hz.ErrIncorrectRevision

@@ -13,6 +13,7 @@ import (
 
 type deleteCmdOptions struct {
 	filename string
+	key      string
 }
 
 var deleteOpts deleteCmdOptions
@@ -39,18 +40,31 @@ to quickly create a Cobra application.`,
 			)
 		}
 
-		if deleteOpts.filename == "" {
-			return fmt.Errorf("filename is required")
-		}
+		clientDeleteOpts := []hz.HTTPDeleteOption{}
+		if deleteOpts.filename != "" {
+			yData, err := os.ReadFile(deleteOpts.filename)
+			if err != nil {
+				return fmt.Errorf("open file: %w", err)
+			}
 
-		yData, err := os.ReadFile(deleteOpts.filename)
-		if err != nil {
-			return fmt.Errorf("open file: %w", err)
+			jData, err := yaml.YAMLToJSONStrict(yData)
+			if err != nil {
+				return fmt.Errorf("convert yaml to json: %w", err)
+			}
+			clientDeleteOpts = append(
+				clientDeleteOpts,
+				hz.WithHTTPDeleteData(jData),
+			)
 		}
-
-		jData, err := yaml.YAMLToJSONStrict(yData)
-		if err != nil {
-			return fmt.Errorf("convert yaml to json: %w", err)
+		if deleteOpts.key != "" {
+			objKey, err := hz.ObjectKeyFromString(deleteOpts.key)
+			if err != nil {
+				return fmt.Errorf("parse key: %w", err)
+			}
+			clientDeleteOpts = append(
+				clientDeleteOpts,
+				hz.WithHTTPDeleteKey(objKey),
+			)
 		}
 
 		client := hz.HTTPClient{
@@ -60,7 +74,7 @@ to quickly create a Cobra application.`,
 		}
 
 		ctx := context.Background()
-		if err := client.Delete(ctx, hz.WithHTTPDeleteData(jData)); err != nil {
+		if err := client.Delete(ctx, clientDeleteOpts...); err != nil {
 			return fmt.Errorf("delete: %w", err)
 		}
 
@@ -78,5 +92,12 @@ func init() {
 		"f",
 		"",
 		"Filename to delete",
+	)
+	flags.StringVarP(
+		&deleteOpts.key,
+		"key",
+		"k",
+		"",
+		"Key to delete",
 	)
 }

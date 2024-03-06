@@ -13,6 +13,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/tidwall/sjson"
 	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/hz"
 )
@@ -440,4 +441,8 @@ func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 	}
 
 	_ = hz.RespondOK(msg, nil)
+}
+
+func removeReadOnlyFields(data []byte) ([]byte, error) {
+	return sjson.DeleteBytes(data, "metadata.revision")
 }

@@ -13,11 +13,9 @@ import (
 )
 
 func main() {
-	// TODO: get NATS credentials and server information.
 	if err := run(); err != nil {
 		slog.Error("running", "error", err)
 		os.Exit(1)
-
 	}
 }
 

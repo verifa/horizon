@@ -228,7 +228,7 @@ func (w *Watcher) Start(ctx context.Context, opts ...WatcherOption) error {
 			}
 		}
 		rawKey := keyFromMsgSubject(kv, msg)
-		key, err := objectKeyFromKey(rawKey)
+		key, err := ObjectKeyFromString(rawKey)
 		if err != nil {
 			slog.Error(
 				"parsing key from subject",
@@ -312,17 +312,17 @@ type EventResult struct {
 	Err    error
 }
 
-type EventOperation int
+type EventOperation string
 
 const (
 	// EventOperationPut indicates that the object has been created or updated.
-	EventOperationPut EventOperation = iota
+	EventOperationPut EventOperation = "put"
 	// EventOperationDelete indicates that the object has been marked for
 	// deletion by setting the metadata.deletionTimestamp field.
 	// It does not mean that the deleteionTimestamp has been reached yet,
 	// so the deletionTimestamp may be in the future.
-	EventOperationDelete
+	EventOperationDelete EventOperation = "delete"
 	// EventOperationPurge indicates that the object no longer exists in the kv
 	// store.
-	EventOperationPurge
+	EventOperationPurge EventOperation = "purge"
 )

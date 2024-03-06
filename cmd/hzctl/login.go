@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"os"
 
@@ -36,10 +35,6 @@ to quickly create a Cobra application.`,
 		if err != nil {
 			return err
 		}
-		creds := base64.StdEncoding.EncodeToString(
-			[]byte(resp.Credentials),
-		)
-		hCtx.Credentials = &creds
 		hCtx.Session = &resp.Session
 		config.Add(hCtx)
 		f, err := os.Create(configFile)

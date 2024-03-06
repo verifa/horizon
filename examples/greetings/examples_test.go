@@ -112,7 +112,7 @@ func TestGreeting(t *testing.T) {
 
 	select {
 	case <-timeout:
-		t.Fatal("timed out waiting for account")
+		t.Fatal("timed out waiting for greeting")
 	case <-done:
 	}
 }

@@ -56,12 +56,12 @@ func (gc *GarbageCollector) garbageCollect(
 	if err := json.Unmarshal(event.Data, &obj); err != nil {
 		return hz.Result{}, fmt.Errorf("unmarshal object: %w", err)
 	}
-	// Double check the object has a deletion timestamp.
-	if obj.ObjectMeta.DeletionTimestamp == nil {
+	// If the object has no deletion timestamp, it's not ready to be deleted.
+	if obj.DeletionTimestamp == nil {
 		return hz.Result{}, nil
 	}
-	// Check that timestamp has expired... so we don't delete prematurely.
-	if obj.ObjectMeta.DeletionTimestamp.After(time.Now()) {
+	// Check the deletion is due. If not, reschedule for when it is.
+	if !obj.ObjectMeta.DeletionTimestamp.IsPast() {
 		// If the deletion timestamp has not expired yet, requeue the event
 		// to be processed once it has.
 		return hz.Result{
@@ -77,11 +77,9 @@ func (gc *GarbageCollector) garbageCollect(
 		}, nil
 	}
 	if result == DeleteResultFinalizers {
-		// If the object still has finalizers, requeue the event to be processed
-		// again later.
-		return hz.Result{
-			RequeueAfter: time.Second * 5,
-		}, nil
+		// If the object still has finalizers, ACK and we will try again when
+		// the object is updated.
+		return hz.Result{}, nil
 	}
 
 	return hz.Result{}, nil
@@ -91,8 +89,17 @@ func (gc *GarbageCollector) deleteObjectCascading(
 	ctx context.Context,
 	obj hz.MetaOnlyObject,
 ) (DeleteResult, error) {
+	slog.Info(
+		"CASCADING DELETE",
+		"key",
+		hz.KeyFromObject(obj),
+		// "revision",
+		// *obj.ObjectMeta.Revision,
+		"finalizers",
+		obj.Finalizers,
+	)
 	// If the object has finalizers, it's not ready to be deleted.
-	if len(obj.ObjectMeta.Finalizers) > 0 {
+	if obj.ObjectMeta.Finalizers != nil && len(*obj.ObjectMeta.Finalizers) > 0 {
 		return DeleteResultFinalizers, nil
 	}
 	// Check any child objects and delete those first.

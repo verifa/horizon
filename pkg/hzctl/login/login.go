@@ -23,8 +23,7 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Session     string
-	Credentials string
+	Session string
 }
 
 func Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
@@ -92,15 +91,9 @@ func (l *loginHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	userConfig, err := postNewUser(l.baseURL, sessionCookie)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	// Write response to channel.
 	resp := LoginResponse{
-		Session:     sessionCookie.Value,
-		Credentials: string(userConfig),
+		Session: sessionCookie.Value,
 	}
 	l.resp <- resp
 	_ = layout(

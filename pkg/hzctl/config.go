@@ -14,10 +14,9 @@ type Config struct {
 type Context struct {
 	Name string `json:"name,omitempty"`
 
-	URL         string  `json:"url,omitempty"`
-	Account     *string `json:"account,omitempty"`
-	Credentials *string `json:"credentials,omitempty"`
-	Session     *string `json:"session,omitempty"`
+	URL     string  `json:"url,omitempty"`
+	Account *string `json:"account,omitempty"`
+	Session *string `json:"session,omitempty"`
 }
 
 type ValidateOption func(*validateOptions)
@@ -46,14 +45,8 @@ func (c *Context) Validate(opts ...ValidateOption) error {
 	if c.URL == "" {
 		errs = errors.Join(errs, fmt.Errorf("context url is required"))
 	}
-	// if c.Account == nil {
-	// 	errs = errors.Join(errs, fmt.Errorf("context account is required"))
-	// }
 	if vOpts.hasSession && c.Session == nil {
 		errs = errors.Join(errs, fmt.Errorf("context session is required"))
-	}
-	if vOpts.hasCredentials && c.Credentials == nil {
-		errs = errors.Join(errs, fmt.Errorf("context credentials is required"))
 	}
 	return errs
 }

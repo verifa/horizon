@@ -89,6 +89,7 @@ func TestCueDefinition(t *testing.T) {
 				account: string
 				name:    string
 			}]
+			deletionTimestamp?: string
 			managedFields?: [...{
 				manager:    =~"^[a-zA-Z0-9-_]+$"
 				fieldsType: =~"^FieldsV1$"

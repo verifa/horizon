@@ -288,7 +288,6 @@ func (c *Controller) startReconciler(
 		return fmt.Errorf("create for consumer: %w", err)
 	}
 	cc, err := con.Consume(func(msg jetstream.Msg) {
-		slog.Info("consumer", "subject", msg.Subject())
 		kvop := opFromMsg(msg)
 		if kvop == jetstream.KeyValueDelete {
 			// If the operation is a KV delete, then the value has been
@@ -419,7 +418,6 @@ func (c *Controller) handleControlLoop(
 	msg jetstream.Msg,
 	ttl time.Duration,
 ) {
-	slog.Info("control loop", "key", key)
 	// Check that the message is the last message for the subject.
 	// If not, we don't care about it and want to avoid acquiring the lock.
 	isLast, err := isLastMsg(ctx, kv, msg)
@@ -441,7 +439,7 @@ func (c *Controller) handleControlLoop(
 		return
 	}
 	// Get the object key from the nats subject / kv key.
-	objKey, err := objectKeyFromKey(key)
+	objKey, err := ObjectKeyFromString(key)
 	if err != nil {
 		slog.Error("getting object key from key", "key", key, "error", err)
 		_ = msg.NakWithDelay(time.Second)
@@ -496,6 +494,7 @@ func (c *Controller) handleControlLoop(
 		defer cancel()
 		reconcileResult, reconcileErr = reconciler.Reconcile(ctx, req)
 	}
+	slog.Info("reconciling object", "key", key)
 	go reconcile()
 
 	// Setup an auto-ticker for the message, which keeps the message alive and
@@ -527,8 +526,6 @@ func (c *Controller) handleControlLoop(
 		}
 		slog.Error(
 			"reconcile",
-			"subject",
-			msg.Subject(),
 			"key",
 			req.Key,
 			"backoff",

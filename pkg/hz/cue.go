@@ -12,6 +12,7 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/format"
+	"github.com/google/uuid"
 	"github.com/verifa/horizon/pkg/internal/managedfields"
 )
 
@@ -155,7 +156,7 @@ func cueEncodeField(
 	// Handle special types.
 	iVal := reflect.New(fieldType).Elem().Interface()
 	switch iVal.(type) {
-	case time.Time:
+	case Time, time.Time:
 		// This was the best attempt at getting formatting for time, but it
 		// involves importing stuff and complicated things a lot right now.
 		// 	importTime := ast.NewImport(nil, "time")
@@ -168,6 +169,8 @@ func cueEncodeField(
 	case json.RawMessage:
 		// Use lattice type for raw message.
 		return cCtx.BuildExpr(ast.NewIdent("_")), nil
+	case uuid.UUID:
+		return cCtx.BuildExpr(ast.NewIdent("string")), nil
 	case managedfields.FieldsV1:
 		// Use lattice type for fieldsv1 because it is recursive.
 		// Would be nice to "solve" recursion in the future...

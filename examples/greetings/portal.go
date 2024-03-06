@@ -33,7 +33,7 @@ type PortalHandler struct {
 
 func (h *PortalHandler) Router() *chi.Mux {
 	r := chi.NewRouter()
-	logger := httplog.NewLogger("horizon", httplog.Options{
+	logger := httplog.NewLogger("portal-greetings", httplog.Options{
 		JSON:             false,
 		LogLevel:         slog.LevelInfo,
 		Concise:          true,

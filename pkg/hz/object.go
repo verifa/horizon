@@ -97,7 +97,7 @@ func KeyFromObjectStrict(obj ObjectKeyer) (string, error) {
 	return KeyFromObject(obj), nil
 }
 
-func objectKeyFromKey(key string) (ObjectKey, error) {
+func ObjectKeyFromString(key string) (ObjectKey, error) {
 	parts := strings.Split(key, ".")
 	if len(parts) != 5 {
 		return ObjectKey{}, fmt.Errorf("invalid key: %q", key)
@@ -185,15 +185,19 @@ type ObjectMeta struct {
 
 	// Revision is the revision number of the object.
 	Revision          *uint64                     `json:"revision,omitempty" cue:",opt"`
-	OwnerReferences   []OwnerReference            `json:"ownerReferences,omitempty" cue:",opt"`
-	DeletionTimestamp *Time                       `json:"deletionTimestamp,omitempty" cue:"-"`
+	OwnerReferences   OwnerReferences             `json:"ownerReferences,omitempty" cue:",opt"`
+	DeletionTimestamp *Time                       `json:"deletionTimestamp,omitempty" cue:",opt"`
 	ManagedFields     managedfields.ManagedFields `json:"managedFields,omitempty" cue:",opt"`
 	// Finalizers are a way for controllers to prevent garbage collection of
 	// objects. The GC will not delete an object unless it has no finalizers.
 	// Hence, it is the responsibility of the controller to remove the
 	// finalizers once the object has been marked for deletion (by setting the
 	// deletionTimestamp).
-	Finalizers []string `json:"finalizers,omitempty" cue:",opt"`
+	//
+	// Use type alias to "correctly" marshal to json.
+	// A nil Finalizers is omitted from JSON.
+	// A non-nil Finalizers is marshalled as an empty array if it is empty.
+	Finalizers *Finalizers `json:"finalizers,omitempty" cue:",opt"`
 }
 
 func (o ObjectMeta) ObjectName() string {
@@ -265,14 +269,25 @@ func (t TypeMeta) ObjectVersion() string {
 	return parts[1]
 }
 
-func OwnerReferenceFromObject(object Objecter) *OwnerReference {
-	return &OwnerReference{
+func OwnerReferenceFromObject(object Objecter) OwnerReference {
+	return OwnerReference{
 		Group:   object.ObjectGroup(),
 		Version: object.ObjectVersion(),
 		Kind:    object.ObjectKind(),
 		Name:    object.ObjectName(),
 		Account: object.ObjectAccount(),
 	}
+}
+
+type OwnerReferences []OwnerReference
+
+func (o OwnerReferences) IsOwnedBy(obj Objecter) bool {
+	for _, owner := range o {
+		if owner.IsOwnedBy(obj) {
+			return true
+		}
+	}
+	return false
 }
 
 var _ ObjectKeyer = (*OwnerReference)(nil)
@@ -325,6 +340,29 @@ func (t *Time) IsPast() bool {
 		return false
 	}
 	return t.Before(time.Now())
+}
+
+// Finalizers are a way to prevent garbage collection of objects until a
+// controller has finished some cleanup logic.
+type Finalizers []string
+
+func (f *Finalizers) Contains(finalizer string) bool {
+	if f == nil {
+		return false
+	}
+	for _, s := range *f {
+		if s == finalizer {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *Finalizers) String() string {
+	if f == nil {
+		return ""
+	}
+	return strings.Join(*f, ",")
 }
 
 var _ Objecter = (*MetaOnlyObject)(nil)

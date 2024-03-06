@@ -183,9 +183,23 @@ func (h *AccountsHandler) servePortal(
 			account: account,
 		}
 		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			// NOTE: this only handles errors returned from the proxy.
+			// I.e. if an HTTP response is received, then it is not considered
+			// an error.
 			w.WriteHeader(http.StatusOK)
 			_ = portalError(err).Render(r.Context(), w)
 		}
+		// This is one idea to handle errors returned from portals.
+		// Ideally portals should only return 2xx status codes, as per the
+		// HATEOS way of handling things.
+		// https://htmx.org/essays/hateoas/
+		// proxy.ModifyResponse = func(resp *http.Response) error {
+		// 	// Modify the response if the status code is not 2xx.
+		// 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// 		// Modify the response here to be 2xx for HTMX to render it.
+		// 	}
+		// 	return nil
+		// }
 		proxy.ServeHTTP(w, r)
 		return
 	}
