@@ -1,0 +1,1 @@
+{"project":{"name":"test-project","description":"Test project","visibility":"private","version_control":"Git","work_item_template":"Basic"},"azure_subscription":{"id":"12749df0-9a8e-44cd-889e-4740be851c13","name":"verifa-main"},"azuread_application":{"client_id":"2a57f5af-ba13-481d-a17a-425c16dec0a6","tenant_id":"449f7bd6-b339-4333-8b85-cd0b8fc37aa6"}}

@@ -27,3 +27,12 @@ node_modules
 
 # NATS creds file
 *.creds
+
+# Terraform
+.terraform
+# .tfstate files
+*.tfstate
+*.tfstate.*
+# Var files
+*.tfvars
+*.tfvars.json

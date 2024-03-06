@@ -1,0 +1,232 @@
+package azuredevops
+
+import "github.com/verifa/horizon/examples/azuredevops/project"
+import "github.com/verifa/horizon/examples/azuredevops/agentpool"
+import "fmt"
+import "github.com/verifa/horizon/examples/azuredevops/vmss"
+
+templ (r *PortalRenderer) home(projects []project.Project) {
+	<div class="prose md:prose-lg lg:prose-xl xl:prose-2xl">
+		<h1>Azure DevOps</h1>
+		<h2>Projects for account { r.Account }</h2>
+		if len(projects) == 0 {
+			<p>No projects found</p>
+		} else {
+			<ul>
+				for _, p := range projects {
+					<li>
+						<a href={ r.URLSafe("projects", p.Name) }>{ p.Name }</a>
+					</li>
+				}
+			</ul>
+		}
+		<a href={ r.URLSafe("projects", "new") } class="btn">New project</a>
+	</div>
+}
+
+templ (r *PortalRenderer) newProject() {
+	<div class="prose md:prose-lg lg:prose-xl xl:prose-2xl">
+		<h1>Create a new Azure DevOps project</h1>
+		@r.newProjectForm("", nil)
+	</div>
+}
+
+templ (r *PortalRenderer) newProjectForm(name string, err error) {
+	<form hx-post={ r.URL("projects") } hx-swap="outerHTML">
+		<label class="label">
+			<span class="label-text">Name</span>
+		</label>
+		<input
+			type="text"
+			name="project-name"
+			placeholder="e.g. team-123"
+			value={ name }
+			class={ "input input-bordered w-full max-w-xs", templ.KV("input-error", err != nil) }
+		/>
+		<button type="submit" class="btn">Submit</button>
+		if err != nil {
+			<p class="text-error">{ "Error: "+ err.Error() }</p>
+		}
+	</form>
+}
+
+templ (r *PortalRenderer) project(p project.Project) {
+	<div class="prose md:prose-lg lg:prose-xl xl:prose-2xl">
+		<h1>Project: { p.Name }</h1>
+		<h2>Agent pools</h2>
+		<table class="table">
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Status</th>
+					<th>VMSS</th>
+				</tr>
+			</thead>
+			<tbody
+				hx-get={ r.URL("projects", p.Name) }
+				hx-headers='{"HZ-Agent-Pools": "true"}'
+				hx-trigger="load, every 5s"
+				hx-swap="innerHTML"
+			></tbody>
+		</table>
+		<a href={ r.URLSafe("projects", p.Name, "agentpools", "new") } class="btn">New Agent Pool</a>
+		<h2>VM Scale Sets</h2>
+		<table class="table">
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Location</th>
+					<th>ID</th>
+				</tr>
+			</thead>
+			<tbody
+				hx-get={ r.URL("projects", p.Name) }
+				hx-headers='{"HZ-VM-Scale-Sets": "true"}'
+				hx-trigger="load, every 5s"
+				hx-swap="innerHTML"
+			></tbody>
+		</table>
+		<a href={ r.URLSafe("projects", p.Name, "vmscalesets", "new") } class="btn">New Scale Set</a>
+	</div>
+}
+
+templ (r *PortalRenderer) agentPoolsTable(agentPools []agentpool.AgentPool) {
+	if len(agentPools) == 0 {
+		<tr>
+			<td colSpan="3" class="text-center">No agents</td>
+		</tr>
+	}
+	for _, agentPool := range agentPools {
+		<tr>
+			<td>{ agentPool.ObjectMeta.Name }</td>
+			if agentPool.Status == nil {
+				<td>Not ready</td>
+				<td>N/A</td>
+			} else {
+				<td>{ fmt.Sprintf("%t", agentPool.Status.Ready) }</td>
+				<td>{ agentPool.Spec.VMScaleSetRef.Name }</td>
+			}
+		</tr>
+	}
+}
+
+templ (r *PortalRenderer) vmScaleSetsTable(vmScaleSets []vmss.VMScaleSet) {
+	if len(vmScaleSets) == 0 {
+		<tr>
+			<td colSpan="3" class="text-center">No VM scale sets</td>
+		</tr>
+	}
+	for _, scaleSet := range vmScaleSets {
+		<tr>
+			<td>{ scaleSet.ObjectMeta.Name }</td>
+			if scaleSet.Status == nil {
+				<td>Not ready</td>
+				<td>N/A</td>
+			} else {
+				<td>{ scaleSet.Spec.Location }</td>
+				<td>{ scaleSet.Status.ID }</td>
+			}
+		</tr>
+	}
+}
+
+templ (r *PortalRenderer) newProjectVMScaleSet(project project.Project) {
+	<div class="prose md:prose-lg lg:prose-xl xl:prose-2xl">
+		<h1>New VM Scale Set for Project { project.Name }</h1>
+		@r.newProjectVMScaleSetForm(project, vmss.VMScaleSet{
+			Spec: &vmss.VMScaleSetSpec{},
+		}, nil)
+	</div>
+}
+
+templ (r *PortalRenderer) newProjectVMScaleSetForm(project project.Project, scaleSet vmss.VMScaleSet, err error) {
+	<form hx-post={ r.URL("projects", project.Name, "vmscalesets") } hx-swap="outerHTML">
+		<label class="label">
+			<span class="label-text">Name</span>
+			<input
+				type="text"
+				name="name"
+				placeholder="e.g. team-123"
+				value={ scaleSet.Name }
+				class="input input-bordered w-full max-w-xs"
+			/>
+		</label>
+		<label class="label">
+			<span class="label-text">Location</span>
+			<select
+				name="location"
+				value={ scaleSet.Spec.Location }
+				class="select select-bordered w-full max-w-xs"
+			>
+				<option value="swedencentral">swedencentral</option>
+			</select>
+		</label>
+		<label class="label">
+			<span class="label-text">Resource Group Name</span>
+			<select
+				name="resource-group-name"
+				value={ scaleSet.Spec.ResourceGroupName }
+				class="select select-bordered w-full max-w-xs"
+			>
+				<option value="rg-default">rg-default</option>
+			</select>
+		</label>
+		<label class="label">
+			<span class="label-text">VMSize</span>
+			<select
+				name="vm-size"
+				value={ scaleSet.Spec.VMSize }
+				class="select select-bordered w-full max-w-xs"
+			>
+				<option value="Standard_DS1_v2">Standard_DS1_v2</option>
+			</select>
+		</label>
+		<button type="submit" class="btn">Submit</button>
+		if err != nil {
+			<p class="text-error">{ "Error: "+ err.Error() }</p>
+		}
+	</form>
+}
+
+templ (r *PortalRenderer) newProjectAgentPool(project project.Project, scaleSets []vmss.VMScaleSet) {
+	<div class="prose md:prose-lg lg:prose-xl xl:prose-2xl">
+		<h1>New Agent Pool for Project { project.Name }</h1>
+		@r.newProjectAgentPoolForm(project, agentpool.AgentPool{
+			Spec: &agentpool.AgentPoolSpec{},
+		}, scaleSets, nil)
+	</div>
+}
+
+templ (r *PortalRenderer) newProjectAgentPoolForm(project project.Project, agentPool agentpool.AgentPool, vmScaleSets []vmss.VMScaleSet, err error) {
+	<form hx-post={ r.URL("projects", project.Name, "agentpools") } hx-swap="outerHTML">
+		<label class="label">
+			<span class="label-text">Name</span>
+			<input
+				type="text"
+				name="name"
+				placeholder="e.g. team-123"
+				value={ agentPool.Name }
+				class="input input-bordered w-full max-w-xs"
+			/>
+		</label>
+		<label class="label">
+			<span class="label-text">VMScaleSetRef</span>
+			<select
+				name="vm-scaleset-ref"
+				value={ agentPool.Spec.VMScaleSetRef.Name }
+				class="select select-bordered w-full max-w-xs"
+			>
+				// TODO: fetch VMScaleSets with hx-get, not passed in as an argument.
+				for _, scaleSet := range vmScaleSets {
+					<option value={ scaleSet.ObjectMeta.Name }>{ scaleSet.ObjectMeta.Name }</option>
+				}
+			</select>
+		</label>
+		// ProjectID/Ref is needed.
+		// ServiceConnectionID/Ref is needed.
+		<button type="submit" class="btn">Submit</button>
+		if err != nil {
+			<p class="text-error">{ "Error: "+ err.Error() }</p>
+		}
+	</form>
+}
