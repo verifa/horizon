@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/verifa/horizon/pkg/hz"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -18,32 +18,16 @@ const (
 )
 
 func printObject(object hz.GenericObject) error {
-	buf := bytes.Buffer{}
-	buf.WriteString(
-		fmt.Sprintf("apiVersion: %s\n", object.APIVersion),
-	)
-	buf.WriteString(fmt.Sprintf("kind: %s\n", object.Kind))
-	buf.WriteString("meta:\n")
-	buf.WriteString(fmt.Sprintf("\taccount: %s\n", object.Account))
-	buf.WriteString(fmt.Sprintf("\tname: %s\n", object.Name))
-	oMF, _ := json.MarshalIndent(object.ManagedFields, "\t", "  ")
-	buf.WriteString(
-		fmt.Sprintf("\tmanagedFields: %s\n", oMF),
-	)
-	buf.WriteString(fmt.Sprintf("\tfinalizers: %s\n", object.Finalizers))
-	buf.WriteString(fmt.Sprintf("\tlabels: %s\n", object.Labels))
-	buf.WriteString("spec:\n")
-	if err := json.Indent(&buf, object.Spec, "", "  "); err != nil {
-		return fmt.Errorf("formatting spec: %w", err)
+	jb, err := json.Marshal(object)
+	if err != nil {
+		return fmt.Errorf("marshalling object: %w", err)
 	}
-	buf.WriteString("\n\n")
-	buf.WriteString("status:\n")
-	if object.Status != nil {
-		if err := json.Indent(&buf, object.Status, "", "  "); err != nil {
-			return fmt.Errorf("formatting status: %w", err)
-		}
+	yb, err := yaml.JSONToYAML(jb)
+	if err != nil {
+		return fmt.Errorf("converting to yaml: %w", err)
 	}
-	fmt.Println(buf.String())
+
+	fmt.Println(string(yb))
 	return nil
 }
 

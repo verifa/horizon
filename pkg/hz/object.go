@@ -376,12 +376,56 @@ type MetaOnlyObject struct {
 
 var _ Objecter = (*GenericObject)(nil)
 
+// GenericObject represents a generic object, containing the type and object
+// meta, and also a body.
+// GenericObject does not care what the body is, but it stores it so that you
+// can unmarshal objects as a GenericObject, perform operations on the metadata
+// and marshal back to JSON with the full body.
+//
+// If you only want to unmarshal and get the type or object meta, use
+// [MetaOnlyObject] instead.
 type GenericObject struct {
 	TypeMeta   `json:",inline"`
 	ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   json.RawMessage `json:"spec,omitempty"`
-	Status json.RawMessage `json:"status,omitempty"`
+	Remaining map[string]json.RawMessage `json:"-"`
+}
+
+// MarhsalJSON marshals the object to JSON.
+func (g GenericObject) MarshalJSON() ([]byte, error) {
+	objMap := map[string]interface{}{}
+	for k, v := range g.Remaining {
+		objMap[k] = v
+	}
+
+	// Marshal the object into JSON and unmarshal it into the object map.
+	// This might not be the most efficient but feels safer than modifying the
+	// map manually.
+	type genAlias GenericObject
+	obj := genAlias(g)
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &objMap); err != nil {
+		return nil, err
+	}
+
+	return json.Marshal(objMap)
+}
+
+func (g *GenericObject) UnmarshalJSON(data []byte) error {
+	type genAlias GenericObject
+	var obj genAlias
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, &obj.Remaining); err != nil {
+		return err
+	}
+
+	*g = GenericObject(obj)
+	return nil
 }
 
 type GenericObjectList struct {

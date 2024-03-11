@@ -9,6 +9,8 @@ import (
 	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/broker"
 	"github.com/verifa/horizon/pkg/extensions/accounts"
+	"github.com/verifa/horizon/pkg/extensions/secrets"
+	"github.com/verifa/horizon/pkg/extensions/serviceaccounts"
 	"github.com/verifa/horizon/pkg/gateway"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/natsutil"
@@ -23,7 +25,9 @@ func WithDevMode() ServerOption {
 		o.runStore = true
 		o.runGateway = true
 
+		o.runSecretsController = true
 		o.runAccountsController = true
+		o.runServiceAccountsController = true
 		o.runUsersActor = true
 		o.runPortalController = true
 	}
@@ -119,14 +123,17 @@ type ServerOption func(*serverOptions)
 type serverOptions struct {
 	conn *nats.Conn
 
-	runNATSServer         bool
-	runAuth               bool
-	runBroker             bool
-	runStore              bool
-	runGateway            bool
-	runAccountsController bool
-	runUsersActor         bool
-	runPortalController   bool
+	runNATSServer bool
+	runAuth       bool
+	runBroker     bool
+	runStore      bool
+	runGateway    bool
+
+	runSecretsController         bool
+	runAccountsController        bool
+	runServiceAccountsController bool
+	runUsersActor                bool
+	runPortalController          bool
 
 	natsOptions               []natsutil.ServerOption
 	authOptions               []auth.Option
@@ -138,14 +145,17 @@ type serverOptions struct {
 type Server struct {
 	Conn *nats.Conn
 
-	NS           *natsutil.Server
-	Auth         *auth.Auth
-	Broker       *broker.Broker
-	Store        *store.Store
-	Gateway      *gateway.Server
-	CtlrAccounts *hz.Controller
-	CltrPortals  *hz.Controller
-	ActorUsers   *hz.Actor[accounts.User]
+	NS      *natsutil.Server
+	Auth    *auth.Auth
+	Broker  *broker.Broker
+	Store   *store.Store
+	Gateway *gateway.Server
+
+	CtlrSecrets         *hz.Controller
+	CtlrAccounts        *hz.Controller
+	CtlrServiceAccounts *hz.Controller
+	CltrPortals         *hz.Controller
+	ActorUsers          *hz.Actor[accounts.User]
 }
 
 func Start(
@@ -237,6 +247,18 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		}
 		s.Gateway = gw
 	}
+
+	if opt.runSecretsController {
+		ctlr, err := hz.StartController(
+			ctx,
+			s.Conn,
+			hz.WithControllerFor(secrets.Secret{}),
+		)
+		if err != nil {
+			return fmt.Errorf("starting secrets controller: %w", err)
+		}
+		s.CtlrSecrets = ctlr
+	}
 	if opt.runAccountsController {
 		recon := accounts.AccountReconciler{
 			Client: hz.NewClient(
@@ -262,6 +284,25 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 			return fmt.Errorf("starting accounts controller: %w", err)
 		}
 		s.CtlrAccounts = ctlr
+	}
+	if opt.runServiceAccountsController {
+		recon := serviceaccounts.Reconciler{
+			Client: hz.NewClient(
+				s.Conn,
+				hz.WithClientInternal(true),
+				hz.WithClientManager(serviceaccounts.FieldManager),
+			),
+		}
+		ctlr, err := hz.StartController(
+			ctx,
+			s.Conn,
+			hz.WithControllerFor(serviceaccounts.ServiceAccount{}),
+			hz.WithControllerReconciler(&recon),
+		)
+		if err != nil {
+			return fmt.Errorf("starting service accounts controller: %w", err)
+		}
+		s.CtlrServiceAccounts = ctlr
 	}
 
 	if opt.runUsersActor {
