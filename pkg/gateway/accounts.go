@@ -3,16 +3,17 @@ package gateway
 import (
 	_ "embed"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"strings"
 
 	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/extensions/accounts"
+	"github.com/verifa/horizon/pkg/extensions/serviceaccounts"
 	"github.com/verifa/horizon/pkg/hz"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats.go"
 )
 
@@ -28,10 +29,11 @@ func (h *AccountsHandler) Router() *chi.Mux {
 	r.Use(h.Middleware...)
 	r.Use(h.middlewareAccount)
 	r.Get("/", h.getAccount)
-	r.Get("/users", h.serveAccountUsers)
-	r.Post("/userconfig", h.postAccountUserConfig)
-	r.HandleFunc("/{portal}", h.servePortal)
-	r.HandleFunc("/{portal}/*", h.servePortal)
+	r.Get("/serviceaccounts", h.getServiceAccounts)
+	r.Post("/serviceaccounts", h.postServiceAccounts)
+	r.Delete("/serviceaccounts/{name}", h.deleteServiceAccounts)
+	r.HandleFunc("/portal/{portal}", h.servePortal)
+	r.HandleFunc("/portal/{portal}/*", h.servePortal)
 	return r
 }
 
@@ -91,7 +93,7 @@ func (h *AccountsHandler) getAccount(w http.ResponseWriter, r *http.Request) {
 	layout("Account", &userInfo, body).Render(r.Context(), w)
 }
 
-func (h *AccountsHandler) serveAccountUsers(
+func (h *AccountsHandler) getServiceAccounts(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
@@ -101,45 +103,76 @@ func (h *AccountsHandler) serveAccountUsers(
 		return
 	}
 	account := chi.URLParam(r, "account")
-	body := accountLayout(account, h.Portals, accountUsersPage(account))
-	layout("Users", &userInfo, body).Render(r.Context(), w)
+
+	if r.Header.Get("HX-Request") == "true" {
+		client := hz.NewClient(h.Conn, hz.WithClientSessionFromRequest(r))
+		saClient := hz.ObjectClient[serviceaccounts.ServiceAccount]{
+			Client: client,
+		}
+		svAccs, err := saClient.List(r.Context())
+		if err != nil {
+			httpError(w, err)
+			return
+		}
+		_ = serviceAccountsTableBody(account, svAccs).Render(r.Context(), w)
+		return
+	}
+	body := accountLayout(
+		hz.RootAccount,
+		h.Portals,
+		serviceAccountsPage(account),
+	)
+	layout("Service Accounts", &userInfo, body).Render(r.Context(), w)
 }
 
-func (h *AccountsHandler) postAccountUserConfig(
+func (h *AccountsHandler) postServiceAccounts(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
 	account := chi.URLParam(r, "account")
-	name := r.FormValue("user-name")
-	user := accounts.User{
+	name := r.FormValue("serviceaccount-name")
+	sa := serviceaccounts.ServiceAccount{
 		ObjectMeta: hz.ObjectMeta{
 			Name:    name,
 			Account: account,
 		},
 	}
-	client := hz.Client{
-		Conn:    h.Conn,
-		Session: hz.SessionFromRequest(r),
+	slog.Info("creating service account", "account", account, "name", name)
+	client := hz.NewClient(h.Conn, hz.WithClientSessionFromRequest(r))
+	if err := client.Create(r.Context(), hz.WithCreateObject(sa)); err != nil {
+		_ = serviceAccountsForm(account, sa, err).Render(r.Context(), w)
+		return
 	}
-	userClient := hz.ObjectClient[accounts.User]{Client: client}
-	reply, err := userClient.Run(
-		r.Context(),
-		&accounts.UserCreateAction{},
-		user,
-	)
-	if err != nil {
+	w.Header().Add("HX-Trigger", "loadServiceAccounts")
+	w.WriteHeader(http.StatusCreated)
+	_ = serviceAccountsForm(
+		account,
+		serviceaccounts.ServiceAccount{},
+		nil,
+	).Render(r.Context(), w)
+}
+
+func (h *AccountsHandler) deleteServiceAccounts(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	account := chi.URLParam(r, "account")
+	name := chi.URLParam(r, "name")
+	sa := serviceaccounts.ServiceAccount{
+		ObjectMeta: hz.ObjectMeta{
+			Name:    name,
+			Account: account,
+		},
+	}
+	slog.Info("deleting service account", "account", account, "name", name)
+	client := hz.NewClient(h.Conn, hz.WithClientSessionFromRequest(r))
+	if err := client.Delete(r.Context(), hz.WithDeleteObject(sa)); err != nil {
+		slog.Error("error deleting service account", "error", err)
 		httpError(w, err)
 		return
 	}
-	creds, err := jwt.FormatUserConfig(
-		reply.Status.JWT,
-		[]byte(reply.Status.Seed),
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Write(creds)
+	w.Header().Add("HX-Trigger", "loadServiceAccounts")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *AccountsHandler) servePortal(
@@ -171,7 +204,7 @@ func (h *AccountsHandler) servePortal(
 		proxy := httputil.ReverseProxy{}
 		proxy.Rewrite = func(req *httputil.ProxyRequest) {
 			// Remove prefix from the request URL.
-			prefix := fmt.Sprintf("/accounts/%s/%s", account, portal)
+			prefix := fmt.Sprintf("/accounts/%s/portal/%s", account, portal)
 			req.Out.URL.Path = strings.TrimPrefix(req.Out.URL.Path, prefix)
 			req.Out.Header.Set(hz.RequestAccount, account)
 			req.Out.Header.Set(hz.RequestPortal, portal)

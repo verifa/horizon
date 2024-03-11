@@ -159,7 +159,7 @@ type PortalRenderer struct {
 }
 
 func (r *PortalRenderer) URL(steps ...string) string {
-	base := fmt.Sprintf("/accounts/%s/%s", r.Account, r.Portal)
+	base := fmt.Sprintf("/accounts/%s/portal/%s", r.Account, r.Portal)
 	path := append([]string{base}, steps...)
 	return strings.Join(path, "/")
 }

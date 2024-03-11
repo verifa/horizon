@@ -28,6 +28,26 @@ type ObjectKeyer interface {
 	ObjectName() string
 }
 
+func validateKeyStrict(key ObjectKeyer) error {
+	var errs error
+	if key.ObjectGroup() == "" {
+		errs = errors.Join(errs, fmt.Errorf("group is required"))
+	}
+	if key.ObjectVersion() == "" {
+		errs = errors.Join(errs, fmt.Errorf("version is required"))
+	}
+	if key.ObjectKind() == "" {
+		errs = errors.Join(errs, fmt.Errorf("kind is required"))
+	}
+	if key.ObjectAccount() == "" {
+		errs = errors.Join(errs, fmt.Errorf("account is required"))
+	}
+	if key.ObjectName() == "" {
+		errs = errors.Join(errs, fmt.Errorf("name is required"))
+	}
+	return errs
+}
+
 // KeyFromObject takes an ObjectKeyer and returns a string key.
 // Any empty fields in the ObjectKeyer are replaced with "*" which works well
 // for nats subjects to list objects.

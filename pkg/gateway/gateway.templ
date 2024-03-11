@@ -48,15 +48,15 @@ templ accountLayout(account string, portals map[string]hz.Portal, body templ.Com
 					</a>
 				</li>
 				<li>
-					<a href={ templ.URL("/accounts/" + account + "/users") }>
+					<a href={ templ.URL("/accounts/" + account + "/serviceaccounts") }>
 						@iconUsers()
-						Users
+						Service Accounts
 					</a>
 				</li>
 				<hr class="my-2"/>
 				for _, ext := range portals {
 					<li>
-						<a href={ templ.URL("/accounts/" + account + "/" + ext.ObjectMeta.Name) }>
+						<a href={ templ.URL("/accounts/" + account + "/portal/" + ext.ObjectMeta.Name) }>
 							@iconRender(ext.Spec.Icon)
 							{ ext.Spec.DisplayName }
 						</a>
@@ -81,7 +81,7 @@ templ nav(userInfo *auth.UserInfo) {
 templ portalProxy(account string, portal string, subpath string) {
 	<div hx-ext="response-targets">
 		<div
-			hx-get={ string(templ.URL(strings.Join([]string{"/accounts", account, portal, subpath}, "/"))) }
+			hx-get={ string(templ.URL(strings.Join([]string{"/accounts", account, "portal", portal, subpath}, "/"))) }
 			hx-headers='{"HZ-Portal-Load-Request": "true"}'
 			hx-trigger="load"
 			hx-swap="outerHTML"

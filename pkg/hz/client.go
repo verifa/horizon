@@ -590,6 +590,10 @@ func (c *Client) Create(
 		return fmt.Errorf("create: %w", ErrClientObjectOrDataRequired)
 	}
 
+	if err := validateKeyStrict(key); err != nil {
+		return fmt.Errorf("invalid key: %w", err)
+	}
+
 	msg := nats.NewMsg(
 		c.SubjectPrefix() + fmt.Sprintf(
 			SubjectStoreCreate,
@@ -647,6 +651,10 @@ func (c *Client) Get(
 
 	if key == nil {
 		return nil, fmt.Errorf("get: key required")
+	}
+
+	if err := validateKeyStrict(key); err != nil {
+		return nil, fmt.Errorf("invalid key: %w", err)
 	}
 
 	msg := nats.NewMsg(

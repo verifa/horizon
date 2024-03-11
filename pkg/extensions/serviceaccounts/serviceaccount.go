@@ -5,8 +5,8 @@ import "github.com/verifa/horizon/pkg/hz"
 type ServiceAccount struct {
 	hz.ObjectMeta `json:"metadata" cue:""`
 
-	Spec   *ServiceAccountSpec   `json:"spec,omitempty"`
-	Status *ServiceAccountStatus `json:"status,omitempty"`
+	Spec   *ServiceAccountSpec   `json:"spec,omitempty" cue:",opt"`
+	Status *ServiceAccountStatus `json:"status,omitempty" cue:",opt"`
 }
 
 func (s ServiceAccount) ObjectGroup() string {
