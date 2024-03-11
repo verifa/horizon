@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"reflect"
 
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/internal/managedfields"
@@ -177,6 +179,12 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 			),
 		}
 	}
+	// Check if the new object is different from the original object.
+	// If there is no change, make it a no-op.
+	if isJSONEqual(rawObj, bDst) {
+		slog.Info("apply: no change in object")
+		return nil
+	}
 	if err := s.Update(ctx, UpdateRequest{
 		Data:     bDst,
 		Key:      req.Key,
@@ -200,4 +208,17 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 		}
 	}
 	return nil
+}
+
+// isJSONEqual returns true if the JSON objects are "equal".
+// Equal means a field by field comparison, not a byte-by-byte comparison.
+func isJSONEqual(a, b []byte) bool {
+	var aMap, bMap map[string]interface{}
+	if err := json.Unmarshal(a, &aMap); err != nil {
+		return false
+	}
+	if err := json.Unmarshal(b, &bMap); err != nil {
+		return false
+	}
+	return reflect.DeepEqual(aMap, bMap)
 }

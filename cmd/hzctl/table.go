@@ -30,6 +30,7 @@ func printObject(object hz.GenericObject) error {
 	buf.WriteString(
 		fmt.Sprintf("\tmanagedFields: %s\n", oMF),
 	)
+	buf.WriteString(fmt.Sprintf("\tfinalizers: %s\n", object.Finalizers))
 	buf.WriteString(fmt.Sprintf("\tlabels: %s\n", object.Labels))
 	buf.WriteString("spec:\n")
 	if err := json.Indent(&buf, object.Spec, "", "  "); err != nil {

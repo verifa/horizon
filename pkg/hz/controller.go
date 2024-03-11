@@ -555,6 +555,8 @@ func (c *Controller) handleControlLoop(
 		if err := msg.Nak(); err != nil {
 			slog.Error("result requeue: nak", "error", err)
 		}
+	default:
+		slog.Error("unknown reconcile result", "result", reconcileResult)
 	}
 }
 

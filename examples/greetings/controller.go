@@ -42,37 +42,26 @@ func (r *GreetingReconciler) Reconcile(
 		greeting,
 	)
 	if err != nil {
-		return hz.Result{}, fmt.Errorf("running hello action: %w", err)
-	}
-
-	// If status is nil then set it.
-	if greeting.Status == nil {
-		applyGreet.Status = reply.Status
-
+		applyGreet.Status = &GreetingStatus{
+			Ready:         false,
+			FailureReason: fmt.Sprintf("running hello action: %s", err),
+			Phase:         StatusPhaseFailed,
+			Response:      "",
+		}
 		if err := r.GreetingClient.Apply(ctx, applyGreet); err != nil {
 			return hz.Result{}, fmt.Errorf("updating greeting: %w", err)
 		}
-		// Return here, because the above apply will trigger a reconcile.
-		return hz.Result{}, nil
+		return hz.Result{}, fmt.Errorf("running hello action: %w", err)
 	}
 
-	// If the current response does not match, or the greeting is not ready,
-	// update the status.
-	if greeting.Status.Response != reply.Status.Response ||
-		!greeting.Status.Ready {
-		if !greeting.Status.Ready {
-			applyGreet.Status = &GreetingStatus{
-				Ready:         true,
-				FailureReason: "",
-				Phase:         StatusPhaseCompleted,
-				Response:      reply.Status.Response,
-			}
-			if err := r.GreetingClient.Apply(ctx, applyGreet); err != nil {
-				return hz.Result{}, fmt.Errorf("updating greeting: %w", err)
-			}
-			return hz.Result{}, nil
-		}
-		return hz.Result{}, nil
+	applyGreet.Status = &GreetingStatus{
+		Ready:         true,
+		FailureReason: "",
+		Phase:         StatusPhaseCompleted,
+		Response:      reply.Status.Response,
+	}
+	if err := r.GreetingClient.Apply(ctx, applyGreet); err != nil {
+		return hz.Result{}, fmt.Errorf("updating greeting: %w", err)
 	}
 
 	return hz.Result{}, nil
