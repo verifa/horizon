@@ -24,3 +24,6 @@ go.work
 
 # Node.js
 node_modules
+
+# NATS creds file
+*.creds
