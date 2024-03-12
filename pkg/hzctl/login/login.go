@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -100,39 +99,6 @@ func (l *loginHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		"login",
 		pageStatusOK(resp),
 	).Render(r.Context(), w)
-}
-
-func postNewUser(
-	baseURL *url.URL,
-	cookie *http.Cookie,
-) ([]byte, error) {
-	loginURL := baseURL.JoinPath("auth", "login")
-	req, err := http.NewRequest(
-		"POST",
-		loginURL.String(),
-		nil,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("new request: %w", err)
-	}
-	req.AddCookie(cookie)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := hz.ErrorFromHTTP(resp); err != nil {
-		return nil, err
-	}
-
-	userConfig, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	return userConfig, nil
 }
 
 func openBrowser(url string) error {
