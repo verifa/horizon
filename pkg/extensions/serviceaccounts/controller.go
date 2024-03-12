@@ -3,7 +3,6 @@ package serviceaccounts
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"time"
 
@@ -42,23 +41,7 @@ func (r Reconciler) Reconcile(
 	}
 
 	if sa.DeletionTimestamp.IsPast() {
-		// Handle cleanup.
-		// If no status, there is no secret to clean up.
-		if sa.Status == nil {
-			return hz.Result{}, nil
-		}
-		// Clean up the secret.
-		if err := secretClient.Delete(
-			ctx,
-			secrets.Secret{
-				ObjectMeta: hz.ObjectMeta{
-					Account: sa.Account,
-					Name:    sa.Name,
-				},
-			},
-		); hz.IgnoreNotFound(err) != nil {
-			return hz.Result{}, fmt.Errorf("deleting secret: %w", err)
-		}
+		// Nothing to do, the GC will delete child secrets.
 		return hz.Result{}, nil
 	}
 
@@ -76,7 +59,7 @@ func (r Reconciler) Reconcile(
 	if hz.IgnoreNotFound(err) != nil {
 		return hz.Result{}, fmt.Errorf("getting secret: %w", err)
 	}
-	if errors.Is(err, hz.ErrNotFound) {
+	if hz.IgnoreNotFound(err) == nil {
 		// Existing secret does not exist, so create it.
 		userCreds, err := r.generateNATSCredentials(ctx, sa)
 		if err != nil {
@@ -91,6 +74,18 @@ func (r Reconciler) Reconcile(
 			ObjectMeta: hz.ObjectMeta{
 				Account: sa.Account,
 				Name:    sa.Name,
+				// Set service account as an owner reference.
+				// That means if the service account is deleted, the secret will
+				// be deleted by the GC.
+				OwnerReferences: []hz.OwnerReference{
+					{
+						Group:   sa.ObjectGroup(),
+						Version: sa.ObjectVersion(),
+						Kind:    sa.ObjectKind(),
+						Account: sa.Account,
+						Name:    sa.Name,
+					},
+				},
 			},
 			Data: secrets.SecretData{
 				"nats.creds": userCreds,
