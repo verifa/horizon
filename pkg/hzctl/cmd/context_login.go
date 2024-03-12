@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"context"
@@ -10,16 +10,9 @@ import (
 	yaml "sigs.k8s.io/yaml/goyaml.v2"
 )
 
-// loginCmd represents the login command
 var loginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Login to Horizon to get a session token.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hCtx, err := config.Context()
 		if err != nil {
@@ -30,7 +23,7 @@ to quickly create a Cobra application.`,
 		}
 		ctx := context.Background()
 		resp, err := login.Login(ctx, login.LoginRequest{
-			URL: "http://localhost:9999",
+			URL: hCtx.URL,
 		})
 		if err != nil {
 			return err
@@ -50,5 +43,5 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
-	authCmd.AddCommand(loginCmd)
+	contextCmd.AddCommand(loginCmd)
 }

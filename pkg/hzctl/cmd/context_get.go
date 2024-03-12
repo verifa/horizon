@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"fmt"
@@ -7,15 +7,13 @@ import (
 	"github.com/verifa/horizon/pkg/hzctl"
 )
 
-var contextGetCmd = &cobra.Command{
-	Use:   "get",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+// type contextGetCmdOptions struct{}
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+// var contextGetOptions contextGetCmdOptions
+
+var contextGetCmd = &cobra.Command{
+	Use:           "get",
+	Short:         "Get information about the current context.",
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hCtx, err := config.Context(
@@ -35,7 +33,4 @@ to quickly create a Cobra application.`,
 
 func init() {
 	contextCmd.AddCommand(contextGetCmd)
-
-	contextGetCmd.Flags().
-		StringVar(&contextSetCurrent, "current", "", "name of the current context")
 }

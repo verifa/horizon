@@ -30,19 +30,22 @@ type ObjectKeyer interface {
 
 func validateKeyStrict(key ObjectKeyer) error {
 	var errs error
-	if key.ObjectGroup() == "" {
+	isEmptyOrStar := func(s string) bool {
+		return s == "" || s == "*"
+	}
+	if isEmptyOrStar(key.ObjectGroup()) {
 		errs = errors.Join(errs, fmt.Errorf("group is required"))
 	}
-	if key.ObjectVersion() == "" {
+	if isEmptyOrStar(key.ObjectVersion()) {
 		errs = errors.Join(errs, fmt.Errorf("version is required"))
 	}
-	if key.ObjectKind() == "" {
+	if isEmptyOrStar(key.ObjectKind()) {
 		errs = errors.Join(errs, fmt.Errorf("kind is required"))
 	}
-	if key.ObjectAccount() == "" {
+	if isEmptyOrStar(key.ObjectAccount()) {
 		errs = errors.Join(errs, fmt.Errorf("account is required"))
 	}
-	if key.ObjectName() == "" {
+	if isEmptyOrStar(key.ObjectName()) {
 		errs = errors.Join(errs, fmt.Errorf("name is required"))
 	}
 	return errs
@@ -92,27 +95,8 @@ func KeyFromObject(obj ObjectKeyer) string {
 // This is useful when you want to ensure the key is concrete when performing
 // operations on specific objects (e.g. get, create, apply).
 func KeyFromObjectStrict(obj ObjectKeyer) (string, error) {
-	var errs error
-	isEmptyOrStar := func(s string) bool {
-		return s == "" || s == "*"
-	}
-	if isEmptyOrStar(obj.ObjectGroup()) {
-		errs = errors.Join(errs, fmt.Errorf("group is required"))
-	}
-	if isEmptyOrStar(obj.ObjectVersion()) {
-		errs = errors.Join(errs, fmt.Errorf("version is required"))
-	}
-	if isEmptyOrStar(obj.ObjectKind()) {
-		errs = errors.Join(errs, fmt.Errorf("kind is required"))
-	}
-	if isEmptyOrStar(obj.ObjectAccount()) {
-		errs = errors.Join(errs, fmt.Errorf("account is required"))
-	}
-	if isEmptyOrStar(obj.ObjectName()) {
-		errs = errors.Join(errs, fmt.Errorf("name is required"))
-	}
-	if errs != nil {
-		return "", errs
+	if err := validateKeyStrict(obj); err != nil {
+		return "", err
 	}
 	return KeyFromObject(obj), nil
 }

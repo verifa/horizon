@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"context"
@@ -19,14 +19,8 @@ type deleteCmdOptions struct {
 var deleteOpts deleteCmdOptions
 
 var deleteCmd = &cobra.Command{
-	Use:   "delete",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Use:           "delete",
+	Short:         "Mark Horizon objects for deletion.",
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hCtx, err := config.Context(
@@ -40,7 +34,7 @@ to quickly create a Cobra application.`,
 			)
 		}
 
-		clientDeleteOpts := []hz.HTTPDeleteOption{}
+		clientDeleteOpts := []hzctl.DeleteOption{}
 		if deleteOpts.filename != "" {
 			yData, err := os.ReadFile(deleteOpts.filename)
 			if err != nil {
@@ -53,7 +47,7 @@ to quickly create a Cobra application.`,
 			}
 			clientDeleteOpts = append(
 				clientDeleteOpts,
-				hz.WithHTTPDeleteData(jData),
+				hzctl.WithDeleteData(jData),
 			)
 		}
 		if deleteOpts.key != "" {
@@ -63,11 +57,11 @@ to quickly create a Cobra application.`,
 			}
 			clientDeleteOpts = append(
 				clientDeleteOpts,
-				hz.WithHTTPDeleteKey(objKey),
+				hzctl.WithDeleteKey(objKey),
 			)
 		}
 
-		client := hz.HTTPClient{
+		client := hzctl.Client{
 			Server:  hCtx.URL,
 			Session: *hCtx.Session,
 			Manager: "hzctl",

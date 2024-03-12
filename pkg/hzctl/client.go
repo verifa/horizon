@@ -1,4 +1,4 @@
-package hz
+package hzctl
 
 import (
 	"bytes"
@@ -8,44 +8,52 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/verifa/horizon/pkg/hz"
 )
 
-// TODO: this should probably go in its own package?
-type HTTPClient struct {
+// Client is an HTTP client for interacting with a Horizon server.
+//
+// It is intended for CLIs and other tooling for end users.
+// If you are building a service or controller, use the [hz.Client] instead
+// which uses a NATS directly, and not the HTTP API.
+type Client struct {
 	Server  string
 	Session string
 	Manager string
 }
 
-type HTTPListOption func(*httpGetOptions)
+type ListOption func(*getOptions)
 
-func WithHTTPListKey(key ObjectKey) HTTPListOption {
-	return func(opt *httpGetOptions) {
+func WithListKey(key hz.ObjectKey) ListOption {
+	return func(opt *getOptions) {
 		opt.key = key
 	}
 }
 
-func WithHTTPListResponseWriter(w io.Writer) HTTPListOption {
-	return func(opt *httpGetOptions) {
+func WithListResponseWriter(w io.Writer) ListOption {
+	return func(opt *getOptions) {
 		opt.respWriter = w
 	}
 }
 
-func WithHTTPListResponseGenericObject(resp *GenericObjectList) HTTPListOption {
-	return func(opt *httpGetOptions) {
+func WithListResponseGenericObject(
+	resp *hz.GenericObjectList,
+) ListOption {
+	return func(opt *getOptions) {
 		opt.respGenericObjects = resp
 	}
 }
 
-type httpGetOptions struct {
-	key ObjectKey
+type getOptions struct {
+	key hz.ObjectKey
 
 	respWriter         io.Writer
-	respGenericObjects *GenericObjectList
+	respGenericObjects *hz.GenericObjectList
 }
 
-func (c *HTTPClient) List(ctx context.Context, opts ...HTTPListOption) error {
-	opt := httpGetOptions{}
+func (c *Client) List(ctx context.Context, opts ...ListOption) error {
+	opt := getOptions{}
 	for _, o := range opts {
 		o(&opt)
 	}
@@ -57,7 +65,7 @@ func (c *HTTPClient) List(ctx context.Context, opts ...HTTPListOption) error {
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)
 	}
-	req.Header.Set(HeaderAuthorization, c.Session)
+	req.Header.Set(hz.HeaderAuthorization, c.Session)
 
 	q := req.URL.Query()
 	if opt.key.Group != "" {
@@ -80,7 +88,7 @@ func (c *HTTPClient) List(ctx context.Context, opts ...HTTPListOption) error {
 	}
 	defer resp.Body.Close()
 
-	if err := ErrorFromHTTP(resp); err != nil {
+	if err := hz.ErrorFromHTTP(resp); err != nil {
 		return err
 	}
 	if opt.respWriter != nil {
@@ -96,27 +104,27 @@ func (c *HTTPClient) List(ctx context.Context, opts ...HTTPListOption) error {
 	return nil
 }
 
-type HTTPApplyOption func(*httpApplyOptions)
+type ApplyOption func(*applyOptions)
 
-func WithHTTPApplyObject(object Objecter) HTTPApplyOption {
-	return func(opt *httpApplyOptions) {
+func WithApplyObject(object hz.Objecter) ApplyOption {
+	return func(opt *applyOptions) {
 		opt.object = object
 	}
 }
 
-func WithHTTPApplyData(data []byte) HTTPApplyOption {
-	return func(opt *httpApplyOptions) {
+func WithApplyData(data []byte) ApplyOption {
+	return func(opt *applyOptions) {
 		opt.data = data
 	}
 }
 
-type httpApplyOptions struct {
-	object Objecter
+type applyOptions struct {
+	object hz.Objecter
 	data   []byte
 }
 
-func (c *HTTPClient) Apply(ctx context.Context, opts ...HTTPApplyOption) error {
-	ao := httpApplyOptions{}
+func (c *Client) Apply(ctx context.Context, opts ...ApplyOption) error {
+	ao := applyOptions{}
 	for _, o := range opts {
 		o(&ao)
 	}
@@ -136,8 +144,8 @@ func (c *HTTPClient) Apply(ctx context.Context, opts ...HTTPApplyOption) error {
 	}
 
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add(HeaderAuthorization, c.Session)
-	req.Header.Add(HeaderApplyFieldManager, c.Manager)
+	req.Header.Add(hz.HeaderAuthorization, c.Session)
+	req.Header.Add(hz.HeaderApplyFieldManager, c.Manager)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -145,45 +153,45 @@ func (c *HTTPClient) Apply(ctx context.Context, opts ...HTTPApplyOption) error {
 	}
 	defer resp.Body.Close()
 
-	if err := ErrorFromHTTP(resp); err != nil {
+	if err := hz.ErrorFromHTTP(resp); err != nil {
 		return err
 	}
 	return nil
 }
 
-type HTTPDeleteOption func(*httpDeleteOptions)
+type DeleteOption func(*deleteOptions)
 
-func WithHTTPDeleteKey(key ObjectKeyer) HTTPDeleteOption {
-	return func(opt *httpDeleteOptions) {
+func WithDeleteKey(key hz.ObjectKeyer) DeleteOption {
+	return func(opt *deleteOptions) {
 		opt.key = key
 	}
 }
 
-func WithHTTPDeleteData(data []byte) HTTPDeleteOption {
-	return func(opt *httpDeleteOptions) {
+func WithDeleteData(data []byte) DeleteOption {
+	return func(opt *deleteOptions) {
 		opt.data = data
 	}
 }
 
-type httpDeleteOptions struct {
-	key  ObjectKeyer
+type deleteOptions struct {
+	key  hz.ObjectKeyer
 	data []byte
 }
 
-func (c *HTTPClient) Delete(
+func (c *Client) Delete(
 	ctx context.Context,
-	opts ...HTTPDeleteOption,
+	opts ...DeleteOption,
 ) error {
-	opt := httpDeleteOptions{}
+	opt := deleteOptions{}
 	for _, o := range opts {
 		o(&opt)
 	}
-	var key ObjectKeyer
+	var key hz.ObjectKeyer
 	if opt.key != nil {
 		key = opt.key
 	}
 	if opt.data != nil {
-		var obj MetaOnlyObject
+		var obj hz.MetaOnlyObject
 		if err := json.Unmarshal(opt.data, &obj); err != nil {
 			return fmt.Errorf("unmarshaling object: %w", err)
 		}
@@ -193,7 +201,7 @@ func (c *HTTPClient) Delete(
 		return fmt.Errorf("delete: key required")
 	}
 
-	if _, err := KeyFromObjectStrict(key); err != nil {
+	if _, err := hz.KeyFromObjectStrict(key); err != nil {
 		return fmt.Errorf("delete: invalid key: %w", err)
 	}
 	reqURL, err := url.JoinPath(
@@ -218,7 +226,7 @@ func (c *HTTPClient) Delete(
 		return fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add(HeaderAuthorization, c.Session)
+	req.Header.Add(hz.HeaderAuthorization, c.Session)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -226,7 +234,7 @@ func (c *HTTPClient) Delete(
 	}
 	defer resp.Body.Close()
 
-	if err := ErrorFromHTTP(resp); err != nil {
+	if err := hz.ErrorFromHTTP(resp); err != nil {
 		return err
 	}
 	return nil

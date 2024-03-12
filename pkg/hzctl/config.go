@@ -6,33 +6,37 @@ import (
 	"slices"
 )
 
+// Config represents the configuration file for the Horizon CLI.
+// It contains a list of context and the current context.
 type Config struct {
 	CurrentContext string    `json:"currentContext"`
 	Contexts       []Context `json:"contexts"`
 }
 
+// Context represents a Horizon context.
+// It contains the name, URL and session for a Horizon server.
 type Context struct {
 	Name string `json:"name,omitempty"`
 
 	URL     string  `json:"url,omitempty"`
-	Account *string `json:"account,omitempty"`
 	Session *string `json:"session,omitempty"`
 }
 
 type ValidateOption func(*validateOptions)
 
+// WithValidateSession returns a ValidateOption that sets the session validation
+// to the given bool.
 func WithValidateSession(b bool) ValidateOption {
 	return func(o *validateOptions) {
 		o.hasSession = b
-		o.hasCredentials = b
 	}
 }
 
 type validateOptions struct {
-	hasSession     bool
-	hasCredentials bool
+	hasSession bool
 }
 
+// Validate validates the context based on the given validation options.
 func (c *Context) Validate(opts ...ValidateOption) error {
 	vOpts := &validateOptions{}
 	for _, opt := range opts {
@@ -53,6 +57,9 @@ func (c *Context) Validate(opts ...ValidateOption) error {
 
 type ContextOption func(*contextOptions)
 
+// WithContextTryName returns a ContextOption that sets the context name to the
+// given string, if it is not nil nor empty.
+// If the given string is nil or empty, it does nothing.
 func WithContextTryName(name *string) ContextOption {
 	return func(o *contextOptions) {
 		if name != nil && *name != "" {
@@ -62,12 +69,16 @@ func WithContextTryName(name *string) ContextOption {
 	}
 }
 
+// WithContextCurrent returns a ContextOption that sets the context to the
+// current context based on the given bool.
 func WithContextCurrent(b bool) ContextOption {
 	return func(o *contextOptions) {
 		o.useCurrent = b
 	}
 }
 
+// WithContextByName returns a ContextOption that sets the context to the one
+// with the given name.
 func WithContextByName(name string) ContextOption {
 	return func(o *contextOptions) {
 		o.useCurrent = false
@@ -75,6 +86,8 @@ func WithContextByName(name string) ContextOption {
 	}
 }
 
+// WithContextValidate returns a ContextOption that sets the context validation
+// options to the given ValidateOptions.
 func WithContextValidate(opts ...ValidateOption) ContextOption {
 	return func(o *contextOptions) {
 		o.validateOpts = opts
@@ -88,6 +101,8 @@ type contextOptions struct {
 	validateOpts []ValidateOption
 }
 
+// Context returns a context based on the given context options, or an error if
+// no such context was found.
 func (c *Config) Context(opts ...ContextOption) (Context, error) {
 	cOpts := &contextOptions{}
 	for _, opt := range opts {
@@ -107,6 +122,7 @@ func (c *Config) Context(opts ...ContextOption) (Context, error) {
 	return Context{}, errors.New("current context not found")
 }
 
+// Add adds a context to the config.
 func (c *Config) Add(ctx Context) {
 	index := slices.IndexFunc(c.Contexts, func(hCtx Context) bool {
 		return hCtx.Name == ctx.Name

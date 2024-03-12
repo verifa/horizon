@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/hzctl"
 	"sigs.k8s.io/yaml"
 )
@@ -18,14 +17,8 @@ type applyCmdOptions struct {
 var applyOpts applyCmdOptions
 
 var applyCmd = &cobra.Command{
-	Use:   "apply",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Use:           "apply",
+	Short:         "Server-side apply Horizon objects.",
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hCtx, err := config.Context(
@@ -53,14 +46,14 @@ to quickly create a Cobra application.`,
 			return fmt.Errorf("convert yaml to json: %w", err)
 		}
 
-		client := hz.HTTPClient{
+		client := hzctl.Client{
 			Server:  hCtx.URL,
 			Session: *hCtx.Session,
 			Manager: "hzctl",
 		}
 
 		ctx := context.Background()
-		if err := client.Apply(ctx, hz.WithHTTPApplyData(jData)); err != nil {
+		if err := client.Apply(ctx, hzctl.WithApplyData(jData)); err != nil {
 			return fmt.Errorf("apply: %w", err)
 		}
 
