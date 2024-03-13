@@ -154,6 +154,18 @@ Check the [examples](./examples/) folder for some examples.
 A recommended starting point would be the incredibly useful (joke) [greetings](./examples/greetings/README.md) example.
 It has a portal, controller and actor and does not depend on any external services, so there is no added complexity due to third party dependencies.
 
+## Frequently Asked Questions
+
+Check the [FAQ](./docs/faq.md) page.
+
+## Debugging with NATS
+
+Check the [debugging with nats](./docs/debugging_nats.md) page.
+
+## Resources / Learning
+
+Check the [resources](./docs/resources.md) for some material to help you learn NATS and generally about platform engineering.
+
 ## Alternatives / Similar tools
 
 Horizon has no opinion about what tools/libraries/SDKs you use to communicate with external services: as you code in Go with Horizon you can do whatever you want.
