@@ -1,6 +1,12 @@
 
 CI_CMD := go run ./cmd/ci/ci.go
 
+
+
+.PHONY: dev
+dev: generate
+	go run ./cmd/horizon/horizon.go
+
 .PHONY: generate
 generate:
 	$(CI_CMD) -generate

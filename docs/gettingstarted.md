@@ -223,6 +223,13 @@ You can see the full example in [validator.go](../examples/greetings/validator.g
 
 Look at [greetings.go](../examples/greetings/cmd/greetings.go) for an example of how to start a controller.
 
+You will need the NATS credentials we generated earlier. To run the greetings example, just do:
+
+```console
+export NATS_CREDS=./nats.creds"
+go run ./examples/greetings/cmd/greetings.go
+```
+
 You can run multiple controllers in the same binary, so don't feel like you have to create a separate binary for every controller.
 
 ### 2.3 Creating a portal
