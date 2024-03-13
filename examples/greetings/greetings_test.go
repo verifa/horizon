@@ -2,13 +2,12 @@ package greetings_test
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/verifa/horizon/examples/greetings"
 	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/hztest"
 	"github.com/verifa/horizon/pkg/server"
 )
 
@@ -65,7 +64,7 @@ func TestGreeting(t *testing.T) {
 			Name:    "Pekka",
 		},
 		Spec: &greetings.GreetingSpec{
-			Name: hz.P("Pekka"),
+			Name: "Pekka",
 		},
 	}
 	err = greetClient.Apply(ctx, greeting)
@@ -76,43 +75,23 @@ func TestGreeting(t *testing.T) {
 	//
 	// Verify that the controller reconciles the object.
 	//
-	// Create a timeout and a done channel.
 	// Watch until the greeting is ready.
-	// If the timeout is reached, fail the test.
+	// If the timeout is reached, the test fails.
 	//
-	timeout := time.After(time.Second * 5)
-	done := make(chan struct{})
-	watcher, err := hz.StartWatcher(
+	hztest.WatchWaitUntil(
+		t,
 		ctx,
 		ts.Conn,
-		hz.WithWatcherFor(greeting),
-		hz.WithWatcherFn(
-			func(event hz.Event) (hz.Result, error) {
-				var watchGreeting greetings.Greeting
-				if err := json.Unmarshal(event.Data, &watchGreeting); err != nil {
-					return hz.Result{}, fmt.Errorf(
-						"unmarshalling greeting: %w",
-						err,
-					)
-				}
-				if watchGreeting.Status == nil {
-					return hz.Result{}, nil
-				}
-				if watchGreeting.Status.Ready == true {
-					close(done)
-				}
-				return hz.Result{}, nil
-			},
-		),
+		time.Second*5,
+		greeting,
+		func(greeting greetings.Greeting) bool {
+			if greeting.Status == nil {
+				return false
+			}
+			if greeting.Status.Ready == true {
+				return true
+			}
+			return false
+		},
 	)
-	if err != nil {
-		t.Fatal("starting greeting watcher: ", err)
-	}
-	defer watcher.Close()
-
-	select {
-	case <-timeout:
-		t.Fatal("timed out waiting for greeting")
-	case <-done:
-	}
 }

@@ -26,8 +26,7 @@ func (a GreetingsHelloAction) Do(
 	}
 	greeting.Status = &GreetingStatus{
 		Ready:    true,
-		Phase:    StatusPhaseCompleted,
-		Response: "Greetings, " + *greeting.Spec.Name + "!",
+		Response: "Greetings, " + greeting.Spec.Name + "!",
 	}
 	return greeting, nil
 }
@@ -36,11 +35,11 @@ func (a GreetingsHelloAction) validate(greeting Greeting) error {
 	if greeting.Spec == nil {
 		return fmt.Errorf("spec is required")
 	}
-	if greeting.Spec.Name == nil {
+	if greeting.Spec.Name == "" {
 		return fmt.Errorf("name is required")
 	}
 
-	if !isFriend(*greeting.Spec.Name) {
+	if !isFriend(greeting.Spec.Name) {
 		return fmt.Errorf(
 			"we don't greet strangers in Finland, we only know: %v",
 			friends,

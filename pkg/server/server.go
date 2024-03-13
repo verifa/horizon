@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats.go"
 	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/broker"
@@ -19,6 +20,8 @@ import (
 
 func WithDevMode() ServerOption {
 	return func(o *serverOptions) {
+		o.devMode = true
+
 		o.runNATSServer = true
 		o.runAuth = true
 		o.runBroker = true
@@ -122,6 +125,8 @@ type ServerOption func(*serverOptions)
 
 type serverOptions struct {
 	conn *nats.Conn
+
+	devMode bool
 
 	runNATSServer bool
 	runAuth       bool
@@ -346,6 +351,37 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 	if err := s.checkRootAccountObject(ctx, s.NS.Auth); err != nil {
 		return fmt.Errorf("checking root account object: %w", err)
 	}
+
+	if opt.devMode {
+		userConfig, err := jwt.FormatUserConfig(
+			s.NS.Auth.RootUser.JWT,
+			[]byte(s.NS.Auth.RootUser.Seed),
+		)
+		if err != nil {
+			return fmt.Errorf("formatting user config: %w", err)
+		}
+		fmt.Println(`
+ _                _
+| |__   ___  _ __(_)_______  _ __
+| '_ \ / _ \| '__| |_  / _ \| '_ \
+| | | | (_) | |  | |/ / (_) | | | |
+|_| |_|\___/|_|  |_/___\___/|_| |_|
+    _                         _
+ __| |_____ __  _ __  ___  __| |___
+/ _` + "`" + ` / -_) V / | '  \/ _ \/ _` + "`" + ` / -_)
+\__,_\___|\_/  |_|_|_\___/\__,_\___|
+		`)
+
+		fmt.Println("Below is a NATS credential for the root account.")
+		fmt.Println("Copy it to a file such as \"nats.creds\"")
+
+		fmt.Println("")
+		fmt.Println("")
+		fmt.Println(string(userConfig))
+		fmt.Println("")
+		fmt.Println("")
+	}
+
 	return nil
 }
 
@@ -387,29 +423,6 @@ func (s *Server) Close() error {
 		}
 	}
 	return errs
-}
-
-func (s *Server) Services() []string {
-	services := []string{}
-	if s.Gateway != nil {
-		services = append(services, "gateway")
-	}
-	if s.Broker != nil {
-		services = append(services, "broker")
-	}
-	if s.Store != nil {
-		services = append(services, "store")
-	}
-	if s.NS != nil {
-		services = append(services, "nats")
-	}
-	if s.CtlrAccounts != nil {
-		services = append(services, "ctlr-accounts")
-	}
-	if s.ActorUsers != nil {
-		services = append(services, "actor-users")
-	}
-	return services
 }
 
 func (s *Server) checkRootAccountObject(

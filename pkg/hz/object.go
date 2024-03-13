@@ -10,6 +10,7 @@ import (
 	"github.com/verifa/horizon/pkg/internal/managedfields"
 )
 
+// Objecter is an interface that represents an object in the Horizon API.
 type Objecter interface {
 	ObjectKeyer
 	ObjectRevision() *uint64

@@ -24,22 +24,12 @@ func run() error {
 		ctx,
 		server.WithDevMode(),
 		server.WithAuthOptions(auth.WithAdminGroups("admin")),
-		// server.WithGatewayOptions(
-		// 	gateway.WithOIDCConfig(
-		// 		gateway.OIDCConfig{
-		// 			Issuer:       "http://localhost:9998/",
-		// 			ClientID:     "web",
-		// 			ClientSecret: "secret",
-		// 			RedirectURL:  "http://localhost:9999/auth/callback",
-		// 		},
-		// 	),
-		// ),
 	)
 	if err != nil {
 		return err
 	}
 	defer s.Close()
-	slog.Info("horizon server started", "services", s.Services())
+	slog.Info("horizon server started")
 
 	<-ctx.Done()
 	// Stop listening for interrupts so that a second interrupt will force

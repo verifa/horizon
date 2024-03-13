@@ -84,7 +84,7 @@ func (e *PortalHandler) Start(ctx context.Context) error {
 	client := NewClient(
 		e.conn,
 		WithClientInternal(true),
-		WithClientManager("TODO"),
+		WithClientDefaultManager(),
 	)
 	extClient := ObjectClient[Portal]{Client: client}
 	// TODO: field manager.

@@ -1,5 +1,9 @@
 
-CI_CMD := go run ./cmd/ci/*.go
+CI_CMD := go run ./cmd/ci/ci.go
+
+.PHONY: generate
+generate:
+	$(CI_CMD) -generate
 
 .PHONY: pr
 pr:

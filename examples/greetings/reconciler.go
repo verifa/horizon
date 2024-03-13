@@ -2,11 +2,9 @@ package greetings
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/verifa/horizon/pkg/hz"
-	"golang.org/x/exp/slices"
 )
 
 type GreetingReconciler struct {
@@ -43,10 +41,9 @@ func (r *GreetingReconciler) Reconcile(
 	)
 	if err != nil {
 		applyGreet.Status = &GreetingStatus{
-			Ready:         false,
-			FailureReason: fmt.Sprintf("running hello action: %s", err),
-			Phase:         StatusPhaseFailed,
-			Response:      "",
+			Ready:    false,
+			Error:    fmt.Sprintf("running hello action: %s", err),
+			Response: "",
 		}
 		if err := r.GreetingClient.Apply(ctx, applyGreet); err != nil {
 			return hz.Result{}, fmt.Errorf("updating greeting: %w", err)
@@ -55,48 +52,13 @@ func (r *GreetingReconciler) Reconcile(
 	}
 
 	applyGreet.Status = &GreetingStatus{
-		Ready:         true,
-		FailureReason: "",
-		Phase:         StatusPhaseCompleted,
-		Response:      reply.Status.Response,
+		Ready:    true,
+		Error:    "",
+		Response: reply.Status.Response,
 	}
 	if err := r.GreetingClient.Apply(ctx, applyGreet); err != nil {
 		return hz.Result{}, fmt.Errorf("updating greeting: %w", err)
 	}
 
 	return hz.Result{}, nil
-}
-
-var _ (hz.Validator) = (*GreetingValidator)(nil)
-
-type GreetingValidator struct{}
-
-// Validate implements hz.Validator.
-func (*GreetingValidator) Validate(ctx context.Context, data []byte) error {
-	var greeting Greeting
-	if err := json.Unmarshal(data, &greeting); err != nil {
-		return fmt.Errorf("unmarshalling greeting: %w", err)
-	}
-	if greeting.Spec == nil {
-		return fmt.Errorf("spec is required")
-	}
-	if greeting.Spec.Name == nil {
-		return fmt.Errorf("name is required")
-	}
-
-	if !isFriend(*greeting.Spec.Name) {
-		return fmt.Errorf(
-			"we don't greet strangers in Finland, we only know: %v",
-			friends,
-		)
-	}
-	return nil
-}
-
-var friends = []string{
-	"Pekka", "Matti", "Jukka", "Kari", "Jari", "Mikko", "Ilkka",
-}
-
-func isFriend(name string) bool {
-	return slices.Contains(friends, name)
 }

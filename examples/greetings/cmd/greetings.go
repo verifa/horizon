@@ -20,6 +20,7 @@ func main() {
 }
 
 func run() error {
+	// Establish a connection to the NATS server.
 	conn, err := nats.Connect(
 		nats.DefaultURL,
 		nats.UserCredentials("nats.creds"),
@@ -28,7 +29,7 @@ func run() error {
 		return fmt.Errorf("connect: %w", err)
 	}
 	ctx := context.Background()
-
+	// Handle interrupts.
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
 
@@ -47,7 +48,6 @@ func run() error {
 	}()
 
 	validator := greetings.GreetingValidator{}
-
 	reconciler := greetings.GreetingReconciler{
 		GreetingClient: hz.ObjectClient[greetings.Greeting]{
 			Client: hz.NewClient(

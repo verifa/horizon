@@ -43,7 +43,7 @@ templ (r *PortalRenderer) greetingsActorForm(name string, status *GreetingStatus
 			if status.Ready {
 				<p class="text-success">{ status.Response }</p>
 			} else {
-				<p class="text-warning">{ status.FailureMessage }</p>
+				<p class="text-warning">{ status.Error }</p>
 			}
 		}
 		if err != nil {

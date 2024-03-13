@@ -25,8 +25,8 @@ const (
 )
 
 func main() {
-	var build, lint, test, pr bool
-	flag.BoolVar(&build, "build", false, "build the website locally")
+	var generate, lint, test, pr bool
+	flag.BoolVar(&generate, "generate", false, "generate code")
 	flag.BoolVar(&lint, "lint", false, "lint the code")
 	flag.BoolVar(&test, "test", false, "run the tests")
 	flag.BoolVar(&pr, "pr", false, "run the pull request checks")
@@ -50,15 +50,14 @@ func main() {
 	)
 	defer stop()
 
+	if generate {
+		Generate(ctx)
+	}
 	if lint {
 		Lint(ctx)
 	}
 	if test {
 		Test(ctx)
-	}
-	if build {
-		panic("build: not implemented")
-		// _ = KoBuild(ctx, WithKoLocal())
 	}
 	if pr {
 		PullRequest(ctx)

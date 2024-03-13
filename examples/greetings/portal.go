@@ -97,7 +97,7 @@ func (h *PortalHandler) post(rw http.ResponseWriter, req *http.Request) {
 			Name:    reqName,
 		},
 		Spec: &GreetingSpec{
-			Name: &reqName,
+			Name: reqName,
 		},
 	}
 	client := hz.NewClient(
@@ -133,7 +133,7 @@ func (h *PortalHandler) postGreet(rw http.ResponseWriter, req *http.Request) {
 			Name:    reqName,
 		},
 		Spec: &GreetingSpec{
-			Name: &reqName,
+			Name: reqName,
 		},
 	}
 	client := hz.NewClient(h.Conn, hz.WithClientSessionFromRequest(req))
