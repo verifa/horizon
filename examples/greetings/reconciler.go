@@ -20,16 +20,16 @@ func (r *GreetingReconciler) Reconcile(
 	if err != nil {
 		return hz.Result{}, hz.IgnoreNotFound(err)
 	}
-	if greeting.DeletionTimestamp.IsPast() {
-		// Handle any cleanup logic here.
-		return hz.Result{}, nil
-	}
 	applyGreet, err := hz.ExtractManagedFields(
 		greeting,
 		r.GreetingClient.Client.Manager,
 	)
 	if err != nil {
 		return hz.Result{}, fmt.Errorf("extracting managed fields: %w", err)
+	}
+	if greeting.DeletionTimestamp.IsPast() {
+		// Handle any cleanup logic here.
+		return hz.Result{}, nil
 	}
 
 	// Obviously we don't need to run an action here, but this is just an

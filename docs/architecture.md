@@ -2,6 +2,8 @@
 
 This section describes the different components of Horizon to build a platform.
 
+It is also important to understand what [Objects](./objects.md) are in Horizon.
+
 ## Core
 
 The "core" consists of a [NATS](https://nats.io/) server and some internal services.
@@ -22,13 +24,15 @@ The `store` is a service that handles all server-side operations for objects in 
 No other service is expected to interface directly with the NATS KV (except for controllers that create NATS consumers for the underlying KV stream).
 
 The store provides basic CRUD operations (`create`, `get`, `list`, `update` and `delete`), as well as `validate` and `apply`.
-The noteworthy operation is the `apply` because this works like Kubernetes' [server-side apply](https://kubernetes.io/docs/reference/using-api/server-side-apply/).
+The noteworthy operation is the `apply` which you should read more about here [server-side apply](./serversideapply.md).
 
 As objects in the store will be mutated by users and controllers, the server-side apply controls which fields are *owned* by the different entities.
-Reading the Kubernetes documentation will give you a greater understanding of how this works.
-Note that Horizon does not support client-side apply (of course you could write your own and use a store `update` operation if you really wanted to...).
 
 The store defers all validation requests to the controller for an object.
+
+Below is a high-level diagram showing the main purpose of the store.
+
+![architecture-store](./drawings/architecture-store.excalidraw.png)
 
 ### Core - Gateway
 
