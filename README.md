@@ -68,6 +68,10 @@ Check the [examples](./examples/) folder for some examples.
 A recommended starting point would be the incredibly useful (joke) [greetings](./examples/greetings/README.md) example.
 It has a portal, controller and actor and does not depend on any external services, so there is no added complexity due to third party dependencies.
 
+## Rationale
+
+To understand how and why Horizon came into existence, check the [rationalte](./docs/rationale.md).
+
 ## Frequently Asked Questions
 
 Check the [FAQ](./docs/faq.md) page.
@@ -78,21 +82,7 @@ Check the [debugging with nats](./docs/debugging_nats.md) page.
 
 ## Resources / Learning
 
-Check the [resources](./docs/resources.md) for some material to help you learn NATS and generally about platform engineering.
-
-## Alternatives / Similar tools
-
-Horizon has no opinion about what tools/libraries/SDKs you use to communicate with external services: as you code in Go with Horizon you can do whatever you want.
-
-Hence, things like [Terraform](https://www.terraform.io/), [Pulumi](https://www.pulumi.com/), [Helm](https://helm.sh/), various CDKs (e.g. [AWS](https://aws.amazon.com/cdk/), [K8s](https://cdk8s.io/)), or any cloud SDK can all be used by your controllers or actors.
-
-At the same time, we feel that no existing Internal Development Portals/Platforms are quite the same as Horizon.
-
-Tools like [Backstage](https://backstage.io/) provides a "single pane of glass" but do not provide the backend for provisioning external resources.
-
-[Kratix](https://kratix.io/) is a "platform framework" that uses [Kubernetes](https://kubernetes.io/) to provision external resources, but requires something like [Backstage](https://backstage.io/) as a UI.
-
-Here is a nice visual of the [platform tooling landscape](https://platformengineering.org/platform-tooling) and Horizon would sit in the Developer Portal box.
+Check the [learning](./docs/learning.md) for some material to help you learn NATS and generally about platform engineering.
 
 ## License
 
