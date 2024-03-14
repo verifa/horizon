@@ -507,10 +507,13 @@ func (c *Controller) handleControlLoop(
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := lock.InProgress(); err != nil {
-					slog.Error("marking message in progress", "error", err)
-				}
 				slog.Info("ticker in progress")
+				if err := lock.InProgress(); err != nil {
+					slog.Error("resetting mutex lock", "error", err)
+				}
+				if err := msg.InProgress(); err != nil {
+					slog.Error("marking  message in progress", "error", err)
+				}
 			case <-reconcileDone:
 				return
 			}
