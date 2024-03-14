@@ -70,7 +70,7 @@ It has a portal, controller and actor and does not depend on any external servic
 
 ## Rationale
 
-To understand how and why Horizon came into existence, check the [rationalte](./docs/rationale.md).
+To understand how and why Horizon came into existence, check the [rationale](./docs/rationale.md).
 
 ## Frequently Asked Questions
 
