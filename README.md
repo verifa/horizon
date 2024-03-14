@@ -16,7 +16,7 @@ At Verifa we have seen two common approaches from platform teams (also known as 
 2. Deploy an Internal Developer Platform / Portal (IdP), like [Backstage](https://backstage.io/).
 
     This provides a very elegant UI for developers, but does not take care of provisioning anything.
-    For provisinioning you still need something like Kubernetes + some infrastructure provisioner (like CrossPlane or a Terraform controller).
+    For provisioning you still need something like Kubernetes + some infrastructure provisioner (like CrossPlane or a Terraform controller).
     Also this is a very complex stack of tools to maintain and requires significant development to be useful.
 
 Horizon is an attempt to get the best of both worlds without a complex stack to maintain.
