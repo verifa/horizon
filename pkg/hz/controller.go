@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -64,6 +65,12 @@ func WithControllerOwns(obj Objecter) ControllerOption {
 	}
 }
 
+func WithControllerStopTimeout(d time.Duration) ControllerOption {
+	return func(ro *controllerOption) {
+		ro.stopTimeout = d
+	}
+}
+
 type controllerOption struct {
 	bucketObjects string
 	bucketMutex   string
@@ -75,12 +82,15 @@ type controllerOption struct {
 
 	forObject Objecter
 	reconOwns []Objecter
+
+	stopTimeout time.Duration
 }
 
 var controllerOptionsDefault = controllerOption{
 	bucketObjects: BucketObjects,
 	bucketMutex:   BucketMutex,
 	cueValidator:  true,
+	stopTimeout:   time.Minute * 10,
 }
 
 func StartController(
@@ -101,6 +111,9 @@ func StartController(
 type Controller struct {
 	Conn *nats.Conn
 
+	wg          sync.WaitGroup
+	stopTimeout time.Duration
+
 	subscriptions   []*nats.Subscription
 	consumeContexts []jetstream.ConsumeContext
 }
@@ -116,6 +129,8 @@ func (c *Controller) Start(
 	if ro.forObject == nil {
 		return fmt.Errorf("no object provided to controller")
 	}
+
+	c.stopTimeout = ro.stopTimeout
 	// Check the forObject value is not a pointer, as this causes problems for
 	// the cue encoder. If it is a pointer, get its element.
 	if reflect.ValueOf(ro.forObject).Type().Kind() == reflect.Ptr {
@@ -396,7 +411,46 @@ func (c *Controller) Stop() error {
 			errs = errors.Join(errs, err)
 		}
 	}
+
+	// Wait for all reconcile loops to finish, with a timeout.
+	if c.stopWaitTimeout() {
+		errs = errors.Join(
+			errs,
+			fmt.Errorf(
+				"timeout after %s waiting for reconcile loops to finish",
+				c.stopTimeout,
+			),
+		)
+	}
 	return errs
+}
+
+func (c *Controller) stopWaitTimeout() bool {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		c.wg.Wait()
+	}()
+	tickDuration := time.Second * 10
+	ticker := time.NewTicker(tickDuration)
+	elapsedTime := time.Duration(0)
+	for {
+		elapsedTime += tickDuration
+		select {
+		case <-ticker.C:
+			slog.Info(
+				"waiting for reconcile loops to finish",
+				"elapsed",
+				elapsedTime,
+				"timeout",
+				c.stopTimeout,
+			)
+		case <-done:
+			return false // completed normally
+		case <-time.After(c.stopTimeout):
+			return true // timed out
+		}
+	}
 }
 
 // handleControlLoop is the main control loop for the controller.
@@ -418,6 +472,8 @@ func (c *Controller) handleControlLoop(
 	msg jetstream.Msg,
 	ttl time.Duration,
 ) {
+	c.wg.Add(1)
+	defer c.wg.Done()
 	// Check that the message is the last message for the subject.
 	// If not, we don't care about it and want to avoid acquiring the lock.
 	isLast, err := isLastMsg(ctx, kv, msg)

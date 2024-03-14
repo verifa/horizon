@@ -201,7 +201,9 @@ func TestReconcilerSlow(t *testing.T) {
 		hz.WithControllerFor(&DummyObject{}),
 	)
 	tu.AssertNoError(t, err)
-	defer ctlr.Stop()
+	t.Cleanup(func() {
+		ctlr.Stop()
+	})
 
 	do := DummyObject{
 		ObjectMeta: hz.ObjectMeta{
@@ -224,11 +226,73 @@ func TestReconcilerSlow(t *testing.T) {
 		close(done)
 	}()
 
+	timeBefore := time.Now()
 	select {
 	case <-done:
 		t.Log("Slow reconciler finished")
 	case <-time.After(time.Second * 15):
 		t.Fatal("timed out waiting for slow reconciler")
+	}
+	if time.Since(timeBefore) < time.Second*5 {
+		t.Fatal("reconciler did not wait for slow reconciler to run twice")
+	}
+}
+
+type SleepReconciler struct {
+	dur time.Duration
+}
+
+func (r *SleepReconciler) Reconcile(
+	ctx context.Context,
+	request hz.Request,
+) (hz.Result, error) {
+	fmt.Println("SleepReconciler is sleeping for ", r.dur.String())
+	// Simulate a long running process...
+	time.Sleep(r.dur)
+	return hz.Result{}, nil
+}
+
+// TestReconcilerWaitForFinish tests that the controller waits for the
+// reconciler to finish before stopping.
+func TestReconcilerWaitForFinish(t *testing.T) {
+	ctx := context.Background()
+	ti := server.Test(t, ctx)
+
+	client := hz.NewClient(
+		ti.Conn,
+		hz.WithClientInternal(true),
+		hz.WithClientDefaultManager(),
+	)
+	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
+
+	sr := SleepReconciler{
+		dur: time.Second * 3,
+	}
+	ctlr, err := hz.StartController(
+		ctx,
+		ti.Conn,
+		hz.WithControllerReconciler(&sr),
+		hz.WithControllerFor(&DummyObject{}),
+	)
+	tu.AssertNoError(t, err)
+
+	do := DummyObject{
+		ObjectMeta: hz.ObjectMeta{
+			Account: "test",
+			Name:    "dummy",
+		},
+	}
+
+	err = dummyClient.Apply(ctx, do)
+	tu.AssertNoError(t, err)
+	// Wait just a moment, before stopping the controller.
+	time.Sleep(time.Millisecond * 100)
+	timeBefore := time.Now()
+	err = ctlr.Stop()
+	tu.AssertNoError(t, err)
+
+	if time.Since(timeBefore) < sr.dur-time.Second {
+		t.Fatal("controller did not wait for slow reconciler to finish")
 	}
 }
 
