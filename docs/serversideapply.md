@@ -19,7 +19,7 @@ The answer: a server-side patching strategy that keeps track of which entity man
 
 ## Manager and Managed Fields
 
-When an object is applied, the `store` (server-side) requires a "manager" (string name) and will calculate the fields that this manager manages.
+When an object is applied, the `store` (server-side) requires a "manager" (string name) and will calculate the fields that this manager manages based on the object payload.
 
 The computed managed fields are stored along with the object in the `.metadata.managedFields` field.
 
@@ -43,7 +43,7 @@ The returned object will include the entire object (all the fields, including th
 The reconciler will want to modify some fields and apply the object back to the store, such as updating the `.status` field.
 The object which the reconcilier applies should only include the fields which the reconciler should manage.
 
-So, how do we "extract" the managed fields from object, so that we can mutate it and apply it back afterwards? Using the `hz.ExtractManagedFields(...)` function.
+So, how do we "extract" the managed fields from an object, so that we can mutate it and apply it back afterwards? Using the `hz.ExtractManagedFields(...)` function.
 
 A typical reconcile loop will look like this:
 
