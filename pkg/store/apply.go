@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"reflect"
 
@@ -23,7 +22,7 @@ type ApplyRequest struct {
 	Key   hz.ObjectKeyer
 }
 
-func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
+func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 	// For apply, do not validate the request data straight away.
 	// An apply might be a patch on an existing object, and as such,
 	// validate the end result.
@@ -182,7 +181,6 @@ func (s Store) Apply(ctx context.Context, req ApplyRequest) error {
 	// Check if the new object is different from the original object.
 	// If there is no change, make it a no-op.
 	if isJSONEqual(rawObj, bDst) {
-		slog.Info("apply: no change in object")
 		return nil
 	}
 	if err := s.Update(ctx, UpdateRequest{

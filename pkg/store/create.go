@@ -15,7 +15,7 @@ type CreateRequest struct {
 	Data []byte
 }
 
-func (s Store) Create(ctx context.Context, req CreateRequest) error {
+func (s *Store) Create(ctx context.Context, req CreateRequest) error {
 	// Check if the object already exists and return a meaningful error.
 	if _, err := s.kv.Get(ctx, hz.KeyFromObject(req.Key)); err != nil {
 		// If we get a non ErrKeyNotFound error, something went wrong...
@@ -28,7 +28,7 @@ func (s Store) Create(ctx context.Context, req CreateRequest) error {
 				),
 			}
 		}
-		if err := s.validate(ctx, req.Key, req.Data); err != nil {
+		if err := s.validateCreate(ctx, req.Key, req.Data); err != nil {
 			return hz.ErrorWrap(
 				err,
 				http.StatusInternalServerError,
@@ -46,7 +46,7 @@ func (s Store) Create(ctx context.Context, req CreateRequest) error {
 	}
 }
 
-func (s Store) create(
+func (s *Store) create(
 	ctx context.Context,
 	key hz.ObjectKeyer,
 	data []byte,

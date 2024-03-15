@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -46,26 +47,6 @@ func (c StoreCommand) String() string {
 	return string(c)
 }
 
-type Store struct {
-	Conn *nats.Conn
-	Auth *auth.Auth
-
-	js    jetstream.JetStream
-	kv    jetstream.KeyValue
-	mutex jetstream.KeyValue
-	subs  []*nats.Subscription
-}
-
-func (s Store) Close() error {
-	var errs error
-	for _, sub := range s.subs {
-		if err := sub.Unsubscribe(); err != nil {
-			errs = errors.Join(errs, err)
-		}
-	}
-	return errs
-}
-
 type StoreOption func(*storeOptions)
 
 func WithMutexTTL(ttl time.Duration) StoreOption {
@@ -74,12 +55,20 @@ func WithMutexTTL(ttl time.Duration) StoreOption {
 	}
 }
 
+func WithStopTimeout(timeout time.Duration) StoreOption {
+	return func(o *storeOptions) {
+		o.stopTimeout = timeout
+	}
+}
+
 var defaultStoreOptions = storeOptions{
-	mutexTTL: time.Minute,
+	mutexTTL:    time.Minute,
+	stopTimeout: time.Minute,
 }
 
 type storeOptions struct {
-	mutexTTL time.Duration
+	mutexTTL    time.Duration
+	stopTimeout time.Duration
 }
 
 func StartStore(
@@ -88,39 +77,66 @@ func StartStore(
 	auth *auth.Auth,
 	opts ...StoreOption,
 ) (*Store, error) {
+	store := Store{
+		Conn: conn,
+		Auth: auth,
+	}
+	if err := store.Start(ctx, conn, auth, opts...); err != nil {
+		return nil, fmt.Errorf("starting store: %w", err)
+	}
+	return &store, nil
+}
+
+type Store struct {
+	Conn *nats.Conn
+	Auth *auth.Auth
+
+	js    jetstream.JetStream
+	kv    jetstream.KeyValue
+	mutex jetstream.KeyValue
+	gc    *GarbageCollector
+	subs  []*nats.Subscription
+
+	stopTimeout time.Duration
+	wg          sync.WaitGroup
+}
+
+func (s *Store) Start(
+	ctx context.Context,
+	conn *nats.Conn,
+	auth *auth.Auth,
+	opts ...StoreOption,
+) error {
 	opt := defaultStoreOptions
 	for _, o := range opts {
 		o(&opt)
 	}
 
-	store := Store{
-		Conn: conn,
-		Auth: auth,
-	}
+	s.stopTimeout = opt.stopTimeout
 
 	js, err := jetstream.New(conn)
 	if err != nil {
-		return nil, fmt.Errorf("new jetstream: %w", err)
+		return fmt.Errorf("new jetstream: %w", err)
 	}
-	store.js = js
+	s.js = js
 	kv, err := js.KeyValue(ctx, hz.BucketObjects)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"conntecting to objects kv bucket %q: %w",
 			hz.BucketObjects,
 			err,
 		)
 	}
-	store.kv = kv
+	s.kv = kv
 	mutex, err := js.KeyValue(ctx, hz.BucketMutex)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"connecting to mutex kv bucket %q: %w",
 			hz.BucketMutex,
 			err,
 		)
 	}
-	store.mutex = mutex
+	s.mutex = mutex
 
 	{
 		sub, err := conn.QueueSubscribe(
@@ -128,13 +144,13 @@ func StartStore(
 			"store",
 			func(msg *nats.Msg) {
 				slog.Info("received store message", "subject", msg.Subject)
-				store.handleInternalMsg(ctx, msg)
+				go s.handleInternalMsg(ctx, msg)
 			},
 		)
 		if err != nil {
-			return nil, fmt.Errorf("subscribing store: %w", err)
+			return fmt.Errorf("subscribing store: %w", err)
 		}
-		store.subs = append(store.subs, sub)
+		s.subs = append(s.subs, sub)
 	}
 	{
 		sub, err := conn.QueueSubscribe(
@@ -142,13 +158,13 @@ func StartStore(
 			"store",
 			func(msg *nats.Msg) {
 				slog.Info("received store message", "subject", msg.Subject)
-				store.handleAPIMsg(ctx, msg)
+				go s.handleAPIMsg(ctx, msg)
 			},
 		)
 		if err != nil {
-			return nil, fmt.Errorf("subscribing store: %w", err)
+			return fmt.Errorf("subscribing store: %w", err)
 		}
-		store.subs = append(store.subs, sub)
+		s.subs = append(s.subs, sub)
 	}
 
 	// Start garbage collector.
@@ -157,82 +173,65 @@ func StartStore(
 		KV:   kv,
 	}
 	if err := gc.Start(ctx); err != nil {
-		return nil, fmt.Errorf("start garbage collector: %w", err)
+		return fmt.Errorf("start garbage collector: %w", err)
 	}
-
-	return &store, nil
-}
-
-func InitKeyValue(
-	ctx context.Context,
-	conn *nats.Conn,
-	opts ...StoreOption,
-) error {
-	opt := defaultStoreOptions
-	for _, o := range opts {
-		o(&opt)
-	}
-
-	js, err := jetstream.New(conn)
-	if err != nil {
-		return fmt.Errorf("new jetstream: %w", err)
-	}
-
-	if _, err := js.KeyValue(ctx, hz.BucketObjects); err != nil {
-		if !errors.Is(err, jetstream.ErrBucketNotFound) {
-			return fmt.Errorf(
-				"get objects bucket %q: %w",
-				hz.BucketObjects,
-				err,
-			)
-		}
-		if _, err := js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
-			Description: "KV bucket for storing horizon objects.",
-			Bucket:      hz.BucketObjects,
-			History:     1,
-			TTL:         0,
-		}); err != nil {
-			return fmt.Errorf(
-				"create objects bucket %q: %w",
-				hz.BucketObjects,
-				err,
-			)
-		}
-	}
-	// TODO: handle updating the objects bucket if it exists.
-
-	if _, err := js.KeyValue(ctx, hz.BucketMutex); err != nil {
-		if !errors.Is(err, jetstream.ErrBucketNotFound) {
-			return fmt.Errorf(
-				"get mutex bucket %q for %q: %w",
-				hz.BucketMutex,
-				hz.BucketObjects,
-				err,
-			)
-		}
-		if _, err := js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
-			Bucket:      hz.BucketMutex,
-			Description: "Mutex for " + hz.BucketObjects,
-			History:     1,
-			// In case unlocking fails, or there's a serious error,
-			// NATS will automatically unlock the mutex after the TTL.
-			// Behind the scenes, NATS will delete the TTL value,
-			// which from the mutex's perspective means there is no lock.
-			TTL: opt.mutexTTL,
-		}); err != nil {
-			return fmt.Errorf(
-				"create mutex bucket %q for %q: %w",
-				hz.BucketMutex,
-				hz.BucketObjects,
-				err,
-			)
-		}
-	}
-	// TODO: handle updating the mutex bucket if it exists.
+	s.gc = gc
 	return nil
 }
 
-func (s Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
+func (s *Store) Close() error {
+	var errs error
+	for _, sub := range s.subs {
+		if err := sub.Unsubscribe(); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+	s.gc.Stop()
+
+	// Wait for all store operations to finish, or timeout.
+	if s.stopWaitTimeout() {
+		errs = errors.Join(
+			errs,
+			fmt.Errorf(
+				"timeout after %s waiting for store operations to finish",
+				s.stopTimeout,
+			),
+		)
+	}
+	return errs
+}
+
+func (s *Store) stopWaitTimeout() bool {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.wg.Wait()
+	}()
+	tickDuration := time.Second * 10
+	ticker := time.NewTicker(tickDuration)
+	elapsedTime := time.Duration(0)
+	for {
+		elapsedTime += tickDuration
+		select {
+		case <-ticker.C:
+			slog.Info(
+				"waiting for reconcile loops to finish",
+				"elapsed",
+				elapsedTime,
+				"timeout",
+				s.stopTimeout,
+			)
+		case <-done:
+			return false // completed normally
+		case <-time.After(s.stopTimeout):
+			return true // timed out
+		}
+	}
+}
+
+func (s *Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
+	s.wg.Add(1)
+	defer s.wg.Done()
 	// Parse subject to get details.
 	parts := strings.Split(msg.Subject, ".")
 	if len(parts) != subjectLength {
@@ -314,7 +313,9 @@ func (s Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
 // subjects.
 // Even though it is unprotected, some commands (like list) still honour the
 // authz for a user session, if provided.
-func (s Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
+func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
+	s.wg.Add(1)
+	defer s.wg.Done()
 	// Parse subject to get details.
 	parts := strings.Split(msg.Subject, ".")
 	if len(parts) != subjectLength {

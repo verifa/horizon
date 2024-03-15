@@ -15,11 +15,11 @@ type GetRequest struct {
 	Key hz.ObjectKeyer
 }
 
-func (s Store) Get(ctx context.Context, req GetRequest) ([]byte, error) {
+func (s *Store) Get(ctx context.Context, req GetRequest) ([]byte, error) {
 	return s.get(ctx, req.Key)
 }
 
-func (s Store) get(ctx context.Context, key hz.ObjectKeyer) ([]byte, error) {
+func (s *Store) get(ctx context.Context, key hz.ObjectKeyer) ([]byte, error) {
 	rawKey, err := hz.KeyFromObjectStrict(key)
 	if err != nil {
 		return nil, &hz.Error{
@@ -51,7 +51,7 @@ func (s Store) get(ctx context.Context, key hz.ObjectKeyer) ([]byte, error) {
 // metadata of the JSON bytes.
 // This is quite a horrible and hacky approach that should probably be fixed in
 // the future, but it works for now and keeps the interfaces clean.
-func (s Store) toObjectWithRevision(
+func (s *Store) toObjectWithRevision(
 	kve jetstream.KeyValueEntry,
 ) ([]byte, error) {
 	data, err := sjson.SetBytes(

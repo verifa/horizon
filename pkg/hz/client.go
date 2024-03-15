@@ -78,8 +78,9 @@ const (
 
 const (
 	// format: HZ.internal.controller.schema.<group>.<version>.<kind>
-	SubjectCtlrSchema   = "HZ.internal.controller.schema.%s.%s.%s"
-	SubjectCtlrValidate = "HZ.internal.controller.validate.%s.%s.%s"
+	SubjectCtlrSchema         = "HZ.internal.controller.schema.%s.%s.%s"
+	SubjectCtlrValidateCreate = "HZ.internal.controller.validate_create.%s.%s.%s"
+	SubjectCtlrValidateUpdate = "HZ.internal.controller.validate_update.%s.%s.%s"
 )
 
 const SubjectPortalRender = "HZ.internal.portal.%s.http.render"
@@ -516,7 +517,7 @@ func (c Client) Apply(
 	msg.Header.Set(HeaderApplyForceConflicts, strconv.FormatBool(ao.force))
 	msg.Header.Set(HeaderAuthorization, c.Session)
 	msg.Data = data
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
 	reply, err := c.Conn.RequestMsgWithContext(ctx, msg)
 	if err != nil {
@@ -675,10 +676,7 @@ func (c *Client) Get(
 		msg,
 	)
 	if err != nil {
-		if errors.Is(err, nats.ErrNoResponders) {
-			return nil, ErrStoreNotResponding
-		}
-		return nil, fmt.Errorf("making request to store: %w", err)
+		return nil, ErrorFromNATSErr(err)
 	}
 	return reply.Data, ErrorFromNATS(reply)
 }

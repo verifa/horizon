@@ -7,6 +7,6 @@ import (
 
 type SchemaRequest struct{}
 
-func (s Store) Schema(ctx context.Context, req SchemaRequest) error {
+func (s *Store) Schema(ctx context.Context, req SchemaRequest) error {
 	return errors.New("TODO")
 }

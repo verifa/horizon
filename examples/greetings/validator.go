@@ -11,10 +11,14 @@ import (
 
 var _ (hz.Validator) = (*GreetingValidator)(nil)
 
-type GreetingValidator struct{}
+type GreetingValidator struct {
+	hz.ZeroValidator
+}
 
-// Validate implements hz.Validator.
-func (*GreetingValidator) Validate(ctx context.Context, data []byte) error {
+func (*GreetingValidator) ValidateCreate(
+	ctx context.Context,
+	data []byte,
+) error {
 	var greeting Greeting
 	if err := json.Unmarshal(data, &greeting); err != nil {
 		return fmt.Errorf("unmarshalling greeting: %w", err)

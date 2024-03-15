@@ -15,7 +15,7 @@ type DeleteRequest struct {
 	Key hz.ObjectKeyer
 }
 
-func (s Store) Delete(ctx context.Context, req DeleteRequest) error {
+func (s *Store) Delete(ctx context.Context, req DeleteRequest) error {
 	data, err := s.get(ctx, req.Key)
 	if err != nil {
 		return err

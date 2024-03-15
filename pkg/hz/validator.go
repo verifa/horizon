@@ -11,17 +11,53 @@ import (
 )
 
 type Validator interface {
-	// TODO: implement ValidateCreate, ValidateUpdate, ValidateDelete
-	// to allow for more fine-grained validation.
-	// Example:
-	// https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html#implementing-defaultingvalidating-webhooks
-	Validate(ctx context.Context, data []byte) error
+	ValidateCreate(ctx context.Context, data []byte) error
+	ValidateUpdate(ctx context.Context, old, data []byte) error
+	ValidateDelete(ctx context.Context, data []byte) error
 }
+
+var _ Validator = (*ZeroValidator)(nil)
+
+type ZeroValidator struct{}
+
+func (z *ZeroValidator) ValidateCreate(ctx context.Context, data []byte) error {
+	return nil
+}
+
+func (z *ZeroValidator) ValidateUpdate(
+	ctx context.Context,
+	old []byte,
+	data []byte,
+) error {
+	return nil
+}
+
+func (z *ZeroValidator) ValidateDelete(ctx context.Context, data []byte) error {
+	return nil
+}
+
+var _ Validator = (*CUEValidator)(nil)
 
 type CUEValidator struct {
 	Object Objecter
 	cCtx   *cue.Context
 	cueDef cue.Value
+}
+
+func (v *CUEValidator) ValidateCreate(ctx context.Context, data []byte) error {
+	return v.validate(ctx, data)
+}
+
+func (v *CUEValidator) ValidateUpdate(
+	ctx context.Context,
+	old []byte,
+	data []byte,
+) error {
+	return v.validate(ctx, data)
+}
+
+func (v *CUEValidator) ValidateDelete(ctx context.Context, data []byte) error {
+	return nil
 }
 
 func (v *CUEValidator) ParseObject() error {
@@ -38,7 +74,7 @@ func (v *CUEValidator) ParseObject() error {
 	return nil
 }
 
-func (v *CUEValidator) Validate(ctx context.Context, data []byte) error {
+func (v *CUEValidator) validate(_ context.Context, data []byte) error {
 	if v.cCtx == nil {
 		err := v.ParseObject()
 		if err != nil {

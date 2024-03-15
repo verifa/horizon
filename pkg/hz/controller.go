@@ -195,7 +195,9 @@ func (c *Controller) startSchema(
 		obj.ObjectKind(),
 	)
 	sub, err := c.Conn.QueueSubscribe(subject, "schema", func(msg *nats.Msg) {
-		_ = msg.Respond(bSchema)
+		go func() {
+			_ = msg.Respond(bSchema)
+		}()
 	})
 	if err != nil {
 		return fmt.Errorf("subscribing validator: %w", err)
@@ -204,51 +206,122 @@ func (c *Controller) startSchema(
 	return nil
 }
 
+// startValidators subscribes to the validator subjects and validates objects as
+// they come in.
 func (c *Controller) startValidators(
 	ctx context.Context,
 	opt controllerOption,
 ) error {
 	obj := opt.forObject
-	subject := fmt.Sprintf(
-		SubjectCtlrValidate,
-		obj.ObjectGroup(),
-		obj.ObjectVersion(),
-		obj.ObjectKind(),
-	)
-	sub, err := c.Conn.QueueSubscribe(
-		subject,
-		"validator",
-		func(msg *nats.Msg) {
-			var vErr *Error
-			for _, validator := range opt.validators {
-				slog.Info("validate", "subject", msg.Subject)
-				if err := validator.Validate(ctx, msg.Data); err != nil {
-					vErr = &Error{
-						Status:  http.StatusBadRequest,
-						Message: err.Error(),
-					}
-					slog.Info("validate error", "error", err)
-					// Break once the first validator finishes.
-					// Reason: custom validators can depend on something like
-					// the default CUE validator and don't need to re-validate
-					// all the basic values before doing something
-					// more advanced.
-					break
-				}
-			}
-			if vErr != nil {
-				_ = RespondError(msg, vErr)
-				return
-			}
-			_ = msg.Respond(nil)
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("subscribing validator: %w", err)
+	{
+		subject := fmt.Sprintf(
+			SubjectCtlrValidateCreate,
+			obj.ObjectGroup(),
+			obj.ObjectVersion(),
+			obj.ObjectKind(),
+		)
+		sub, err := c.Conn.QueueSubscribe(
+			subject,
+			"validate-create",
+			func(msg *nats.Msg) {
+				go c.handleValidateCreate(ctx, opt, msg)
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("subscribing validator %q: %w", subject, err)
+		}
+		c.subscriptions = append(c.subscriptions, sub)
 	}
-	slog.Info("controller validator subscribed", "subject", subject)
-	c.subscriptions = append(c.subscriptions, sub)
+	{
+		subject := fmt.Sprintf(
+			SubjectCtlrValidateUpdate,
+			obj.ObjectGroup(),
+			obj.ObjectVersion(),
+			obj.ObjectKind(),
+		)
+		sub, err := c.Conn.QueueSubscribe(
+			subject,
+			"validate-update",
+			func(msg *nats.Msg) {
+				go c.handleValidateUpdate(ctx, opt, msg)
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("subscribing validator %q: %w", subject, err)
+		}
+		c.subscriptions = append(c.subscriptions, sub)
+	}
 	return nil
+}
+
+func (c *Controller) handleValidateCreate(
+	ctx context.Context,
+	opt controllerOption,
+	msg *nats.Msg,
+) {
+	var vErr *Error
+	for _, validator := range opt.validators {
+		if err := validator.ValidateCreate(ctx, msg.Data); err != nil {
+			vErr = &Error{
+				Status:  http.StatusBadRequest,
+				Message: err.Error(),
+			}
+			slog.Info("validate create error", "error", err)
+			break
+		}
+	}
+	if vErr != nil {
+		_ = RespondError(msg, vErr)
+		return
+	}
+	_ = RespondOK(msg, nil)
+}
+
+func (c *Controller) handleValidateUpdate(
+	ctx context.Context,
+	opt controllerOption,
+	msg *nats.Msg,
+) {
+	var metaObj MetaOnlyObject
+	if err := json.Unmarshal(msg.Data, &metaObj); err != nil {
+		_ = RespondError(msg, &Error{
+			Status: http.StatusBadRequest,
+			Message: fmt.Sprintf(
+				"unmarshalling object: %s",
+				err.Error(),
+			),
+		})
+		return
+	}
+	// Need to fetch the existing object and pass it to the validators.
+	client := NewClient(c.Conn, WithClientInternal(true))
+	old, err := client.Get(ctx, WithGetKey(metaObj))
+	if err != nil {
+		_ = RespondError(msg, &Error{
+			Status: http.StatusInternalServerError,
+			Message: fmt.Sprintf(
+				"getting existing object from store: %s",
+				err.Error(),
+			),
+		})
+		return
+	}
+	var vErr *Error
+	for _, validator := range opt.validators {
+		if err := validator.ValidateUpdate(ctx, old, msg.Data); err != nil {
+			vErr = &Error{
+				Status:  http.StatusBadRequest,
+				Message: err.Error(),
+			}
+			slog.Info("validate update error", "error", err)
+			break
+		}
+	}
+	if vErr != nil {
+		_ = RespondError(msg, vErr)
+		return
+	}
+	_ = RespondOK(msg, nil)
 }
 
 func (c *Controller) startReconciler(

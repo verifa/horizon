@@ -1,6 +1,7 @@
 package hz
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -28,6 +29,29 @@ func (e *Error) Is(err error) bool {
 		return false
 	}
 	return e.Status == target.Status && e.Message == target.Message
+}
+
+func ErrorFromNATSErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case errors.Is(err, nats.ErrTimeout),
+		errors.Is(err, context.DeadlineExceeded):
+		return &Error{
+			Status:  http.StatusGatewayTimeout,
+			Message: fmt.Sprintf("nats timeout: %s", err.Error()),
+		}
+	case errors.Is(err, nats.ErrNoResponders):
+		return &Error{
+			Status:  http.StatusBadGateway,
+			Message: fmt.Sprintf("no responders: %s", err.Error()),
+		}
+	}
+	return &Error{
+		Status:  http.StatusInternalServerError,
+		Message: fmt.Sprintf("nats error: %s", err.Error()),
+	}
 }
 
 func ErrorFromNATS(msg *nats.Msg) error {

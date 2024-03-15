@@ -16,8 +16,8 @@ type UpdateRequest struct {
 	Revision uint64
 }
 
-func (s Store) Update(ctx context.Context, req UpdateRequest) error {
-	if err := s.validate(ctx, req.Key, req.Data); err != nil {
+func (s *Store) Update(ctx context.Context, req UpdateRequest) error {
+	if err := s.validateUpdate(ctx, req.Key, req.Data); err != nil {
 		return hz.ErrorWrap(
 			err,
 			http.StatusInternalServerError,
@@ -27,7 +27,7 @@ func (s Store) Update(ctx context.Context, req UpdateRequest) error {
 	return s.update(ctx, req.Key, req.Data, req.Revision)
 }
 
-func (s Store) update(
+func (s *Store) update(
 	ctx context.Context,
 	key hz.ObjectKeyer,
 	data []byte,

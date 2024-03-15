@@ -18,7 +18,7 @@ type ListRequest struct {
 // 	Data []json.RawMessage `json:"data"`
 // }
 
-func (s Store) List(
+func (s *Store) List(
 	ctx context.Context,
 	req ListRequest,
 ) (*hz.ObjectList, error) {
