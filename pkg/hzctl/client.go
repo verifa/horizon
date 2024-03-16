@@ -123,7 +123,10 @@ type applyOptions struct {
 	data   []byte
 }
 
-func (c *Client) Apply(ctx context.Context, opts ...ApplyOption) error {
+func (c *Client) Apply(
+	ctx context.Context,
+	opts ...ApplyOption,
+) (hz.ApplyOpResult, error) {
 	ao := applyOptions{}
 	for _, o := range opts {
 		o(&ao)
@@ -131,7 +134,10 @@ func (c *Client) Apply(ctx context.Context, opts ...ApplyOption) error {
 
 	reqURL, err := url.JoinPath(c.Server, "v1", "objects")
 	if err != nil {
-		return fmt.Errorf("creating request url: %w", err)
+		return hz.ApplyOpResultError, fmt.Errorf(
+			"creating request url: %w",
+			err,
+		)
 	}
 
 	req, err := http.NewRequest(
@@ -140,7 +146,7 @@ func (c *Client) Apply(ctx context.Context, opts ...ApplyOption) error {
 		bytes.NewReader(ao.data),
 	)
 	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
+		return hz.ApplyOpResultError, fmt.Errorf("creating request: %w", err)
 	}
 
 	req.Header.Add("Content-Type", "application/json")
@@ -149,14 +155,22 @@ func (c *Client) Apply(ctx context.Context, opts ...ApplyOption) error {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("executing request: %w", err)
+		return hz.ApplyOpResultError, fmt.Errorf("executing request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if err := hz.ErrorFromHTTP(resp); err != nil {
-		return err
+	switch resp.StatusCode {
+	case http.StatusCreated:
+		return hz.ApplyOpResultCreated, nil
+	case http.StatusOK:
+		return hz.ApplyOpResultUpdated, nil
+	case http.StatusNotModified:
+		return hz.ApplyOpResultNoop, nil
+	case http.StatusConflict:
+		return hz.ApplyOpResultConflict, hz.ErrorFromHTTP(resp)
+	default:
+		return hz.ApplyOpResultError, hz.ErrorFromHTTP(resp)
 	}
-	return nil
 }
 
 type DeleteOption func(*deleteOptions)

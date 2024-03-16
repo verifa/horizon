@@ -45,7 +45,7 @@ func (r *GreetingReconciler) Reconcile(
 			Error:    fmt.Sprintf("running hello action: %s", err),
 			Response: "",
 		}
-		if err := r.GreetingClient.Apply(ctx, applyGreet); err != nil {
+		if _, err := r.GreetingClient.Apply(ctx, applyGreet); err != nil {
 			return hz.Result{}, fmt.Errorf("updating greeting: %w", err)
 		}
 		return hz.Result{}, fmt.Errorf("running hello action: %w", err)
@@ -56,7 +56,7 @@ func (r *GreetingReconciler) Reconcile(
 		Error:    "",
 		Response: reply.Status.Response,
 	}
-	if err := r.GreetingClient.Apply(ctx, applyGreet); err != nil {
+	if _, err := r.GreetingClient.Apply(ctx, applyGreet); err != nil {
 		return hz.Result{}, fmt.Errorf("updating greeting: %w", err)
 	}
 

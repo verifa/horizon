@@ -345,6 +345,8 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			_ = hz.RespondError(msg, err)
 			return
 		}
+		_ = hz.RespondStatus(msg, http.StatusCreated, nil)
+		return
 	case StoreCommandApply:
 		manager := msg.Header.Get(hz.HeaderApplyFieldManager)
 		forceStr := msg.Header.Get(hz.HeaderApplyForceConflicts)
@@ -376,10 +378,13 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			Force:   force,
 		}
 
-		if err := s.Apply(ctx, req); err != nil {
+		status, err := s.Apply(ctx, req)
+		if err != nil {
 			_ = hz.RespondError(msg, err)
 			return
 		}
+		_ = hz.RespondStatus(msg, status, nil)
+		return
 	case StoreCommandGet:
 		req := GetRequest{
 			Key: key,
@@ -390,6 +395,7 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			return
 		}
 		_ = hz.RespondOK(msg, resp)
+		return
 	case StoreCommandList:
 		// Logic: the auth rbac does not know which objects exist.
 		// Therefore, we cannot ask it which objects we can list.
@@ -433,6 +439,8 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			_ = hz.RespondError(msg, err)
 			return
 		}
+		_ = hz.RespondOK(msg, nil)
+		return
 	default:
 		_ = hz.RespondError(msg, &hz.Error{
 			Status:  http.StatusBadRequest,
@@ -440,8 +448,6 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 		})
 		return
 	}
-
-	_ = hz.RespondOK(msg, nil)
 }
 
 func removeReadOnlyFields(data []byte) ([]byte, error) {

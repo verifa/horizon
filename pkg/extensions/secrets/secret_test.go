@@ -41,7 +41,7 @@ func TestSecrets(t *testing.T) {
 		hz.WithClientInternal(true),
 		hz.WithClientDefaultManager(),
 	)
-	err = client.Apply(ctx, hz.WithApplyObject(secret))
+	_, err = client.Apply(ctx, hz.WithApplyObject(secret))
 	tu.AssertNoError(t, err)
 
 	raw, err := client.Get(ctx, hz.WithGetKey(secret))

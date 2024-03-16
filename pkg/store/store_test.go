@@ -120,7 +120,7 @@ func runTest(
 				err = json.Unmarshal(jsonData, &obj)
 				tu.AssertNoError(t, err, "unmarshal obj")
 
-				err = client.Apply(
+				_, err = client.Apply(
 					ctx,
 					hz.WithApplyObject(obj),
 					hz.WithApplyForce(ts.Force),

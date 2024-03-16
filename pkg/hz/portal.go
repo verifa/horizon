@@ -88,8 +88,15 @@ func (e *PortalHandler) Start(ctx context.Context) error {
 	)
 	extClient := ObjectClient[Portal]{Client: client}
 	// TODO: field manager.
-	if err := extClient.Apply(ctx, e.ext); err != nil {
+	applyResult, err := extClient.Apply(ctx, e.ext)
+	if err != nil {
 		return fmt.Errorf("putting extension: %w", err)
+	}
+	switch applyResult {
+	case ApplyOpResultCreated:
+		slog.Info("created portal", "name", e.ext.Name)
+	case ApplyOpResultUpdated:
+		slog.Info("updated portal", "name", e.ext.Name)
 	}
 
 	// Subscribe to nats to receive http requests and proxy them to the handler.

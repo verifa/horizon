@@ -22,7 +22,11 @@ type ApplyRequest struct {
 	Key   hz.ObjectKeyer
 }
 
-func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
+// Apply performs the apply operation on the given request.
+// It returns an HTTP status code (int) indicating the result of the operation.
+// If an error is returned, the HTTP status code is part of the error and hence
+// the return value is ignored (use -1 for consistency).
+func (s *Store) Apply(ctx context.Context, req ApplyRequest) (int, error) {
 	// For apply, do not validate the request data straight away.
 	// An apply might be a patch on an existing object, and as such,
 	// validate the end result.
@@ -32,7 +36,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 	// Create managed fields for the request data.
 	fieldsV1, err := managedfields.ManagedFieldsV1(req.Data)
 	if err != nil {
-		return &hz.Error{
+		return -1, &hz.Error{
 			Status: http.StatusBadRequest,
 			Message: fmt.Sprintf(
 				"creating field manager: %s",
@@ -51,11 +55,11 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 	rawObj, err := s.get(ctx, req.Key)
 	if err != nil {
 		if !errors.Is(err, hz.ErrNotFound) {
-			return err
+			return -1, err
 		}
 		var generic hz.GenericObject
 		if err := json.Unmarshal(req.Data, &generic); err != nil {
-			return &hz.Error{
+			return -1, &hz.Error{
 				Status: http.StatusBadRequest,
 				Message: fmt.Sprintf(
 					"decoding request data: %s",
@@ -66,7 +70,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 		generic.ManagedFields = []managedfields.FieldManager{fieldManager}
 		bGeneric, err := json.Marshal(generic)
 		if err != nil {
-			return &hz.Error{
+			return -1, &hz.Error{
 				Status: http.StatusInternalServerError,
 				Message: fmt.Sprintf(
 					"marshalling generic object: %s",
@@ -79,9 +83,9 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 			Key:  req.Key,
 			Data: bGeneric,
 		}); err != nil {
-			return err
+			return -1, err
 		}
-		return nil
+		return http.StatusCreated, nil
 	}
 
 	// If the object already exists we need to perform a merge of the objects
@@ -89,7 +93,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 	// Decode the existing object's managed fields.
 	var generic hz.GenericObject
 	if err := json.Unmarshal(rawObj, &generic); err != nil {
-		return &hz.Error{
+		return -1, &hz.Error{
 			Status: http.StatusInternalServerError,
 			Message: fmt.Sprintf(
 				"decoding existing object: %s",
@@ -106,7 +110,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 	if err != nil {
 		var conflictErr *managedfields.Conflict
 		if !errors.As(err, &conflictErr) {
-			return &hz.Error{
+			return -1, &hz.Error{
 				Status: http.StatusInternalServerError,
 				Message: fmt.Sprintf(
 					"merging managed fields: %s",
@@ -114,7 +118,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 				),
 			}
 		}
-		return &hz.Error{
+		return -1, &hz.Error{
 			Status: http.StatusConflict,
 			Message: fmt.Sprintf(
 				"conflict: %s",
@@ -126,7 +130,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 	generic.ManagedFields = result.ManagedFields
 	newObj, err := json.Marshal(generic)
 	if err != nil {
-		return &hz.Error{
+		return -1, &hz.Error{
 			Status: http.StatusInternalServerError,
 			Message: fmt.Sprintf(
 				"marshalling merged managed fields object: %s",
@@ -141,7 +145,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 	// Finally merge src into dst.
 	var dst, src map[string]interface{}
 	if err := json.Unmarshal(newObj, &dst); err != nil {
-		return &hz.Error{
+		return -1, &hz.Error{
 			Status: http.StatusInternalServerError,
 			Message: fmt.Sprintf(
 				"decoding existing object into map[string]interface{}: %s",
@@ -150,7 +154,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 		}
 	}
 	if err := json.Unmarshal(req.Data, &src); err != nil {
-		return &hz.Error{
+		return -1, &hz.Error{
 			Status: http.StatusBadRequest,
 			Message: fmt.Sprintf(
 				"decoding request data into map[string]interface{}: %s",
@@ -159,7 +163,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 		}
 	}
 	if err := managedfields.PurgeRemovedFields(dst, result.Removed); err != nil {
-		return &hz.Error{
+		return -1, &hz.Error{
 			Status: http.StatusInternalServerError,
 			Message: fmt.Sprintf(
 				"purging removed fields: %s",
@@ -170,7 +174,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 	managedfields.MergeObjects(dst, src, fieldsV1)
 	bDst, err := json.Marshal(dst)
 	if err != nil {
-		return &hz.Error{
+		return -1, &hz.Error{
 			Status: http.StatusInternalServerError,
 			Message: fmt.Sprintf(
 				"encoding merged object: %s",
@@ -181,7 +185,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 	// Check if the new object is different from the original object.
 	// If there is no change, make it a no-op.
 	if isJSONEqual(rawObj, bDst) {
-		return nil
+		return http.StatusNotModified, nil
 	}
 	if err := s.Update(ctx, UpdateRequest{
 		Data:     bDst,
@@ -189,7 +193,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 		Revision: *generic.Revision,
 	}); err != nil {
 		if errors.Is(err, hz.ErrIncorrectRevision) {
-			return &hz.Error{
+			return -1, &hz.Error{
 				Status: http.StatusConflict,
 				Message: fmt.Sprintf(
 					"updating the object (%s): please try again",
@@ -197,7 +201,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 				),
 			}
 		}
-		return &hz.Error{
+		return -1, &hz.Error{
 			Status: http.StatusInternalServerError,
 			Message: fmt.Sprintf(
 				"updating object: %s",
@@ -205,7 +209,7 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) error {
 			),
 		}
 	}
-	return nil
+	return http.StatusOK, nil
 }
 
 // isJSONEqual returns true if the JSON objects are "equal".

@@ -30,7 +30,7 @@ func TestServiceAccounts(t *testing.T) {
 		hz.WithClientInternal(true),
 	)
 
-	if err := client.Apply(ctx, hz.WithApplyObject(svcAcc)); err != nil {
+	if _, err := client.Apply(ctx, hz.WithApplyObject(svcAcc)); err != nil {
 		t.Fatalf("apply service account: %v", err)
 	}
 

@@ -67,7 +67,7 @@ func TestGreeting(t *testing.T) {
 			Name: "Pekka",
 		},
 	}
-	err = greetClient.Apply(ctx, greeting)
+	_, err = greetClient.Apply(ctx, greeting)
 	if err != nil {
 		t.Fatal("applying greeting: ", err)
 	}

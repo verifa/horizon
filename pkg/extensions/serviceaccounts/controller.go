@@ -91,7 +91,7 @@ func (r Reconciler) Reconcile(
 				"nats.creds": userCreds,
 			},
 		}
-		if err := secretClient.Apply(ctx, saSecret); err != nil {
+		if _, err := secretClient.Apply(ctx, saSecret); err != nil {
 			return hz.Result{}, fmt.Errorf("applying secret: %w", err)
 		}
 	}
@@ -101,7 +101,7 @@ func (r Reconciler) Reconcile(
 			Ready:                     true,
 			NATSCredentialsSecretName: &saSecret.Name,
 		}
-		if err := saClient.Apply(ctx, saApply); err != nil {
+		if _, err := saClient.Apply(ctx, saApply); err != nil {
 			return hz.Result{}, fmt.Errorf("applying service account: %w", err)
 		}
 	}

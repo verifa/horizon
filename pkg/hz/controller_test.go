@@ -142,7 +142,7 @@ func TestReconcilerPanic(t *testing.T) {
 	// If we publish messages too quickly the reconciler will only get the last.
 	// Add a little sleep to make sure both messages get handled.
 	time.Sleep(time.Second)
-	err = dummyClient.Apply(ctx, do)
+	_, err = dummyClient.Apply(ctx, do)
 	tu.AssertNoError(t, err)
 
 	done := make(chan struct{})
@@ -212,12 +212,12 @@ func TestReconcilerSlow(t *testing.T) {
 		},
 	}
 
-	err = dummyClient.Apply(ctx, do)
+	_, err = dummyClient.Apply(ctx, do)
 	tu.AssertNoError(t, err)
 	// If we publish messages too quickly the reconciler will only get the last
 	// message, so add a minor delay.
 	time.Sleep(time.Millisecond * 100)
-	err = dummyClient.Apply(ctx, do)
+	_, err = dummyClient.Apply(ctx, do)
 	tu.AssertNoError(t, err)
 
 	done := make(chan struct{})
@@ -283,7 +283,7 @@ func TestReconcilerWaitForFinish(t *testing.T) {
 		},
 	}
 
-	err = dummyClient.Apply(ctx, do)
+	_, err = dummyClient.Apply(ctx, do)
 	tu.AssertNoError(t, err)
 	// Wait just a moment, before stopping the controller.
 	time.Sleep(time.Millisecond * 100)
@@ -397,9 +397,9 @@ func TestReconcilerConcurrent(t *testing.T) {
 		err = childClient.Create(ctx, co)
 		tu.AssertNoError(t, err)
 		for i := 0; i < 50; i++ {
-			err = dummyClient.Apply(ctx, do)
+			_, err = dummyClient.Apply(ctx, do)
 			tu.AssertNoError(t, err)
-			err = childClient.Apply(ctx, co)
+			_, err = childClient.Apply(ctx, co)
 			tu.AssertNoError(t, err)
 		}
 	}()

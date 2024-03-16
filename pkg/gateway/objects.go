@@ -80,7 +80,7 @@ func (o *ObjectsHandler) apply(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
-	if err := client.Apply(r.Context(), hz.WithApplyObject(obj)); err != nil {
+	if _, err := client.Apply(r.Context(), hz.WithApplyObject(obj)); err != nil {
 		httpError(w, err)
 		return
 	}

@@ -53,9 +53,12 @@ var applyCmd = &cobra.Command{
 		}
 
 		ctx := context.Background()
-		if err := client.Apply(ctx, hzctl.WithApplyData(jData)); err != nil {
+		result, err := client.Apply(ctx, hzctl.WithApplyData(jData))
+		if err != nil {
 			return fmt.Errorf("apply: %w", err)
 		}
+
+		fmt.Println("object " + result)
 
 		return nil
 	},

@@ -112,7 +112,7 @@ func (oc ObjectClient[T]) Apply(
 	ctx context.Context,
 	object T,
 	opts ...ApplyOption,
-) error {
+) (ApplyOpResult, error) {
 	opts = append(opts, WithApplyObject(object))
 	return oc.Client.Apply(ctx, opts...)
 }
@@ -426,14 +426,7 @@ func (c Client) Validate(
 		return fmt.Errorf("request: %w", err)
 	}
 
-	status, err := strconv.Atoi(reply.Header.Get(HeaderStatus))
-	if err != nil {
-		return fmt.Errorf("invalid status header: %w", err)
-	}
-	return &Error{
-		Status:  status,
-		Message: string(reply.Data),
-	}
+	return ErrorFromNATS(reply)
 }
 
 type ApplyOption func(*applyOptions)
@@ -462,12 +455,22 @@ func WithApplyForce(force bool) ApplyOption {
 	}
 }
 
+type ApplyOpResult string
+
+const (
+	ApplyOpResultCreated  ApplyOpResult = "created"
+	ApplyOpResultUpdated  ApplyOpResult = "updated"
+	ApplyOpResultNoop     ApplyOpResult = "noop"
+	ApplyOpResultConflict ApplyOpResult = "conflict"
+	ApplyOpResultError    ApplyOpResult = "error"
+)
+
 func (c Client) Apply(
 	ctx context.Context,
 	opts ...ApplyOption,
-) error {
+) (ApplyOpResult, error) {
 	if err := c.checkSession(); err != nil {
-		return err
+		return ApplyOpResultError, err
 	}
 	ao := applyOptions{}
 	for _, opt := range opts {
@@ -475,7 +478,7 @@ func (c Client) Apply(
 	}
 
 	if c.Manager == "" {
-		return ErrApplyManagerRequired
+		return ApplyOpResultError, ErrApplyManagerRequired
 	}
 	var (
 		key  ObjectKeyer
@@ -485,23 +488,29 @@ func (c Client) Apply(
 		var err error
 		data, err = c.marshalObjectWithTypeFields(ao.object)
 		if err != nil {
-			return fmt.Errorf("marshalling object: %w", err)
+			return ApplyOpResultError, fmt.Errorf("marshalling object: %w", err)
 		}
 		key = ao.object
 	}
 	if ao.data != nil {
 		var obj MetaOnlyObject
 		if err := json.Unmarshal(ao.data, &obj); err != nil {
-			return fmt.Errorf("unmarshalling data: %w", err)
+			return ApplyOpResultError, fmt.Errorf("unmarshalling data: %w", err)
 		}
 		key = obj
 		data = ao.data
 	}
 	if key == nil {
-		return fmt.Errorf("apply: %w", ErrClientObjectOrDataRequired)
+		return ApplyOpResultError, fmt.Errorf(
+			"apply: %w",
+			ErrClientObjectOrDataRequired,
+		)
 	}
 	if data == nil {
-		return fmt.Errorf("apply: %w", ErrClientObjectOrDataRequired)
+		return ApplyOpResultError, fmt.Errorf(
+			"apply: %w",
+			ErrClientObjectOrDataRequired,
+		)
 	}
 	msg := nats.NewMsg(
 		c.SubjectPrefix() + fmt.Sprintf(
@@ -522,15 +531,35 @@ func (c Client) Apply(
 	reply, err := c.Conn.RequestMsgWithContext(ctx, msg)
 	if err != nil {
 		if errors.Is(err, nats.ErrNoResponders) {
-			return fmt.Errorf(
+			return ApplyOpResultError, fmt.Errorf(
 				"subject %q: %w",
 				msg.Subject,
 				ErrStoreNotResponding,
 			)
 		}
-		return fmt.Errorf("applying object: %w", err)
+		return ApplyOpResultError, fmt.Errorf("applying object: %w", err)
 	}
-	return ErrorFromNATS(reply)
+	headerStatus := reply.Header.Get(HeaderStatus)
+	status, err := strconv.Atoi(headerStatus)
+	if err != nil {
+		return ApplyOpResultError, fmt.Errorf(
+			"invalid status header %q: %w",
+			headerStatus,
+			err,
+		)
+	}
+	switch status {
+	case http.StatusCreated:
+		return ApplyOpResultCreated, nil
+	case http.StatusOK:
+		return ApplyOpResultUpdated, nil
+	case http.StatusNotModified:
+		return ApplyOpResultNoop, nil
+	case http.StatusConflict:
+		return ApplyOpResultConflict, ErrorFromNATS(reply)
+	default:
+		return ApplyOpResultError, ErrorFromNATS(reply)
+	}
 }
 
 type CreateOption func(*createOptions)

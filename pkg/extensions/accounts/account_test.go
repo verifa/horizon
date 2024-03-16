@@ -30,7 +30,7 @@ func TestAccount(t *testing.T) {
 		Spec: &accounts.AccountSpec{},
 	}
 	accClient := hz.ObjectClient[accounts.Account]{Client: client}
-	err := accClient.Apply(ctx, account)
+	_, err := accClient.Apply(ctx, account)
 	tu.AssertNoError(t, err)
 
 	hztest.WatchWaitUntil(

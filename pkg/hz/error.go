@@ -60,7 +60,7 @@ func ErrorFromNATS(msg *nats.Msg) error {
 	if err != nil {
 		return fmt.Errorf("invalid status header %q: %w", headerStatus, err)
 	}
-	if status == http.StatusOK {
+	if status >= http.StatusOK && status < http.StatusMultipleChoices {
 		return nil
 	}
 	return &Error{
@@ -144,12 +144,20 @@ func RespondOK(
 	msg *nats.Msg,
 	body []byte,
 ) error {
+	return RespondStatus(msg, http.StatusOK, body)
+}
+
+func RespondStatus(
+	msg *nats.Msg,
+	status int,
+	body []byte,
+) error {
 	if msg.Reply == "" {
 		return errors.New("no reply subject")
 	}
 	response := nats.NewMsg(msg.Reply)
 	response.Data = body
 	response.Header = make(nats.Header)
-	response.Header.Add(HeaderStatus, fmt.Sprintf("%d", http.StatusOK))
+	response.Header.Add(HeaderStatus, fmt.Sprintf("%d", status))
 	return msg.RespondMsg(response)
 }
