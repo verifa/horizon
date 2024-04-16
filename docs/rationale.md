@@ -41,6 +41,8 @@ Hence, things like [Terraform](https://www.terraform.io/), [Pulumi](https://www.
 At the same time, we feel that no existing Internal Development Portals/Platforms are quite the same as Horizon.
 
 Tools like [Backstage](https://backstage.io/) provides a "single pane of glass" but do not provide the backend for provisioning external resources.
+Of course Backstage provides a lot of features that Horizon does not, so using Backstage as a UI for Horizon is not an unfounded idea.
+You could use just the server-side apply and controller logic from Horizon, and skip the portals and developing UI components.
 
 [Kratix](https://kratix.io/) is a "platform framework" that uses [Kubernetes](https://kubernetes.io/) to provision external resources, but requires something like [Backstage](https://backstage.io/) as a UI.
 
