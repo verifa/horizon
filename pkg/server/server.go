@@ -266,11 +266,6 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 	}
 	if opt.runAccountsController {
 		recon := accounts.AccountReconciler{
-			Client: hz.NewClient(
-				s.Conn,
-				hz.WithClientInternal(true),
-				hz.WithClientManager("ctlr-accounts"),
-			),
 			Conn:              s.Conn,
 			OpKeyPair:         s.NS.Auth.Operator.SigningKey.KeyPair,
 			RootAccountPubKey: s.NS.Auth.RootAccount.PublicKey,

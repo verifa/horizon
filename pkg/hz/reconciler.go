@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const RootAccount = "hz-root"
+const RootAccount = "root"
 
 type Reconciler interface {
 	Reconcile(context.Context, Request) (Result, error)

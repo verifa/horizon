@@ -1,4 +1,4 @@
-apiVersion: hz-internal/v1 # "core/v1"
+apiVersion: core/v1
 kind: Account
 metadata:
   name: test-account

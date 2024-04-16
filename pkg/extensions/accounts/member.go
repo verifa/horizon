@@ -15,7 +15,7 @@ func (Member) ObjectVersion() string {
 }
 
 func (Member) ObjectGroup() string {
-	return "hz-internal"
+	return "core"
 }
 
 func (Member) ObjectKind() string {

@@ -31,7 +31,7 @@ func (e Portal) ObjectVersion() string {
 }
 
 func (e Portal) ObjectGroup() string {
-	return "hz-internal"
+	return "core"
 }
 
 func (e Portal) ObjectKind() string {

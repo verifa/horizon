@@ -15,7 +15,7 @@ func (RoleBinding) ObjectVersion() string {
 }
 
 func (RoleBinding) ObjectGroup() string {
-	return "hz-internal"
+	return "core"
 }
 
 func (RoleBinding) ObjectKind() string {

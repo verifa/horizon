@@ -14,8 +14,11 @@ import (
 )
 
 const (
+	fieldManager = "ctrl-accounts"
+	Finalizer    = "core/account"
+
 	ObjectKind    = "Account"
-	ObjectGroup   = "hz-internal"
+	ObjectGroup   = "core"
 	ObjectVersion = "v1"
 )
 
@@ -36,6 +39,11 @@ func (a Account) ObjectGroup() string {
 
 func (a Account) ObjectKind() string {
 	return ObjectKind
+}
+
+// Override ObjectAccount because accounts can only exist in the root account.
+func (a Account) ObjectAccount() string {
+	return hz.RootAccount
 }
 
 type AccountSpec struct{}
@@ -59,7 +67,6 @@ type AccountStatus struct {
 var _ (hz.Reconciler) = (*AccountReconciler)(nil)
 
 type AccountReconciler struct {
-	hz.Client
 	Conn *nats.Conn
 
 	OpKeyPair         nkeys.KeyPair
@@ -71,7 +78,12 @@ func (r *AccountReconciler) Reconcile(
 	ctx context.Context,
 	req hz.Request,
 ) (hz.Result, error) {
-	accClient := hz.ObjectClient[Account]{Client: r.Client}
+	client := hz.NewClient(
+		r.Conn,
+		hz.WithClientInternal(true),
+		hz.WithClientManager(fieldManager),
+	)
+	accClient := hz.ObjectClient[Account]{Client: client}
 	account, err := accClient.Get(
 		ctx,
 		hz.WithGetKey(req.Key),
@@ -80,7 +92,7 @@ func (r *AccountReconciler) Reconcile(
 		return hz.Result{}, hz.IgnoreNotFound(err)
 	}
 
-	accountApply, err := hz.ExtractManagedFields(account, "ctrl-accounts")
+	accountApply, err := hz.ExtractManagedFields(account, fieldManager)
 	if err != nil {
 		return hz.Result{}, fmt.Errorf("extracting managed fields: %w", err)
 	}
@@ -103,8 +115,9 @@ func (r *AccountReconciler) Reconcile(
 		}
 		return hz.Result{}, nil
 	}
-
-	ready := true
+	// If status is non-nil, check if the account exists.
+	// If it exists, make sure it matches what it should.
+	// If it doesn't exist, re-create it.
 	existingClaims, err := jwt.DecodeAccountClaims(account.Status.JWT)
 	if err != nil {
 		return hz.Result{}, fmt.Errorf("decoding account claims: %w", err)
@@ -118,32 +131,20 @@ func (r *AccountReconciler) Reconcile(
 		if _, err := AccountClaimsUpdate(ctx, r.Conn, r.OpKeyPair, account.Status.JWT); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
-		ready = false
 	}
 
-	if ready && !cmp.Equal(claims, existingClaims) {
+	if !cmp.Equal(claims, existingClaims) {
 		if _, err := AccountClaimsUpdate(ctx, r.Conn, r.OpKeyPair, account.Status.JWT); err != nil {
-			return hz.Result{}, fmt.Errorf("updating account: %w", err)
-		}
-		ready = false
-	}
-
-	if !ready {
-		if account.Status.Ready {
 			accountApply.Status.Ready = false
 			if _, err := accClient.Apply(ctx, accountApply); err != nil {
 				return hz.Result{}, fmt.Errorf("updating account: %w", err)
 			}
-			return hz.Result{}, nil
-		}
-		return hz.Result{}, nil
-	}
-
-	if !account.Status.Ready {
-		accountApply.Status.Ready = true
-		if _, err := accClient.Apply(ctx, accountApply); err != nil {
 			return hz.Result{}, fmt.Errorf("updating account: %w", err)
 		}
+	}
+	accountApply.Status.Ready = true
+	if _, err := accClient.Apply(ctx, accountApply); err != nil {
+		return hz.Result{}, fmt.Errorf("updating account: %w", err)
 	}
 
 	return hz.Result{}, nil

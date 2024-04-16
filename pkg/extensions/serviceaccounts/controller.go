@@ -114,8 +114,8 @@ func (r Reconciler) generateNATSCredentials(
 ) (string, error) {
 	accClient := hz.ObjectClient[accounts.Account]{Client: r.Client}
 	account, err := accClient.Get(ctx, hz.WithGetKey(hz.ObjectKey{
-		Name:    hz.RootAccount,
-		Account: sa.Account,
+		Account: hz.RootAccount,
+		Name:    sa.Account,
 	}))
 	if err != nil {
 		return "", fmt.Errorf("getting horizon account: %w", err)

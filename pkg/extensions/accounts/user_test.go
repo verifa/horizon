@@ -31,7 +31,6 @@ func TestUser(t *testing.T) {
 	// In order to publish a user, the account the user references
 	// must exist in the NATS KV store.
 	recon := accounts.AccountReconciler{
-		Client:            client,
 		Conn:              ti.Conn,
 		OpKeyPair:         ti.NS.Auth.Operator.SigningKey.KeyPair,
 		RootAccountPubKey: ti.NS.Auth.RootAccount.PublicKey,

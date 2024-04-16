@@ -53,7 +53,7 @@ func TestRBAC(t *testing.T) {
 				},
 				Spec: RoleBindingSpec{
 					RoleRef: RoleRef{
-						Group: "hz-internal",
+						Group: "core",
 						Kind:  "Role",
 						Name:  "role-creator",
 					},
@@ -176,7 +176,7 @@ func TestRBAC(t *testing.T) {
 				},
 				Spec: RoleBindingSpec{
 					RoleRef: RoleRef{
-						Group: "hz-internal",
+						Group: "core",
 						Kind:  "Role",
 						Name:  "role-runner",
 					},
@@ -247,7 +247,7 @@ func TestRBAC(t *testing.T) {
 				},
 				Spec: RoleBindingSpec{
 					RoleRef: RoleRef{
-						Group: "hz-internal",
+						Group: "core",
 						Kind:  "Role",
 						Name:  "role-allow-all",
 					},
@@ -266,7 +266,7 @@ func TestRBAC(t *testing.T) {
 				},
 				Spec: RoleBindingSpec{
 					RoleRef: RoleRef{
-						Group: "hz-internal",
+						Group: "core",
 						Kind:  "Role",
 						Name:  "role-deny-delete",
 					},
