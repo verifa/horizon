@@ -205,10 +205,10 @@ func (s Server) RootUserConn() (*nats.Conn, error) {
 	return nc, nil
 }
 
-// PublishRootAccount publishes the root account JWT to the server.
+// PublishRootNamespace publishes the root account JWT to the server.
 // This is required to be able to connect to the server with the root account
 // and therefore needs to happen once the server has been started.
-func (s Server) PublishRootAccount() error {
+func (s Server) PublishRootNamespace() error {
 	nc, err := s.sysUserConn()
 	if err != nil {
 		return fmt.Errorf("connecting to system_account nats: %w", err)

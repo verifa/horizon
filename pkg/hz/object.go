@@ -25,7 +25,7 @@ type ObjectKeyer interface {
 	ObjectGroup() string
 	ObjectVersion() string
 	ObjectKind() string
-	ObjectAccount() string
+	ObjectNamespace() string
 	ObjectName() string
 }
 
@@ -43,8 +43,8 @@ func validateKeyStrict(key ObjectKeyer) error {
 	if isEmptyOrStar(key.ObjectKind()) {
 		errs = errors.Join(errs, fmt.Errorf("kind is required"))
 	}
-	if isEmptyOrStar(key.ObjectAccount()) {
-		errs = errors.Join(errs, fmt.Errorf("account is required"))
+	if isEmptyOrStar(key.ObjectNamespace()) {
+		errs = errors.Join(errs, fmt.Errorf("namespace is required"))
 	}
 	if isEmptyOrStar(key.ObjectName()) {
 		errs = errors.Join(errs, fmt.Errorf("name is required"))
@@ -73,9 +73,9 @@ func KeyFromObject(obj ObjectKeyer) string {
 	if obj.ObjectKind() != "" {
 		kind = obj.ObjectKind()
 	}
-	account := "*"
-	if obj.ObjectAccount() != "" {
-		account = obj.ObjectAccount()
+	namespace := "*"
+	if obj.ObjectNamespace() != "" {
+		namespace = obj.ObjectNamespace()
 	}
 	name := "*"
 	if obj.ObjectName() != "" {
@@ -86,7 +86,7 @@ func KeyFromObject(obj ObjectKeyer) string {
 		group,
 		version,
 		kind,
-		account,
+		namespace,
 		name,
 	)
 }
@@ -108,32 +108,32 @@ func ObjectKeyFromString(key string) (ObjectKey, error) {
 		return ObjectKey{}, fmt.Errorf("invalid key: %q", key)
 	}
 	return ObjectKey{
-		Group:   parts[0],
-		Version: parts[1],
-		Kind:    parts[2],
-		Account: parts[3],
-		Name:    parts[4],
+		Group:     parts[0],
+		Version:   parts[1],
+		Kind:      parts[2],
+		Namespace: parts[3],
+		Name:      parts[4],
 	}, nil
 }
 
 func ObjectKeyFromObject(object Objecter) ObjectKey {
 	return ObjectKey{
-		Group:   object.ObjectGroup(),
-		Version: object.ObjectVersion(),
-		Kind:    object.ObjectKind(),
-		Account: object.ObjectAccount(),
-		Name:    object.ObjectName(),
+		Group:     object.ObjectGroup(),
+		Version:   object.ObjectVersion(),
+		Kind:      object.ObjectKind(),
+		Namespace: object.ObjectNamespace(),
+		Name:      object.ObjectName(),
 	}
 }
 
 var _ ObjectKeyer = (*ObjectKey)(nil)
 
 type ObjectKey struct {
-	Group   string
-	Version string
-	Kind    string
-	Account string
-	Name    string
+	Group     string
+	Version   string
+	Kind      string
+	Namespace string
+	Name      string
 }
 
 func (o ObjectKey) ObjectGroup() string {
@@ -157,11 +157,11 @@ func (o ObjectKey) ObjectKind() string {
 	return o.Kind
 }
 
-func (o ObjectKey) ObjectAccount() string {
-	if o.Account == "" {
+func (o ObjectKey) ObjectNamespace() string {
+	if o.Namespace == "" {
 		return "*"
 	}
-	return o.Account
+	return o.Namespace
 }
 
 func (o ObjectKey) ObjectName() string {
@@ -177,22 +177,22 @@ func (o ObjectKey) String() string {
 		o.ObjectGroup(),
 		o.ObjectVersion(),
 		o.ObjectKind(),
-		o.ObjectAccount(),
+		o.ObjectNamespace(),
 		o.ObjectName(),
 	)
 }
 
 type ObjectMeta struct {
-	Name    string `json:"name,omitempty" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
-	Account string `json:"account,omitempty" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
+	Name      string `json:"name,omitempty"      cue:"=~\"^[a-zA-Z0-9-_]+$\""`
+	Namespace string `json:"namespace,omitempty" cue:"=~\"^[a-zA-Z0-9-_]+$\""`
 
 	Labels map[string]string `json:"labels,omitempty" cue:",opt"`
 
 	// Revision is the revision number of the object.
-	Revision          *uint64                     `json:"revision,omitempty" cue:",opt"`
-	OwnerReferences   OwnerReferences             `json:"ownerReferences,omitempty" cue:",opt"`
+	Revision          *uint64                     `json:"revision,omitempty"          cue:",opt"`
+	OwnerReferences   OwnerReferences             `json:"ownerReferences,omitempty"   cue:",opt"`
 	DeletionTimestamp *Time                       `json:"deletionTimestamp,omitempty" cue:",opt"`
-	ManagedFields     managedfields.ManagedFields `json:"managedFields,omitempty" cue:",opt"`
+	ManagedFields     managedfields.ManagedFields `json:"managedFields,omitempty"     cue:",opt"`
 	// Finalizers are a way for controllers to prevent garbage collection of
 	// objects. The GC will not delete an object unless it has no finalizers.
 	// Hence, it is the responsibility of the controller to remove the
@@ -202,15 +202,15 @@ type ObjectMeta struct {
 	// Use type alias to "correctly" marshal to json.
 	// A nil Finalizers is omitted from JSON.
 	// A non-nil Finalizers is marshalled as an empty array if it is empty.
-	Finalizers *Finalizers `json:"finalizers,omitempty" cue:",opt"`
+	Finalizers *Finalizers `json:"finalizers,omitempty"        cue:",opt"`
 }
 
 func (o ObjectMeta) ObjectName() string {
 	return o.Name
 }
 
-func (o ObjectMeta) ObjectAccount() string {
-	return o.Account
+func (o ObjectMeta) ObjectNamespace() string {
+	return o.Namespace
 }
 
 func (o ObjectMeta) ObjectRevision() *uint64 {
@@ -276,11 +276,11 @@ func (t TypeMeta) ObjectVersion() string {
 
 func OwnerReferenceFromObject(object Objecter) OwnerReference {
 	return OwnerReference{
-		Group:   object.ObjectGroup(),
-		Version: object.ObjectVersion(),
-		Kind:    object.ObjectKind(),
-		Name:    object.ObjectName(),
-		Account: object.ObjectAccount(),
+		Group:     object.ObjectGroup(),
+		Version:   object.ObjectVersion(),
+		Kind:      object.ObjectKind(),
+		Name:      object.ObjectName(),
+		Namespace: object.ObjectNamespace(),
 	}
 }
 
@@ -298,11 +298,11 @@ func (o OwnerReferences) IsOwnedBy(obj Objecter) bool {
 var _ ObjectKeyer = (*OwnerReference)(nil)
 
 type OwnerReference struct {
-	Group   string `json:"group,omitempty" cue:""`
-	Version string `json:"version,omitempty" cue:""`
-	Kind    string `json:"kind,omitempty" cue:""`
-	Account string `json:"account,omitempty" cue:""`
-	Name    string `json:"name,omitempty" cue:""`
+	Group     string `json:"group,omitempty"     cue:""`
+	Version   string `json:"version,omitempty"   cue:""`
+	Kind      string `json:"kind,omitempty"      cue:""`
+	Namespace string `json:"namespace,omitempty" cue:""`
+	Name      string `json:"name,omitempty"      cue:""`
 }
 
 func (o OwnerReference) ObjectGroup() string {
@@ -317,8 +317,8 @@ func (o OwnerReference) ObjectKind() string {
 	return o.Kind
 }
 
-func (o OwnerReference) ObjectAccount() string {
-	return o.Account
+func (o OwnerReference) ObjectNamespace() string {
+	return o.Namespace
 }
 
 func (o OwnerReference) ObjectName() string {
@@ -333,7 +333,7 @@ func (o OwnerReference) IsOwnedBy(owner Objecter) bool {
 		o.Version == owner.ObjectVersion() &&
 		o.Kind == owner.ObjectKind() &&
 		o.Name == owner.ObjectName() &&
-		o.Account == owner.ObjectAccount()
+		o.Namespace == owner.ObjectNamespace()
 }
 
 type Time struct {

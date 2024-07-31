@@ -30,33 +30,27 @@ templ layout(title string, userInfo *auth.UserInfo, body templ.Component) {
 	</html>
 }
 
-// accountLayout is a layout for pages within an account.
+// namespaceLayout is a layout for pages within an namespace.
 // It shows the sidebar with the extensions/actors installed.
-templ accountLayout(account string, portals map[string]hz.Portal, body templ.Component) {
+templ namespaceLayout(namespace string, portals map[string]hz.Portal, body templ.Component) {
 	<div class="drawer drawer-open">
-		<input id="account-drawer" type="checkbox" class="drawer-toggle"/>
+		<input id="namespace-drawer" type="checkbox" class="drawer-toggle"/>
 		<div class="drawer-content p-8">
 			@body
 		</div>
 		<div class="drawer-side">
-			<label for="account-drawer" class="drawer-overlay"></label>
+			<label for="namespace-drawer" class="drawer-overlay"></label>
 			<ul class="menu p-4 w-80 min-h-full bg-base-200 text-base-content">
 				<li>
-					<a href={ templ.URL("/accounts/" + account) } class="text-primary">
+					<a href={ templ.URL("/namespaces/" + namespace) } class="text-primary">
 						@iconComputerDesktop()
 						Dashboard
-					</a>
-				</li>
-				<li>
-					<a href={ templ.URL("/accounts/" + account + "/serviceaccounts") }>
-						@iconUsers()
-						Service Accounts
 					</a>
 				</li>
 				<hr class="my-2"/>
 				for _, ext := range portals {
 					<li>
-						<a href={ templ.URL("/accounts/" + account + "/portal/" + ext.ObjectMeta.Name) }>
+						<a href={ templ.URL("/namespaces/" + namespace + "/portal/" + ext.ObjectMeta.Name) }>
 							@iconRender(ext.Spec.Icon)
 							{ ext.Spec.DisplayName }
 						</a>
@@ -78,10 +72,10 @@ templ nav(userInfo *auth.UserInfo) {
 	</div>
 }
 
-templ portalProxy(account string, portal string, subpath string) {
+templ portalProxy(namespace string, portal string, subpath string) {
 	<div hx-ext="response-targets">
 		<div
-			hx-get={ string(templ.URL(strings.Join([]string{"/accounts", account, "portal", portal, subpath}, "/"))) }
+			hx-get={ string(templ.URL(strings.Join([]string{"/namespaces", namespace, "portal", portal, subpath}, "/"))) }
 			hx-headers='{"HZ-Portal-Load-Request": "true"}'
 			hx-trigger="load"
 			hx-swap="outerHTML"

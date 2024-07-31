@@ -9,9 +9,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/broker"
-	"github.com/verifa/horizon/pkg/extensions/accounts"
-	"github.com/verifa/horizon/pkg/extensions/secrets"
-	"github.com/verifa/horizon/pkg/extensions/serviceaccounts"
+	"github.com/verifa/horizon/pkg/extensions/core"
 	"github.com/verifa/horizon/pkg/gateway"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/natsutil"
@@ -29,9 +27,7 @@ func WithDevMode() ServerOption {
 		o.runGateway = true
 
 		o.runSecretsController = true
-		o.runAccountsController = true
-		o.runServiceAccountsController = true
-		o.runUsersActor = true
+		o.runNamespaceController = true
 		o.runPortalController = true
 	}
 }
@@ -100,27 +96,6 @@ func WithGatewayOptions(opts ...gateway.ServerOption) ServerOption {
 	}
 }
 
-func WithRunAccountsController(b bool) ServerOption {
-	return func(o *serverOptions) {
-		o.runAccountsController = b
-	}
-}
-
-func WithAccountsControllerOptions(opts ...hz.ControllerOption) ServerOption {
-	return func(o *serverOptions) {
-		o.runAccountsController = true
-		o.accountsControllerOptions = append(
-			o.accountsControllerOptions,
-			opts...)
-	}
-}
-
-func WithRunUsersActor(b bool) ServerOption {
-	return func(o *serverOptions) {
-		o.runUsersActor = b
-	}
-}
-
 type ServerOption func(*serverOptions)
 
 type serverOptions struct {
@@ -134,17 +109,15 @@ type serverOptions struct {
 	runStore      bool
 	runGateway    bool
 
-	runSecretsController         bool
-	runAccountsController        bool
-	runServiceAccountsController bool
-	runUsersActor                bool
-	runPortalController          bool
+	runSecretsController   bool
+	runNamespaceController bool
+	runPortalController    bool
 
-	natsOptions               []natsutil.ServerOption
-	authOptions               []auth.Option
-	storeOptions              []store.StoreOption
-	gatewayOptions            []gateway.ServerOption
-	accountsControllerOptions []hz.ControllerOption
+	natsOptions                []natsutil.ServerOption
+	authOptions                []auth.Option
+	storeOptions               []store.StoreOption
+	gatewayOptions             []gateway.ServerOption
+	namespaceControllerOptions []hz.ControllerOption
 }
 
 type Server struct {
@@ -156,11 +129,9 @@ type Server struct {
 	Store   *store.Store
 	Gateway *gateway.Server
 
-	CtlrSecrets         *hz.Controller
-	CtlrAccounts        *hz.Controller
-	CtlrServiceAccounts *hz.Controller
-	CltrPortals         *hz.Controller
-	ActorUsers          *hz.Actor[accounts.User]
+	CtlrSecrets    *hz.Controller
+	CtlrNamespaces *hz.Controller
+	CltrPortals    *hz.Controller
 }
 
 func Start(
@@ -191,8 +162,8 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		if err := ts.StartUntilReady(); err != nil {
 			return fmt.Errorf("starting nats server: %w", err)
 		}
-		if err := ts.PublishRootAccount(); err != nil {
-			return fmt.Errorf("publishing root horizon account: %w", err)
+		if err := ts.PublishRootNamespace(); err != nil {
+			return fmt.Errorf("publishing root horizon namespace: %w", err)
 		}
 		conn, err := ts.RootUserConn()
 		if err != nil {
@@ -257,72 +228,28 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		ctlr, err := hz.StartController(
 			ctx,
 			s.Conn,
-			hz.WithControllerFor(secrets.Secret{}),
+			hz.WithControllerFor(core.Secret{}),
 		)
 		if err != nil {
 			return fmt.Errorf("starting secrets controller: %w", err)
 		}
 		s.CtlrSecrets = ctlr
 	}
-	if opt.runAccountsController {
-		recon := accounts.AccountReconciler{
-			Conn:              s.Conn,
-			OpKeyPair:         s.NS.Auth.Operator.SigningKey.KeyPair,
-			RootAccountPubKey: s.NS.Auth.RootAccount.PublicKey,
-		}
+	if opt.runNamespaceController {
 		defaultOptions := []hz.ControllerOption{
-			hz.WithControllerFor(accounts.Account{}),
-			hz.WithControllerReconciler(&recon),
+			hz.WithControllerFor(core.Namespace{}),
 		}
 
 		ctlr, err := hz.StartController(
 			ctx,
 			s.Conn,
-			append(defaultOptions, opt.accountsControllerOptions...)...,
+			append(defaultOptions, opt.namespaceControllerOptions...)...,
 		)
 		if err != nil {
-			return fmt.Errorf("starting accounts controller: %w", err)
+			return fmt.Errorf("starting namespaces controller: %w", err)
 		}
-		s.CtlrAccounts = ctlr
+		s.CtlrNamespaces = ctlr
 	}
-	if opt.runServiceAccountsController {
-		recon := serviceaccounts.Reconciler{
-			Client: hz.NewClient(
-				s.Conn,
-				hz.WithClientInternal(true),
-				hz.WithClientManager(serviceaccounts.FieldManager),
-			),
-		}
-		ctlr, err := hz.StartController(
-			ctx,
-			s.Conn,
-			hz.WithControllerFor(serviceaccounts.ServiceAccount{}),
-			hz.WithControllerReconciler(&recon),
-		)
-		if err != nil {
-			return fmt.Errorf("starting service accounts controller: %w", err)
-		}
-		s.CtlrServiceAccounts = ctlr
-	}
-
-	if opt.runUsersActor {
-		userCreateAction := accounts.UserCreateAction{
-			Client: hz.NewClient(
-				s.Conn,
-				hz.WithClientInternal(true),
-			),
-		}
-		userActor, err := hz.StartActor(
-			ctx,
-			s.Conn,
-			hz.WithActorActioner(&userCreateAction),
-		)
-		if err != nil {
-			return fmt.Errorf("starting user actor: %w", err)
-		}
-		s.ActorUsers = userActor
-	}
-
 	if opt.runPortalController {
 		ctlr, err := hz.StartController(
 			ctx,
@@ -335,16 +262,16 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		s.CltrPortals = ctlr
 	}
 
-	// Check that the root account exists as an object.
+	// Check that the root namespace exists as an object.
 	// This is a little bit fidgety, because the root account *will* exist in
-	// NATS, but we want it to exist as a horizon object in the store.
+	// NATS, but we want it to exist as a horizon namespace object in the store.
 	// We cannot create the horizon object when we create the account in nats
 	// because we would need the store to run, which cannot run until the root
 	// account exists in nats...
 	// For now, create it here but when we split the server out we'll need to
 	// find a good startup process.
-	if err := s.checkRootAccountObject(ctx, s.NS.Auth); err != nil {
-		return fmt.Errorf("checking root account object: %w", err)
+	if err := s.checkRootNamespaceObject(ctx); err != nil {
+		return fmt.Errorf("checking root namespace object: %w", err)
 	}
 
 	if opt.devMode {
@@ -367,7 +294,7 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 \__,_\___|\_/  |_|_|_\___/\__,_\___|
 		`)
 
-		fmt.Println("Below is a NATS credential for the root account.")
+		fmt.Println("Below is a NATS credential for the root NATS account.")
 		fmt.Println("Copy it to a file such as \"nats.creds\"")
 
 		fmt.Println("")
@@ -387,8 +314,8 @@ func (s *Server) Close() error {
 			errs = errors.Join(errs, err)
 		}
 	}
-	if s.CtlrAccounts != nil {
-		if err := s.CtlrAccounts.Stop(); err != nil {
+	if s.CtlrNamespaces != nil {
+		if err := s.CtlrNamespaces.Stop(); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}
@@ -420,40 +347,33 @@ func (s *Server) Close() error {
 	return errs
 }
 
-func (s *Server) checkRootAccountObject(
+func (s *Server) checkRootNamespaceObject(
 	ctx context.Context,
-	jwtAuth natsutil.ServerJWTAuth,
 ) error {
-	accClient := hz.ObjectClient[accounts.Account]{
+	nsClient := hz.ObjectClient[core.Namespace]{
 		Client: hz.NewClient(s.Conn, hz.WithClientInternal(true)),
 	}
-	if _, err := accClient.Get(
+	if _, err := nsClient.Get(
 		ctx,
 		hz.WithGetKey(hz.ObjectKey{
-			Name:    hz.RootAccount,
-			Account: hz.RootAccount,
+			Name:      hz.RootNamespace,
+			Namespace: hz.RootNamespace,
 		}),
 	); err != nil {
 		if !errors.Is(err, hz.ErrNotFound) {
-			return fmt.Errorf("get root account: %w", err)
+			return fmt.Errorf("get root namespace: %w", err)
 		}
-		fmt.Println("Checking root account object: not found, creating...")
-		// If the root account is not found, we need to create it.
-		if err := accClient.Create(ctx, accounts.Account{
+		fmt.Println("Checking root namespace object: not found, creating...")
+		// If the root namespace is not found, we need to create it.
+		if err := nsClient.Create(ctx, core.Namespace{
 			ObjectMeta: hz.ObjectMeta{
-				Name:    hz.RootAccount,
-				Account: hz.RootAccount,
+				Name:      hz.RootNamespace,
+				Namespace: hz.RootNamespace,
 			},
-			Spec: &accounts.AccountSpec{},
-			Status: &accounts.AccountStatus{
-				Ready:          true,
-				ID:             jwtAuth.RootAccount.PublicKey,
-				Seed:           jwtAuth.RootAccount.Seed,
-				SigningKeySeed: jwtAuth.RootAccount.SigningKey.Seed,
-				JWT:            jwtAuth.RootAccount.JWT,
-			},
+			Spec:   &core.NamespaceSpec{},
+			Status: &core.NamespaceStatus{},
 		}); err != nil {
-			return fmt.Errorf("create root account: %w", err)
+			return fmt.Errorf("create root namespace: %w", err)
 		}
 	}
 

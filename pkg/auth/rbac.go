@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/verifa/horizon/pkg/extensions/core"
 	"github.com/verifa/horizon/pkg/hz"
 )
 
@@ -118,19 +119,13 @@ func (r *RBAC) Close() error {
 }
 
 type Group struct {
-	Name     string
-	Accounts map[string]*Permissions
+	Name       string
+	Namespaces map[string]*Permissions
 }
 
 type Permissions struct {
 	Allow []Verbs `json:"allow"`
 	Deny  []Verbs `json:"deny"`
-}
-
-type AccountRequest struct {
-	User    string
-	Groups  []string
-	Account string
 }
 
 type Verb string
@@ -170,26 +165,26 @@ func (r *RBAC) Check(ctx context.Context, req RBACRequest) bool {
 		if !ok {
 			continue
 		}
-		wildcardAccount, wildcardOK := group.Accounts["*"]
-		account, accountOK := group.Accounts[req.Object.ObjectAccount()]
-		if !wildcardOK && !accountOK {
+		wildcardNS, wildcardOK := group.Namespaces["*"]
+		ns, nsOK := group.Namespaces[req.Object.ObjectNamespace()]
+		if !wildcardOK && !nsOK {
 			continue
 		}
 
-		// Merge wildcard and account permissions.
-		if account == nil {
-			account = &Permissions{
+		// Merge wildcard and namespace permissions.
+		if ns == nil {
+			ns = &Permissions{
 				Allow: []Verbs{},
 				Deny:  []Verbs{},
 			}
 		}
-		if wildcardAccount != nil {
-			account.Allow = append(account.Allow, wildcardAccount.Allow...)
-			account.Deny = append(account.Deny, wildcardAccount.Deny...)
+		if wildcardNS != nil {
+			ns.Allow = append(ns.Allow, wildcardNS.Allow...)
+			ns.Deny = append(ns.Deny, wildcardNS.Deny...)
 		}
 
 		if !isAllow {
-			for _, allow := range account.Allow {
+			for _, allow := range ns.Allow {
 				switch req.Verb {
 				case VerbRead:
 					isAllow = checkVerbFilter(allow.Read, req.Object) ||
@@ -215,7 +210,7 @@ func (r *RBAC) Check(ctx context.Context, req RBACRequest) bool {
 			}
 		}
 		if !isDeny {
-			for _, deny := range account.Deny {
+			for _, deny := range ns.Deny {
 				switch req.Verb {
 				case VerbRead:
 					isDeny = checkVerbFilter(deny.Read, req.Object)
@@ -350,28 +345,28 @@ func (r *RBAC) refresh() {
 			group, ok := cache[subject.Name]
 			if !ok {
 				group = &Group{
-					Name:     subject.Name,
-					Accounts: make(map[string]*Permissions),
+					Name:       subject.Name,
+					Namespaces: make(map[string]*Permissions),
 				}
 				cache[subject.Name] = group
 			}
 
-			// Get permissions for the account, or create if not exists.
-			permissions, ok := group.Accounts[roleBinding.Account]
+			// Get permissions for the namespace, or create if not exists.
+			permissions, ok := group.Namespaces[roleBinding.Namespace]
 			if !ok {
 				permissions = &Permissions{
 					Allow: []Verbs{},
 					Deny:  []Verbs{},
 				}
-				group.Accounts[roleBinding.Account] = permissions
+				group.Namespaces[roleBinding.Namespace] = permissions
 			}
 
 			roleKey := hz.KeyFromObject(hz.ObjectKey{
-				Group:   roleBinding.Spec.RoleRef.Group,
-				Version: "v1",
-				Kind:    roleBinding.Spec.RoleRef.Kind,
-				Account: roleBinding.Account,
-				Name:    roleBinding.Spec.RoleRef.Name,
+				Group:     roleBinding.Spec.RoleRef.Group,
+				Version:   "v1",
+				Kind:      roleBinding.Spec.RoleRef.Kind,
+				Namespace: roleBinding.Namespace,
+				Name:      roleBinding.Spec.RoleRef.Name,
 			})
 			// Get the role key. It should exist.
 			// A RoleBinding cannot be created with the Role.
@@ -394,31 +389,30 @@ func (r *RBAC) refresh() {
 		}
 	}
 
-	// Add implicit account permissions based on Group<-->Account
-	// relations.
-	// If a group has any relation to an account, we should give it read
-	// access to the account object, implicitly.
+	// Add implicit namespace permissions based on Group<-->Namespace relations.
+	// If a group has any relation to a namespace, we should give it read
+	// access to the namespace object, implicitly.
 	for _, group := range cache {
-		for accountName, permissions := range group.Accounts {
-			if accountName == hz.RootAccount {
+		for nsName, permissions := range group.Namespaces {
+			if nsName == hz.RootNamespace {
 				continue
 			}
-			localAccount := accountName
+			localNS := nsName
 
 			if len(permissions.Allow) > 0 {
-				rootAccount, ok := group.Accounts[hz.RootAccount]
+				rootNS, ok := group.Namespaces[hz.RootNamespace]
 				if !ok {
-					rootAccount = &Permissions{
+					rootNS = &Permissions{
 						Allow: []Verbs{},
 						Deny:  []Verbs{},
 					}
-					group.Accounts[hz.RootAccount] = rootAccount
+					group.Namespaces[hz.RootNamespace] = rootNS
 				}
 
-				rootAccount.Allow = append(rootAccount.Allow, Verbs{
+				rootNS.Allow = append(rootNS.Allow, Verbs{
 					Read: &VerbFilter{
-						Name: &localAccount,
-						Kind: hz.P("Account"),
+						Name: &localNS,
+						Kind: hz.P(core.ObjectKindNamespace),
 						// Group: hz.P("TODO"),
 					},
 				})
@@ -431,20 +425,20 @@ func (r *RBAC) refresh() {
 		group, ok := cache[adminGroup]
 		if !ok {
 			group = &Group{
-				Name:     adminGroup,
-				Accounts: make(map[string]*Permissions),
+				Name:       adminGroup,
+				Namespaces: make(map[string]*Permissions),
 			}
 			cache[adminGroup] = group
 		}
-		account, ok := group.Accounts["*"]
+		ns, ok := group.Namespaces["*"]
 		if !ok {
-			account = &Permissions{
+			ns = &Permissions{
 				Allow: []Verbs{},
 				Deny:  []Verbs{},
 			}
-			group.Accounts["*"] = account
+			group.Namespaces["*"] = ns
 		}
-		account.Allow = append(account.Allow, Verbs{
+		ns.Allow = append(ns.Allow, Verbs{
 			Read:   &VerbFilter{},
 			Update: &VerbFilter{},
 			Create: &VerbFilter{},

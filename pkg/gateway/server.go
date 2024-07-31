@@ -228,19 +228,19 @@ func (s *Server) start(
 	r.Group(func(r chi.Router) {
 		r.Use(oidcHandler.authMiddleware)
 		r.Get("/", h.GetHome)
-		r.Get("/accounts", h.GetAccounts)
-		r.Get("/accounts/new", h.GetAccountsNew)
-		r.Post("/accounts", h.PostAccounts)
+		r.Get("/namespaces", h.GetNamespaces)
+		r.Get("/namespaces/new", h.GetNamespacesNew)
+		r.Post("/namespaces", h.PostNamespaces)
 	})
 
-	accountsHandler := AccountsHandler{
+	nsHandler := NamespaceHandler{
 		Middleware: chi.Middlewares{oidcHandler.authMiddleware},
 		Auth:       s.Auth,
 		Conn:       s.Conn,
 		Portals:    s.portals,
 	}
-	accountsRouter := accountsHandler.Router()
-	r.Mount("/accounts/{account}", accountsRouter)
+	nsRouter := nsHandler.Router()
+	r.Mount("/namespaces/{namespace}", nsRouter)
 
 	objHandler := ObjectsHandler{
 		Conn: s.Conn,

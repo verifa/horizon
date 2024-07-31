@@ -1,11 +1,11 @@
-package secrets_test
+package core_test
 
 import (
 	"context"
 	"encoding/json"
 	"testing"
 
-	"github.com/verifa/horizon/pkg/extensions/secrets"
+	"github.com/verifa/horizon/pkg/extensions/core"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/server"
 	tu "github.com/verifa/horizon/pkg/testutil"
@@ -13,25 +13,24 @@ import (
 
 func TestSecrets(t *testing.T) {
 	ctx := context.Background()
-
 	ts := server.Test(t, ctx)
 
 	ctlr, err := hz.StartController(
 		ctx,
 		ts.Conn,
-		hz.WithControllerFor(secrets.Secret{}),
+		hz.WithControllerFor(core.Secret{}),
 	)
 	tu.AssertNoError(t, err)
 	t.Cleanup(func() {
 		_ = ctlr.Stop()
 	})
 
-	secret := secrets.Secret{
+	secret := core.Secret{
 		ObjectMeta: hz.ObjectMeta{
-			Name:    "my-secret",
-			Account: "my-account",
+			Name:      "my-secret",
+			Namespace: "my-namespace",
 		},
-		Data: secrets.SecretData{
+		Data: core.SecretData{
 			"username": "admin",
 			"password": "password",
 		},
@@ -47,7 +46,7 @@ func TestSecrets(t *testing.T) {
 	raw, err := client.Get(ctx, hz.WithGetKey(secret))
 	tu.AssertNoError(t, err)
 
-	getSecret := secrets.Secret{}
+	getSecret := core.Secret{}
 	err = json.Unmarshal(raw, &getSecret)
 	tu.AssertNoError(t, err)
 

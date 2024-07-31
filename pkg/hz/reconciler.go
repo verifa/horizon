@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const RootAccount = "root"
+const RootNamespace = "root"
 
 type Reconciler interface {
 	Reconcile(context.Context, Request) (Result, error)

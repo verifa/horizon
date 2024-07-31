@@ -40,7 +40,7 @@ Now you can just call the NATS CLI and access the KV and other streams (remember
   "apiVersion": "hz-examples/v1",
   "kind": "Greeting",
   "metadata": {
-    "account": "test",
+    "namespace": "test",
     "managedFields": [
       {
         "fieldsType": "FieldsV1",
@@ -90,13 +90,13 @@ Now you can just call the NATS CLI and access the KV and other streams (remember
 
 ```console
 ❯ nats consumer info KV_hz_objects rc_AgentPool
-? Select a Consumer rc_Account
-Information for Consumer KV_hz_objects > rc_Account created 2024-03-13T09:05:53+02:00
+? Select a Consumer rc_Namespace
+Information for Consumer KV_hz_objects > rc_Namespace created 2024-03-13T09:05:53+02:00
 
 Configuration:
 
-                Name: rc_Account
-         Description: Reconciler for Account
+                Name: rc_Namespace
+         Description: Reconciler for Namespace
            Pull Mode: true
       Deliver Policy: Last Per Subject
           Ack Policy: Explicit

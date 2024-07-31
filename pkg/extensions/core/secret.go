@@ -1,20 +1,20 @@
-package secrets
+package core
 
 import "github.com/verifa/horizon/pkg/hz"
 
 var _ hz.Objecter = (*Secret)(nil)
 
 type Secret struct {
-	hz.ObjectMeta `json:"metadata" cue:""`
-	Data          SecretData `json:"data" cue:",optional"`
+	hz.ObjectMeta `           json:"metadata" cue:""`
+	Data          SecretData `json:"data"     cue:",optional"`
 }
 
 func (s Secret) ObjectGroup() string {
-	return "secrets"
+	return ObjectGroup
 }
 
 func (s Secret) ObjectVersion() string {
-	return "v1"
+	return ObjectVersion
 }
 
 func (s Secret) ObjectKind() string {

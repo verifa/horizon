@@ -16,7 +16,7 @@ var _ (hz.Objecter) = (*DummyObject)(nil)
 type DummyObject struct {
 	hz.ObjectMeta `json:"metadata,omitempty" cue:""`
 
-	Spec   struct{} `json:"spec,omitempty" cue:""`
+	Spec   struct{} `json:"spec,omitempty"   cue:""`
 	Status struct{} `json:"status,omitempty"`
 }
 
@@ -113,8 +113,8 @@ func TestBroker(t *testing.T) {
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
 	dObj := DummyObject{
 		ObjectMeta: hz.ObjectMeta{
-			Name:    "dummy",
-			Account: "test",
+			Name:      "dummy",
+			Namespace: "test",
 		},
 	}
 
@@ -137,8 +137,8 @@ func TestBroker(t *testing.T) {
 	t.Run("withActorLabelSelector", func(t *testing.T) {
 		ridObject := returnIDObject{
 			ObjectMeta: hz.ObjectMeta{
-				Name:    "returnID",
-				Account: "test",
+				Name:      "returnID",
+				Namespace: "test",
 			},
 		}
 		ridClient := hz.ObjectClient[returnIDObject]{Client: client}

@@ -30,8 +30,8 @@ func TestRBAC(t *testing.T) {
 		roles: []Role{
 			{
 				ObjectMeta: hz.ObjectMeta{
-					Name:    "role-creator",
-					Account: "account-test",
+					Name:      "role-creator",
+					Namespace: "namespace-test",
 				},
 				Spec: RoleSpec{
 					Allow: []Verbs{
@@ -48,8 +48,8 @@ func TestRBAC(t *testing.T) {
 		bindings: []RoleBinding{
 			{
 				ObjectMeta: hz.ObjectMeta{
-					Name:    "rolebinding-test",
-					Account: "account-test",
+					Name:      "rolebinding-test",
+					Namespace: "namespace-test",
 				},
 				Spec: RoleBindingSpec{
 					RoleRef: RoleRef{
@@ -72,10 +72,10 @@ func TestRBAC(t *testing.T) {
 					Groups: []string{"group-creator"},
 					Verb:   "read",
 					Object: hz.ObjectKey{
-						Group:   "group-test",
-						Kind:    "Account",
-						Account: hz.RootAccount,
-						Name:    "account-test",
+						Group:     "group-test",
+						Kind:      "Namespace",
+						Namespace: hz.RootNamespace,
+						Name:      "namespace-test",
 					},
 				},
 				expect: true,
@@ -85,10 +85,10 @@ func TestRBAC(t *testing.T) {
 					Groups: []string{"group-creator"},
 					Verb:   "read",
 					Object: hz.ObjectKey{
-						Group:   "group-test",
-						Kind:    "Account",
-						Account: hz.RootAccount,
-						Name:    "account-another",
+						Group:     "group-test",
+						Kind:      "Namespace",
+						Namespace: hz.RootNamespace,
+						Name:      "namespace-another",
 					},
 				},
 				expect: false,
@@ -98,10 +98,10 @@ func TestRBAC(t *testing.T) {
 					Groups: []string{"group-creator"},
 					Verb:   "read",
 					Object: hz.ObjectKey{
-						Group:   "group-test",
-						Kind:    "object-test",
-						Account: "account-test",
-						Name:    "superfluous",
+						Group:     "group-test",
+						Kind:      "object-test",
+						Namespace: "namespace-test",
+						Name:      "superfluous",
 					},
 				},
 				expect: true,
@@ -111,10 +111,10 @@ func TestRBAC(t *testing.T) {
 					Groups: []string{"group-creator"},
 					Verb:   "create",
 					Object: hz.ObjectKey{
-						Group:   "group-test",
-						Kind:    "object-test",
-						Account: "account-test",
-						Name:    "superfluous",
+						Group:     "group-test",
+						Kind:      "object-test",
+						Namespace: "namespace-test",
+						Name:      "superfluous",
 					},
 				},
 				expect: true,
@@ -124,10 +124,10 @@ func TestRBAC(t *testing.T) {
 					Groups: []string{"group-creator"},
 					Verb:   "delete",
 					Object: hz.ObjectKey{
-						Group:   "group-test",
-						Kind:    "object-test",
-						Account: "account-test",
-						Name:    "superfluous",
+						Group:     "group-test",
+						Kind:      "object-test",
+						Namespace: "namespace-test",
+						Name:      "superfluous",
 					},
 				},
 				expect: false,
@@ -137,10 +137,10 @@ func TestRBAC(t *testing.T) {
 					Groups: []string{"group-unknown"},
 					Verb:   "read",
 					Object: hz.ObjectKey{
-						Group:   "group-test",
-						Kind:    "object-test",
-						Account: "account-test",
-						Name:    "superfluous",
+						Group:     "group-test",
+						Kind:      "object-test",
+						Namespace: "namespace-test",
+						Name:      "superfluous",
 					},
 				},
 				expect: false,
@@ -153,8 +153,8 @@ func TestRBAC(t *testing.T) {
 		roles: []Role{
 			{
 				ObjectMeta: hz.ObjectMeta{
-					Name:    "role-runner",
-					Account: "account-test",
+					Name:      "role-runner",
+					Namespace: "namespace-test",
 				},
 				Spec: RoleSpec{
 					Allow: []Verbs{
@@ -171,8 +171,8 @@ func TestRBAC(t *testing.T) {
 		bindings: []RoleBinding{
 			{
 				ObjectMeta: hz.ObjectMeta{
-					Name:    "rolebinding-test",
-					Account: "account-test",
+					Name:      "rolebinding-test",
+					Namespace: "namespace-test",
 				},
 				Spec: RoleBindingSpec{
 					RoleRef: RoleRef{
@@ -195,10 +195,10 @@ func TestRBAC(t *testing.T) {
 					Groups: []string{"group-runner"},
 					Verb:   "run",
 					Object: hz.ObjectKey{
-						Group:   "group-test",
-						Kind:    "object-test",
-						Account: "account-test",
-						Name:    "superfluous",
+						Group:     "group-test",
+						Kind:      "object-test",
+						Namespace: "namespace-test",
+						Name:      "superfluous",
 					},
 				},
 				expect: true,
@@ -210,8 +210,8 @@ func TestRBAC(t *testing.T) {
 		roles: []Role{
 			{
 				ObjectMeta: hz.ObjectMeta{
-					Name:    "role-allow-all",
-					Account: "account-test",
+					Name:      "role-allow-all",
+					Namespace: "namespace-test",
 				},
 				Spec: RoleSpec{
 					Allow: []Verbs{
@@ -227,8 +227,8 @@ func TestRBAC(t *testing.T) {
 			},
 			{
 				ObjectMeta: hz.ObjectMeta{
-					Name:    "role-deny-delete",
-					Account: "account-test",
+					Name:      "role-deny-delete",
+					Namespace: "namespace-test",
 				},
 				Spec: RoleSpec{
 					Deny: []Verbs{
@@ -242,8 +242,8 @@ func TestRBAC(t *testing.T) {
 		bindings: []RoleBinding{
 			{
 				ObjectMeta: hz.ObjectMeta{
-					Name:    "rolebinding-allow-all",
-					Account: "account-test",
+					Name:      "rolebinding-allow-all",
+					Namespace: "namespace-test",
 				},
 				Spec: RoleBindingSpec{
 					RoleRef: RoleRef{
@@ -261,8 +261,8 @@ func TestRBAC(t *testing.T) {
 			},
 			{
 				ObjectMeta: hz.ObjectMeta{
-					Name:    "rolebinding-deny-delete",
-					Account: "account-test",
+					Name:      "rolebinding-deny-delete",
+					Namespace: "namespace-test",
 				},
 				Spec: RoleBindingSpec{
 					RoleRef: RoleRef{
@@ -285,10 +285,10 @@ func TestRBAC(t *testing.T) {
 					Groups: []string{"group-deny-delete"},
 					Verb:   "run",
 					Object: hz.ObjectKey{
-						Group:   "group-test",
-						Kind:    "object-test",
-						Account: "account-test",
-						Name:    "superfluous",
+						Group:     "group-test",
+						Kind:      "object-test",
+						Namespace: "namespace-test",
+						Name:      "superfluous",
 					},
 				},
 				expect: true,
@@ -298,10 +298,10 @@ func TestRBAC(t *testing.T) {
 					Groups: []string{"group-deny-delete"},
 					Verb:   "create",
 					Object: hz.ObjectKey{
-						Group:   "group-test",
-						Kind:    "object-test",
-						Account: "account-test",
-						Name:    "superfluous",
+						Group:     "group-test",
+						Kind:      "object-test",
+						Namespace: "namespace-test",
+						Name:      "superfluous",
 					},
 				},
 				expect: true,
@@ -311,9 +311,9 @@ func TestRBAC(t *testing.T) {
 					Groups: []string{"group-deny-delete"},
 					Verb:   "delete",
 					Object: hz.ObjectKey{
-						Name:    "superfluous",
-						Account: "account-test",
-						Kind:    "object-test",
+						Name:      "superfluous",
+						Namespace: "namespace-test",
+						Kind:      "object-test",
 					},
 				},
 				expect: false,
@@ -330,10 +330,10 @@ func TestRBAC(t *testing.T) {
 					Groups: []string{"admin"},
 					Verb:   "delete",
 					Object: hz.ObjectKey{
-						Group:   "group-test",
-						Kind:    "object-test",
-						Account: "whatever-account-doesnt-matter",
-						Name:    "superfluous",
+						Group:     "group-test",
+						Kind:      "object-test",
+						Namespace: "whatever-namespace-doesnt-matter",
+						Name:      "superfluous",
 					},
 				},
 				expect: true,

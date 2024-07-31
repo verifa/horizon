@@ -74,8 +74,8 @@ func (c *Client) List(ctx context.Context, opts ...ListOption) error {
 	if opt.key.Kind != "" {
 		q.Add("kind", opt.key.Kind)
 	}
-	if opt.key.Account != "" {
-		q.Add("account", opt.key.Account)
+	if opt.key.Namespace != "" {
+		q.Add("namespace", opt.key.Namespace)
 	}
 	if opt.key.Name != "" {
 		q.Add("name", opt.key.Name)
@@ -225,7 +225,7 @@ func (c *Client) Delete(
 		key.ObjectGroup(),
 		key.ObjectVersion(),
 		key.ObjectKind(),
-		key.ObjectAccount(),
+		key.ObjectNamespace(),
 		key.ObjectName(),
 	)
 	if err != nil {

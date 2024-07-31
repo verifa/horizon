@@ -18,8 +18,8 @@ const extName = "greetings"
 
 var Portal = hz.Portal{
 	ObjectMeta: hz.ObjectMeta{
-		Account: hz.RootAccount,
-		Name:    extName,
+		Namespace: hz.RootNamespace,
+		Name:      extName,
 	},
 	Spec: &hz.PortalSpec{
 		DisplayName: "Greetings",
@@ -54,8 +54,8 @@ func (h *PortalHandler) Router() *chi.Mux {
 
 func (h *PortalHandler) get(rw http.ResponseWriter, req *http.Request) {
 	rendr := PortalRenderer{
-		Account: req.Header.Get(hz.RequestAccount),
-		Portal:  req.Header.Get(hz.RequestPortal),
+		Namespace: req.Header.Get(hz.RequestNamespace),
+		Portal:    req.Header.Get(hz.RequestPortal),
 	}
 	if req.Header.Get("HX-Request") == "" {
 		_ = rendr.home().Render(req.Context(), rw)
@@ -66,7 +66,7 @@ func (h *PortalHandler) get(rw http.ResponseWriter, req *http.Request) {
 	greetings, err := greetClient.List(
 		req.Context(),
 		hz.WithListKey(hz.ObjectKey{
-			Account: req.Header.Get(hz.RequestAccount),
+			Namespace: req.Header.Get(hz.RequestNamespace),
 		}),
 	)
 	if err != nil {
@@ -78,8 +78,8 @@ func (h *PortalHandler) get(rw http.ResponseWriter, req *http.Request) {
 
 func (h *PortalHandler) post(rw http.ResponseWriter, req *http.Request) {
 	rendr := PortalRenderer{
-		Account: req.Header.Get(hz.RequestAccount),
-		Portal:  req.Header.Get(hz.RequestPortal),
+		Namespace: req.Header.Get(hz.RequestNamespace),
+		Portal:    req.Header.Get(hz.RequestPortal),
 	}
 	if err := req.ParseForm(); err != nil {
 		_ = rendr.greetingsControllerForm(
@@ -93,8 +93,8 @@ func (h *PortalHandler) post(rw http.ResponseWriter, req *http.Request) {
 
 	greeting := Greeting{
 		ObjectMeta: hz.ObjectMeta{
-			Account: req.Header.Get(hz.RequestAccount),
-			Name:    reqName,
+			Namespace: req.Header.Get(hz.RequestNamespace),
+			Name:      reqName,
 		},
 		Spec: &GreetingSpec{
 			Name: reqName,
@@ -118,8 +118,8 @@ func (h *PortalHandler) post(rw http.ResponseWriter, req *http.Request) {
 
 func (h *PortalHandler) postGreet(rw http.ResponseWriter, req *http.Request) {
 	rendr := PortalRenderer{
-		Account: req.Header.Get(hz.RequestAccount),
-		Portal:  req.Header.Get(hz.RequestPortal),
+		Namespace: req.Header.Get(hz.RequestNamespace),
+		Portal:    req.Header.Get(hz.RequestPortal),
 	}
 	if err := req.ParseForm(); err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
@@ -129,8 +129,8 @@ func (h *PortalHandler) postGreet(rw http.ResponseWriter, req *http.Request) {
 
 	greeting := Greeting{
 		ObjectMeta: hz.ObjectMeta{
-			Account: req.Header.Get(hz.RequestAccount),
-			Name:    reqName,
+			Namespace: req.Header.Get(hz.RequestNamespace),
+			Name:      reqName,
 		},
 		Spec: &GreetingSpec{
 			Name: reqName,
@@ -154,12 +154,12 @@ func (h *PortalHandler) postGreet(rw http.ResponseWriter, req *http.Request) {
 }
 
 type PortalRenderer struct {
-	Account string
-	Portal  string
+	Namespace string
+	Portal    string
 }
 
 func (r *PortalRenderer) URL(steps ...string) string {
-	base := fmt.Sprintf("/accounts/%s/portal/%s", r.Account, r.Portal)
+	base := fmt.Sprintf("/namespaces/%s/portal/%s", r.Namespace, r.Portal)
 	path := append([]string{base}, steps...)
 	return strings.Join(path, "/")
 }

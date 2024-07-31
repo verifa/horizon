@@ -41,7 +41,7 @@ If all works, you should see the following output:
 / _` / -_) V / | '  \/ _ \/ _` / -_)
 \__,_\___|\_/  |_|_|_\___/\__,_\___|
 
-Below is a NATS credential for the root account.
+Below is a NATS credential for the root namespace.
 Copy it to a file such as nats.creds
 
 
@@ -86,10 +86,10 @@ The key includes the following fields:
 1. **Object Group:** groups are a logical way to organise resources together for things like searching and RBAC.
 2. **Object Version:** the object version is a way to version the API. It helps maintain things like backwards compatability.
 3. **Object Kind:** is just a name for the kind of object.
-4. **Object Account:** is the account that this object belongs to.
-5. **Object Name:** is the unique identifier for this object within the account.
+4. **Object Namespace:** is the namespace that this object belongs to.
+5. **Object Name:** is the unique identifier for this object within the namespace.
 
-An example key looks like: `group.v1.Object.account.name`.
+An example key looks like: `group.v1.Object.namespace.name`.
 
 There are two important interfaces in the `hz` package:
 
@@ -99,7 +99,7 @@ type ObjectKeyer interface {
     ObjectGroup() string
     ObjectVersion() string
     ObjectKind() string
-    ObjectAccount() string
+    ObjectNamespace() string
     ObjectName() string
 }
 
@@ -184,7 +184,7 @@ ctlr, err := hz.StartController(
  )
 ```
 
-This key will match all objects with the kind `Greeting`, for `v1` in the `greetings` group in any account with any name.
+This key will match all objects with the kind `Greeting`, for `v1` in the `greetings` group in any namespace with any name.
 
 #### 2.2.1 Creating a reconciler
 
@@ -248,7 +248,7 @@ ctx := context.Background()
 conn, _ := nats.Connect(nats.DefaultURL)
 portalObj := hz.Portal{
    ObjectMeta: hz.ObjectMeta{
-       Account: hz.RootAccount,
+       Namespace: hz.RootNamespace,
        Name:    "greetings",
    },
    Spec: &hz.PortalSpec{

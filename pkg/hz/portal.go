@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	RequestPortal  = "HZ-Request-Portal"
-	RequestAccount = "HZ-Request-Account"
+	RequestPortal    = "HZ-Request-Portal"
+	RequestNamespace = "HZ-Request-Namespace"
 )
 
 var _ Objecter = (*Portal)(nil)
@@ -22,7 +22,7 @@ var _ Objecter = (*Portal)(nil)
 type Portal struct {
 	ObjectMeta `json:"metadata,omitempty" cue:""`
 
-	Spec   *PortalSpec   `json:"spec,omitempty" cue:""`
+	Spec   *PortalSpec   `json:"spec,omitempty"   cue:""`
 	Status *PortalStatus `json:"status,omitempty" cue:",opt"`
 }
 

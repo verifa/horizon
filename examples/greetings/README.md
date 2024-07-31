@@ -17,9 +17,9 @@ The example includes implementing:
 1. Run `make dev` to start the Horizon server in dev mode.
 2. Copy the credentials that are output and save it to a file `nats.creds`.
 3. Export the `nats.creds` for NATS to use it `export NATS_CREDS=./nats.creds`
-4. Run the greetings extention: `go run ./examples/cmd/main.go`
+4. Run the greetings extension: `go run ./examples/cmd/main.go`
 
-Once you start the server and create an account you should see the "Greetings" portal on the left:
+Once you start the server and create a namespace you should see the "Greetings" portal on the left:
 
 ![greetings-screenshot](./greetings-example-screenshot.png)
 

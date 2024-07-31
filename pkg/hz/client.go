@@ -54,24 +54,25 @@ var (
 const (
 	SubjectAPIAllowAll = "HZ.api.>"
 
-	// format: HZ.api.broker.<group>.<version>.<kind>.<account>.<name>.<action>
-	SubjectAPIBroker                  = "HZ.api.broker.*.*.*.*.*.*"
-	SubjectInternalBroker             = "HZ.internal.broker.*.*.*.*.*.*"
-	SubjectInternalBrokerIndexGroup   = 3
-	SubjectInternalBrokerIndexVersion = 4
-	SubjectInternalBrokerIndexKind    = 5
-	SubjectInternalBrokerIndexAccount = 6
-	SubjectInternalBrokerIndexName    = 7
-	SubjectInternalBrokerIndexAction  = 8
-	SubjectInternalBrokerLength       = 9
-	SubjectBrokerRun                  = "broker.%s.%s.%s.%s.%s.%s"
+	// format:
+	// HZ.api.broker.<group>.<version>.<kind>.<namespace>.<name>.<action>
+	SubjectAPIBroker                    = "HZ.api.broker.*.*.*.*.*.*"
+	SubjectInternalBroker               = "HZ.internal.broker.*.*.*.*.*.*"
+	SubjectInternalBrokerIndexGroup     = 3
+	SubjectInternalBrokerIndexVersion   = 4
+	SubjectInternalBrokerIndexKind      = 5
+	SubjectInternalBrokerIndexNamespace = 6
+	SubjectInternalBrokerIndexName      = 7
+	SubjectInternalBrokerIndexAction    = 8
+	SubjectInternalBrokerLength         = 9
+	SubjectBrokerRun                    = "broker.%s.%s.%s.%s.%s.%s"
 
 	// format:
-	// HZ.internal.actor.advertise.<group>.<version>.<kind>.<account>.<name>.<action>
+	// HZ.internal.actor.advertise.<group>.<version>.<kind>.<namespace>.<name>.<action>
 	SubjectActorAdvertise    = "HZ.internal.actor.advertise.%s.%s.%s.*.*.%s"
 	SubjectActorAdvertiseFmt = "HZ.internal.actor.advertise.%s.%s.%s.%s.%s.%s"
 	// format:
-	// HZ.internal.actor.run.<group>.<version>.<kind>.<account>.<name>.<action>.<actor_uuid>
+	// HZ.internal.actor.run.<group>.<version>.<kind>.<namespace>.<name>.<action>.<actor_uuid>
 	SubjectActorRun    = "HZ.internal.actor.run.%s.%s.%s.*.*.%s.%s"
 	SubjectActorRunFmt = "HZ.internal.actor.run.%s.%s.%s.%s.%s.%s.%s"
 )
@@ -89,7 +90,7 @@ const (
 	// Format: store.<cmd>.<group>.<version>.<kind>
 	SubjectStoreSchema   = "store.schema.%s.%s.%s"
 	SubjectStoreValidate = "store.validate.%s.%s.%s"
-	// Format: store.<cmd>.<group>.<version>.<kind>.<account>.<name>
+	// Format: store.<cmd>.<group>.<version>.<kind>.<namespace>.<name>
 	SubjectStoreApply  = "store.apply.%s.%s.%s.%s.%s"
 	SubjectStoreCreate = "store.create.%s.%s.%s.%s.%s"
 	SubjectStoreGet    = "store.get.%s.%s.%s.%s.%s"
@@ -133,8 +134,8 @@ func (oc ObjectClient[T]) Get(
 		Kind:    object.ObjectKind(),
 	}
 	if opt.key != nil {
-		// Get account and name from the user-provided key.
-		key.Account = opt.key.ObjectAccount()
+		// Get namespace and name from the user-provided key.
+		key.Namespace = opt.key.ObjectNamespace()
 		key.Name = opt.key.ObjectName()
 	}
 	opts = append(opts, WithGetKey(key))
@@ -165,7 +166,7 @@ func (oc ObjectClient[T]) List(
 	}
 	if opt.key != nil {
 		key.Name = opt.key.ObjectName()
-		key.Account = opt.key.ObjectAccount()
+		key.Namespace = opt.key.ObjectNamespace()
 	}
 	resp := bytes.Buffer{}
 	opts = append(opts, WithListKey(key), WithListResponseWriter(&resp))
@@ -286,10 +287,10 @@ type Client struct {
 	Conn *nats.Conn
 
 	// Internal is set to true to use the internal nats subjects.
-	// This is used for service accounts (controllers) that have nats
+	// This is used for controllers that have nats
 	// credentials with permission to use the internal nats subjects.
 	// For clients such as hzctl, this should be false causing the client to use
-	// the `api` nats subjects (requiring authn/authz).
+	// the `api` nats subjects (requiring authn/authz outside of nats).
 	Internal bool
 
 	Session string
@@ -518,7 +519,7 @@ func (c Client) Apply(
 			key.ObjectGroup(),
 			key.ObjectVersion(),
 			key.ObjectKind(),
-			key.ObjectAccount(),
+			key.ObjectNamespace(),
 			key.ObjectName(),
 		),
 	)
@@ -630,7 +631,7 @@ func (c *Client) Create(
 			key.ObjectGroup(),
 			key.ObjectVersion(),
 			key.ObjectKind(),
-			key.ObjectAccount(),
+			key.ObjectNamespace(),
 			key.ObjectName(),
 		),
 	)
@@ -693,7 +694,7 @@ func (c *Client) Get(
 			key.ObjectGroup(),
 			key.ObjectVersion(),
 			key.ObjectKind(),
-			key.ObjectAccount(),
+			key.ObjectNamespace(),
 			key.ObjectName(),
 		),
 	)
@@ -770,7 +771,7 @@ func (c *Client) Delete(
 			key.ObjectGroup(),
 			key.ObjectVersion(),
 			key.ObjectKind(),
-			key.ObjectAccount(),
+			key.ObjectNamespace(),
 			key.ObjectName(),
 		),
 	)
@@ -843,7 +844,7 @@ func (c *Client) List(
 			key.ObjectGroup(),
 			key.ObjectVersion(),
 			key.ObjectKind(),
-			key.ObjectAccount(),
+			key.ObjectNamespace(),
 			key.ObjectName(),
 		),
 	)
@@ -974,7 +975,7 @@ func (c *Client) Run(
 		key.ObjectGroup(),
 		key.ObjectVersion(),
 		key.ObjectKind(),
-		key.ObjectAccount(),
+		key.ObjectNamespace(),
 		key.ObjectName(),
 		action,
 	))

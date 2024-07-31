@@ -1,0 +1,42 @@
+package gateway
+
+import (
+	"github.com/verifa/horizon/pkg/extensions/core"
+)
+
+templ home() {
+	<div class="prose prose-a:no-underline mx-auto max-w-7xl px-8 py-8">
+		<h1>Horizon</h1>
+		<p>Welcome to Horizon, the gateway to your infrastructure.</p>
+		<h2>Namespaces</h2>
+		<p>Horizon is a multi-tenant system. Each tenant is represented by a namespace.</p>
+		<a role="button" href="/namespaces" class="btn">To Namespaces</a>
+	</div>
+}
+
+templ namespacesPage(namespaces []core.Namespace) {
+	<div class="prose prose-a:no-underline mx-auto max-w-7xl px-8 py-8">
+		<h1>Namespaces</h1>
+		if len(namespaces) > 0 {
+			<ul role="list" class="divide-y divide-gray-100">
+				for _, ns := range namespaces {
+					<li class="py-4"><a href={ templ.URL("/namespaces/" + ns.Name) }>{ ns.Name }</a></li>
+				}
+			</ul>
+		} else {
+			<p>No namespaces found</p>
+		}
+		<a role="button" href="/namespaces/new" class="btn">New Namespace</a>
+	</div>
+}
+
+templ namespacePage() {
+	<h1>Dashboard!</h1>
+}
+
+templ namespacesNewPage() {
+	<div class="prose prose-a:no-underline mx-auto max-w-7xl px-8 py-8">
+		<h1>New Namespace</h1>
+		<form hx-post="/namespaces"><label class="label"><span class="label-text">Name</span></label><input type="text" placeholder="e.g. team-123" id="namespace-name" name="namespace-name" class="input input-bordered w-full max-w-xs"/><button type="submit" class="btn">Submit</button></form>
+	</div>
+}

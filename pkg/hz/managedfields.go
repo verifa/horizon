@@ -10,7 +10,7 @@ import (
 // ExtractManagedFields creates an object containing the fields managed by the
 // given manager. If the manager does not manage any fields, the object will be
 // empty (except for the identifying fields, like metadata.name,
-// metadata.account).
+// metadata.namespace).
 //
 // The use of ExtractManagedFields is for a controller (for example) to get an
 // object from the store, extract the fields it manages, and then update the
@@ -34,7 +34,7 @@ func ExtractManagedFields[T Objecter](
 		// If the field manager is not found, this manager currently owns no
 		// fields in the object.
 		// Therefore return an empty object with the necessary fields set (i.e.
-		// kind, apiVersion, metadata.name, metadata.account).
+		// kind, apiVersion, metadata.name, metadata.namespace).
 		dst := map[string]interface{}{}
 		copyObjectIDToMap(object, dst)
 		t, err := mapToObject[T](dst)
@@ -66,14 +66,14 @@ func copyObjectIDToMap(
 	meta, ok := m["metadata"].(map[string]interface{})
 	if !ok {
 		meta = map[string]interface{}{
-			"name":    obj.ObjectName(),
-			"account": obj.ObjectAccount(),
+			"name":      obj.ObjectName(),
+			"namespace": obj.ObjectNamespace(),
 		}
 		m["metadata"] = meta
 		return
 	}
 	meta["name"] = obj.ObjectName()
-	meta["account"] = obj.ObjectAccount()
+	meta["namespace"] = obj.ObjectNamespace()
 	m["metadata"] = meta
 }
 

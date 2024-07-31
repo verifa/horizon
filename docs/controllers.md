@@ -70,7 +70,7 @@ Under the hood, a reconciler is just a [NATS Consumer](https://docs.nats.io/nats
 The NATS KV is just a glorified [NATS Stream](https://docs.nats.io/nats-concepts/jetstream/streams).
 
 When you create or apply an object, you are actually adding a message onto a NATS stream.
-The subject of the message is derived from the `hz.ObjectKeyer` interface (e.g. `group.version.kind.account.name`).
+The subject of the message is derived from the `hz.ObjectKeyer` interface (e.g. `group.version.kind.namespace.name`).
 
 The reconciler then *consumes* messages from this stream.
 The NATS consumer is [durable](https://docs.nats.io/using-nats/developer/develop_jetstream/consumers#durable-consumers), meaning you can run multiple instances of it and the messages will be distributed across the instances.

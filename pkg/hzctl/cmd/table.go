@@ -53,7 +53,7 @@ func printObjects(objects []hz.GenericObject) {
 	for i, obj := range objects {
 		rows[i] = []string{
 			obj.Kind,
-			obj.Account,
+			obj.Namespace,
 			obj.Name,
 		}
 	}
@@ -73,7 +73,7 @@ func printObjects(objects []hz.GenericObject) {
 		}).
 		Headers(
 			"Kind",
-			"Account",
+			"Namespace",
 			"Name",
 		).
 		Rows(rows...)

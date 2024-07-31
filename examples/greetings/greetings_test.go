@@ -60,8 +60,8 @@ func TestGreeting(t *testing.T) {
 	//
 	greeting := greetings.Greeting{
 		ObjectMeta: hz.ObjectMeta{
-			Account: "test",
-			Name:    "Pekka",
+			Namespace: "test",
+			Name:      "Pekka",
 		},
 		Spec: &greetings.GreetingSpec{
 			Name: "Pekka",

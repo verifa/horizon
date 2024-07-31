@@ -13,7 +13,7 @@ var _ (hz.Objecter) = (*DummyObject)(nil)
 type DummyObject struct {
 	hz.ObjectMeta `json:"metadata,omitempty" cue:""`
 
-	Spec   struct{} `json:"spec,omitempty" cue:""`
+	Spec   struct{} `json:"spec,omitempty"   cue:""`
 	Status struct{} `json:"status,omitempty"`
 }
 
@@ -52,8 +52,8 @@ func TestGenericObjectMarshal(t *testing.T) {
 		"apiVersion": "core/v1",
 		"kind":       "Whatever",
 		"metadata": map[string]interface{}{
-			"name":    "my-object",
-			"account": "my-account",
+			"name":      "my-object",
+			"namespace": "my-namespace",
 		},
 		"data": map[string]interface{}{
 			"data_field": "some_data",

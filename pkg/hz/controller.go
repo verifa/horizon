@@ -450,10 +450,10 @@ func (c *Controller) startReconciler(
 			}
 			// Key for the owner (parent) object.
 			key := KeyFromObject(ObjectKey{
-				Group:   ownerRef.Group,
-				Kind:    ownerRef.Kind,
-				Name:    ownerRef.Name,
-				Account: ownerRef.Account,
+				Group:     ownerRef.Group,
+				Kind:      ownerRef.Kind,
+				Name:      ownerRef.Name,
+				Namespace: ownerRef.Namespace,
 			})
 			go c.handleControlLoop(
 				ctx,

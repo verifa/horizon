@@ -67,8 +67,8 @@ func TestReconciler(t *testing.T) {
 
 	do := DummyObject{
 		ObjectMeta: hz.ObjectMeta{
-			Account: "test",
-			Name:    "dummy",
+			Namespace: "test",
+			Name:      "dummy",
 		},
 	}
 	err = dummyClient.Create(ctx, do)
@@ -77,15 +77,15 @@ func TestReconciler(t *testing.T) {
 	childClient := hz.ObjectClient[ChildObject]{Client: client}
 	co := ChildObject{
 		ObjectMeta: hz.ObjectMeta{
-			Account: "test",
-			Name:    "child",
+			Namespace: "test",
+			Name:      "child",
 			OwnerReferences: []hz.OwnerReference{
 				{
-					Group:   do.ObjectGroup(),
-					Version: do.ObjectVersion(),
-					Kind:    do.ObjectKind(),
-					Account: do.Account,
-					Name:    do.Name,
+					Group:     do.ObjectGroup(),
+					Version:   do.ObjectVersion(),
+					Kind:      do.ObjectKind(),
+					Namespace: do.Namespace,
+					Name:      do.Name,
 				},
 			},
 		},
@@ -132,8 +132,8 @@ func TestReconcilerPanic(t *testing.T) {
 
 	do := DummyObject{
 		ObjectMeta: hz.ObjectMeta{
-			Account: "test",
-			Name:    "dummy",
+			Namespace: "test",
+			Name:      "dummy",
 		},
 	}
 
@@ -207,8 +207,8 @@ func TestReconcilerSlow(t *testing.T) {
 
 	do := DummyObject{
 		ObjectMeta: hz.ObjectMeta{
-			Account: "test",
-			Name:    "dummy",
+			Namespace: "test",
+			Name:      "dummy",
 		},
 	}
 
@@ -278,8 +278,8 @@ func TestReconcilerWaitForFinish(t *testing.T) {
 
 	do := DummyObject{
 		ObjectMeta: hz.ObjectMeta{
-			Account: "test",
-			Name:    "dummy",
+			Namespace: "test",
+			Name:      "dummy",
 		},
 	}
 
@@ -372,21 +372,21 @@ func TestReconcilerConcurrent(t *testing.T) {
 
 	do := DummyObject{
 		ObjectMeta: hz.ObjectMeta{
-			Account: "test",
-			Name:    "dummy",
+			Namespace: "test",
+			Name:      "dummy",
 		},
 	}
 	co := ChildObject{
 		ObjectMeta: hz.ObjectMeta{
-			Account: "test",
-			Name:    "child",
+			Namespace: "test",
+			Name:      "child",
 			OwnerReferences: []hz.OwnerReference{
 				{
-					Group:   do.ObjectGroup(),
-					Version: do.ObjectVersion(),
-					Kind:    do.ObjectKind(),
-					Name:    do.Name,
-					Account: do.Account,
+					Group:     do.ObjectGroup(),
+					Version:   do.ObjectVersion(),
+					Kind:      do.ObjectKind(),
+					Name:      do.Name,
+					Namespace: do.Namespace,
 				},
 			},
 		},

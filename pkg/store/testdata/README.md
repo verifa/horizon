@@ -36,7 +36,7 @@ apiVersion: dummy/v1
 kind: DummyApplyObject
 metadata:
   name: test
-  account: test
+  namespace: test
 spec:
   text: test
   object:
@@ -47,7 +47,7 @@ apiVersion: dummy/v1
 kind: DummyApplyObject
 metadata:
   name: test
-  account: test
+  namespace: test
   managedFields:
   - manager: m1
     fieldsType: FieldsV1

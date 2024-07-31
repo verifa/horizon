@@ -1,8 +1,8 @@
 apiVersion: core/v1
-kind: Account
+kind: Namespace
 metadata:
-  name: test-account
-  account: hz-root
+  name: test-namespace
+  namespace: hz-root
   labels:
     app: test-app
     env: test-env

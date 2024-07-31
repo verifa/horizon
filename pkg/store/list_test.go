@@ -37,8 +37,8 @@ func TestList(t *testing.T) {
 	// Create a dummy object
 	obj1 := DummyApplyObject{
 		ObjectMeta: hz.ObjectMeta{
-			Name:    "obj1",
-			Account: "test",
+			Name:      "obj1",
+			Namespace: "test",
 		},
 	}
 	if err := client.Create(ctx, obj1); err != nil {
@@ -51,8 +51,8 @@ func TestList(t *testing.T) {
 	// Create a dummy object
 	obj2 := DummyApplyObject{
 		ObjectMeta: hz.ObjectMeta{
-			Name:    "obj2",
-			Account: "test",
+			Name:      "obj2",
+			Namespace: "test",
 		},
 	}
 	if err := client.Create(ctx, obj2); err != nil {

@@ -20,10 +20,10 @@ The key includes the following fields:
 1. **Object Group:** groups are a logical way to organise resources together for things like searching and RBAC.
 2. **Object Version:** the object version is a way to version the API. It helps maintain things like backwards compatability.
 3. **Object Kind:** is just a name for the kind of object.
-4. **Object Account:** is the account that this object belongs to.
-5. **Object Name:** is the unique identifier for this object within the account.
+4. **Object Namespace:** is the namespace that this object belongs to.
+5. **Object Name:** is the unique identifier for this object within the namespace.
 
-An example key looks like: `group.v1.Object.account.name`.
+An example key looks like: `group.v1.Object.namespace.name`.
 
 ## Defining an object
 
@@ -35,7 +35,7 @@ type ObjectKeyer interface {
     ObjectGroup() string
     ObjectVersion() string
     ObjectKind() string
-    ObjectAccount() string
+    ObjectNamespace() string
     ObjectName() string
 }
 

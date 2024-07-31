@@ -35,19 +35,20 @@ type cueSpec struct {
 
 	CueEmbedJSON `json:"embedJSON" cue:""`
 
-	RequiredString string  `json:"requiredString" cue:""`
-	RegexString    string  `json:"regexString" cue:"=~\"^[a-z]+$\""`
-	PtrString      *string `json:"ptrString,omitempty" cue:"=~\"^[a-z]+$\",opt"`
-	RequiredInt    int     `json:"requiredInt" cue:""`
-	OptInt         int     `json:"optInt,omitempty" cue:",opt"`
-	LimitsInt      int     `json:"limitsInt,omitempty" cue:"<=5"`
+	RequiredString string `json:"requiredString" cue:""`
 
-	Array         [3]string         `json:"array" cue:""`
+	RegexString string  `json:"regexString"         cue:"=~\"^[a-z]+$\""`
+	PtrString   *string `json:"ptrString,omitempty" cue:"=~\"^[a-z]+$\",opt"`
+	RequiredInt int     `json:"requiredInt"         cue:""`
+	OptInt      int     `json:"optInt,omitempty"    cue:",opt"`
+	LimitsInt   int     `json:"limitsInt,omitempty" cue:"<=5"`
+
+	Array         [3]string         `json:"array"         cue:""`
 	RequiredSlice []string          `json:"requiredSlice" cue:""`
-	Children      []*cueStructChild `json:"children" cue:""`
+	Children      []*cueStructChild `json:"children"      cue:""`
 
 	StringMap map[string]string `json:"stringMap" cue:""`
-	IntMap    map[int]int       `json:"intMap" cue:""`
+	IntMap    map[int]int       `json:"intMap"    cue:""`
 
 	RawData json.RawMessage `json:"rawData" cue:",opt"`
 }
@@ -76,18 +77,18 @@ func TestCueDefinition(t *testing.T) {
 		apiVersion: =~"^CueGroup/v1$"
 		kind: =~"^CueObject$"
 		metadata: {
-			name:    =~"^[a-zA-Z0-9-_]+$"
-			account: =~"^[a-zA-Z0-9-_]+$"
+			name:      =~"^[a-zA-Z0-9-_]+$"
+			namespace: =~"^[a-zA-Z0-9-_]+$"
 			labels?: {
 				[string]: string
 			}
 			revision?: uint64
 			ownerReferences?: [...{
-				group:   string
-				version: string
-				kind:    string
-				account: string
-				name:    string
+				group:     string
+				version:   string
+				kind:      string
+				namespace: string
+				name:      string
 			}]
 			deletionTimestamp?: string
 			managedFields?: [...{

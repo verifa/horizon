@@ -16,7 +16,7 @@ func TestConn(t *testing.T) {
 	tu.AssertNoError(t, err)
 	err = ts.StartUntilReady()
 	tu.AssertNoError(t, err)
-	err = ts.PublishRootAccount()
+	err = ts.PublishRootNamespace()
 	tu.AssertNoError(t, err)
 	rootConn, err := ts.RootUserConn()
 	tu.AssertNoError(t, err)

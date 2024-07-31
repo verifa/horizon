@@ -19,9 +19,9 @@ var cmpOptIgnoreMetaManagedFields = cmp.FilterPath(func(p cmp.Path) bool {
 func TestExtractObjectFields(t *testing.T) {
 	obj := extractFieldsObject{
 		ObjectMeta: hz.ObjectMeta{
-			Name:    "name",
-			Account: "account",
-			Labels:  map[string]string{"label": "value"},
+			Name:      "name",
+			Namespace: "namespace",
+			Labels:    map[string]string{"label": "value"},
 		},
 		Spec: &struct {
 			Foo *string `json:"foo,omitempty"`
@@ -53,8 +53,8 @@ func TestExtractObjectFields(t *testing.T) {
 
 	idObj := extractFieldsObject{
 		ObjectMeta: hz.ObjectMeta{
-			Name:    obj.Name,
-			Account: obj.Account,
+			Name:      obj.Name,
+			Namespace: obj.Namespace,
 		},
 	}
 

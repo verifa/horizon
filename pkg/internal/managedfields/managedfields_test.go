@@ -77,7 +77,7 @@ func TestManagedFieldsV1(t *testing.T) {
 			json: `{
 				"metadata": {
 					"name": "test",
-					"account": "test"
+					"namespace": "test"
 				},
 				"spec": {
 					"replicas": 3

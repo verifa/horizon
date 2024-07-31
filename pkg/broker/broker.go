@@ -87,11 +87,11 @@ func (b *Broker) handleAPIMessage(ctx context.Context, msg *nats.Msg) {
 		return
 	}
 	key := hz.ObjectKey{
-		Group:   tokens[hz.SubjectInternalBrokerIndexGroup],
-		Version: tokens[hz.SubjectInternalBrokerIndexVersion],
-		Kind:    tokens[hz.SubjectInternalBrokerIndexKind],
-		Account: tokens[hz.SubjectInternalBrokerIndexAccount],
-		Name:    tokens[hz.SubjectInternalBrokerIndexName],
+		Group:     tokens[hz.SubjectInternalBrokerIndexGroup],
+		Version:   tokens[hz.SubjectInternalBrokerIndexVersion],
+		Kind:      tokens[hz.SubjectInternalBrokerIndexKind],
+		Namespace: tokens[hz.SubjectInternalBrokerIndexNamespace],
+		Name:      tokens[hz.SubjectInternalBrokerIndexName],
 	}
 
 	ok, err := b.Auth.Check(ctx, auth.CheckRequest{
@@ -125,11 +125,11 @@ func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
 	}
 
 	key := hz.ObjectKey{
-		Group:   tokens[hz.SubjectInternalBrokerIndexGroup],
-		Version: tokens[hz.SubjectInternalBrokerIndexVersion],
-		Kind:    tokens[hz.SubjectInternalBrokerIndexKind],
-		Account: tokens[hz.SubjectInternalBrokerIndexAccount],
-		Name:    tokens[hz.SubjectInternalBrokerIndexName],
+		Group:     tokens[hz.SubjectInternalBrokerIndexGroup],
+		Version:   tokens[hz.SubjectInternalBrokerIndexVersion],
+		Kind:      tokens[hz.SubjectInternalBrokerIndexKind],
+		Namespace: tokens[hz.SubjectInternalBrokerIndexNamespace],
+		Name:      tokens[hz.SubjectInternalBrokerIndexName],
 	}
 	action := tokens[hz.SubjectInternalBrokerIndexAction]
 
@@ -159,7 +159,7 @@ func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
 		key.Group,
 		key.Version,
 		key.Kind,
-		key.Account,
+		key.Namespace,
 		key.Name,
 		action,
 	)
@@ -254,7 +254,7 @@ func (b *Broker) handleInternalMessage(ctx context.Context, msg *nats.Msg) {
 		key.Group,
 		key.Version,
 		key.Kind,
-		key.Account,
+		key.Namespace,
 		key.Name,
 		action,
 		id,

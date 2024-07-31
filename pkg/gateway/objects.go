@@ -19,7 +19,7 @@ func (o *ObjectsHandler) router() *chi.Mux {
 	r.Get("/", o.get)
 	r.Post("/", o.create)
 	r.Patch("/", o.apply)
-	r.Delete("/{group}/{version}/{kind}/{account}/{name}", o.delete)
+	r.Delete("/{group}/{version}/{kind}/{namespace}/{name}", o.delete)
 	return r
 }
 
@@ -43,11 +43,11 @@ func (o *ObjectsHandler) create(w http.ResponseWriter, r *http.Request) {
 
 func (o *ObjectsHandler) get(w http.ResponseWriter, r *http.Request) {
 	key := hz.ObjectKey{
-		Group:   r.URL.Query().Get("group"),
-		Version: r.URL.Query().Get("version"),
-		Kind:    r.URL.Query().Get("kind"),
-		Name:    r.URL.Query().Get("name"),
-		Account: r.URL.Query().Get("account"),
+		Group:     r.URL.Query().Get("group"),
+		Version:   r.URL.Query().Get("version"),
+		Kind:      r.URL.Query().Get("kind"),
+		Name:      r.URL.Query().Get("name"),
+		Namespace: r.URL.Query().Get("namespace"),
 	}
 	client := hz.NewClient(o.Conn, hz.WithClientSessionFromRequest(r))
 	resp := bytes.Buffer{}
@@ -89,11 +89,11 @@ func (o *ObjectsHandler) apply(w http.ResponseWriter, r *http.Request) {
 
 func (o *ObjectsHandler) delete(w http.ResponseWriter, r *http.Request) {
 	key := hz.ObjectKey{
-		Group:   chi.URLParam(r, "group"),
-		Version: chi.URLParam(r, "version"),
-		Kind:    chi.URLParam(r, "kind"),
-		Account: chi.URLParam(r, "account"),
-		Name:    chi.URLParam(r, "name"),
+		Group:     chi.URLParam(r, "group"),
+		Version:   chi.URLParam(r, "version"),
+		Kind:      chi.URLParam(r, "kind"),
+		Namespace: chi.URLParam(r, "namespace"),
+		Name:      chi.URLParam(r, "name"),
 	}
 	client := hz.NewClient(o.Conn, hz.WithClientSessionFromRequest(r))
 	if err := client.Delete(r.Context(), hz.WithDeleteKey(key)); err != nil {

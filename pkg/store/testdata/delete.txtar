@@ -3,7 +3,7 @@ apiVersion: dummy/v1
 kind: DummyApplyObject
 metadata:
   name: test
-  account: test
+  namespace: test
 spec:
   text: test
   object:
@@ -14,17 +14,17 @@ apiVersion: dummy/v1
 kind: DummyApplyObject
 metadata:
   name: test
-  account: test
+  namespace: test
 -- {"cmd":"assert_delete"} --
 apiVersion: dummy/v1
 kind: DummyApplyObject
 metadata:
   name: test
-  account: test
+  namespace: test
 -- {"cmd":"assert", "status":404} --
 apiVersion: dummy/v1
 kind: DummyApplyObject
 metadata:
   name: test
-  account: test
+  namespace: test
 

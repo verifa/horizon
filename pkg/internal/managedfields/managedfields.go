@@ -18,7 +18,7 @@ func ManagedFieldsV1(data []byte) (FieldsV1, error) {
 	delete(raw, "group")
 	if metadata, ok := raw["metadata"].(map[string]interface{}); ok {
 		delete(metadata, "name")
-		delete(metadata, "account")
+		delete(metadata, "namespace")
 		// If there's nothing left in metadata, remove it.
 		if len(metadata) == 0 {
 			delete(raw, "metadata")

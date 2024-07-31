@@ -11,7 +11,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-const HeaderAccount = "Hz-Account"
+const HeaderNamespace = "Hz-Namespace"
 
 var _ http.RoundTripper = (*NATSHTTPTransport)(nil)
 
@@ -21,9 +21,9 @@ var _ http.RoundTripper = (*NATSHTTPTransport)(nil)
 // It is used together with httputil.ReverseProxy to create an HTTP
 // reverse proxy that transports requests over NATS.
 type NATSHTTPTransport struct {
-	conn    *nats.Conn
-	subject string
-	account string
+	conn      *nats.Conn
+	subject   string
+	namespace string
 }
 
 func (t *NATSHTTPTransport) RoundTrip(r *http.Request) (*http.Response, error) {

@@ -22,7 +22,7 @@ func TestSessions(t *testing.T) {
 		s.NS.WaitForShutdown()
 	})
 
-	err = s.PublishRootAccount()
+	err = s.PublishRootNamespace()
 	tu.AssertNoError(t, err)
 
 	conn, err := s.RootUserConn()
