@@ -17,41 +17,34 @@ type CreateRequest struct {
 
 func (s *Store) Create(ctx context.Context, req CreateRequest) error {
 	// Check if the object already exists and return a meaningful error.
-	if _, err := s.kv.Get(ctx, hz.KeyFromObject(req.Key)); err != nil {
-		// If we get a non ErrKeyNotFound error, something went wrong...
-		if !errors.Is(err, jetstream.ErrKeyNotFound) {
-			return &hz.Error{
-				Status: http.StatusInternalServerError,
-				Message: fmt.Sprintf(
-					"checking existing object: %s",
-					err.Error(),
-				),
-			}
+	_, err := s.kv.Get(ctx, hz.KeyFromObject(req.Key))
+	if err == nil {
+		return &hz.Error{
+			Status: http.StatusConflict,
+			Message: fmt.Sprintf(
+				"object already exists: %q",
+				req.Key,
+			),
 		}
-		if err := s.validateCreate(ctx, req.Key, req.Data); err != nil {
-			return hz.ErrorWrap(
-				err,
-				http.StatusInternalServerError,
-				fmt.Sprintf("validating object: %q", req.Key),
-			)
+	}
+	// If we get a non ErrKeyNotFound error, something went wrong...
+	if !errors.Is(err, jetstream.ErrKeyNotFound) {
+		return &hz.Error{
+			Status: http.StatusInternalServerError,
+			Message: fmt.Sprintf(
+				"checking existing object: %s",
+				err.Error(),
+			),
 		}
-		return s.create(ctx, req.Key, req.Data)
 	}
-	return &hz.Error{
-		Status: http.StatusConflict,
-		Message: fmt.Sprintf(
-			"object already exists: %q",
-			req.Key,
-		),
+	if err := s.validateCreate(ctx, req.Key, req.Data); err != nil {
+		return hz.ErrorWrap(
+			err,
+			http.StatusInternalServerError,
+			fmt.Sprintf("validating object: %q", req.Key),
+		)
 	}
-}
-
-func (s *Store) create(
-	ctx context.Context,
-	key hz.ObjectKeyer,
-	data []byte,
-) error {
-	rawKey, err := hz.KeyFromObjectStrict(key)
+	rawKey, err := hz.KeyFromObjectStrict(req.Key)
 	if err != nil {
 		return &hz.Error{
 			Status: http.StatusBadRequest,
@@ -61,7 +54,7 @@ func (s *Store) create(
 			),
 		}
 	}
-	data, err = removeReadOnlyFields(data)
+	data, err := removeReadOnlyFields(req.Data)
 	if err != nil {
 		return &hz.Error{
 			Status: http.StatusInternalServerError,
@@ -77,7 +70,7 @@ func (s *Store) create(
 				Status: http.StatusConflict,
 				Message: fmt.Sprintf(
 					"object already exists: %q",
-					key,
+					req.Key,
 				),
 			}
 		}

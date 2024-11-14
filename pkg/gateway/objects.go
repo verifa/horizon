@@ -34,7 +34,7 @@ func (o *ObjectsHandler) create(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
-	if err := client.Create(r.Context(), hz.WithCreateObject(obj)); err != nil {
+	if _, err := client.Apply(r.Context(), hz.WithApplyObject(obj)); err != nil {
 		httpError(w, err)
 		return
 	}

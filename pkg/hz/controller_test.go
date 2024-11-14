@@ -71,7 +71,7 @@ func TestReconciler(t *testing.T) {
 			Name:      "dummy",
 		},
 	}
-	err = dummyClient.Create(ctx, do)
+	_, err = dummyClient.Apply(ctx, do, hz.WithApplyCreateOnly(true))
 	tu.AssertNoError(t, err)
 
 	childClient := hz.ObjectClient[ChildObject]{Client: client}
@@ -91,7 +91,7 @@ func TestReconciler(t *testing.T) {
 		},
 	}
 
-	err = childClient.Create(ctx, co)
+	_, err = childClient.Apply(ctx, co, hz.WithApplyCreateOnly(true))
 	tu.AssertNoError(t, err)
 
 	time.Sleep(time.Second * 1)
@@ -137,11 +137,13 @@ func TestReconcilerPanic(t *testing.T) {
 		},
 	}
 
-	err = dummyClient.Create(ctx, do)
+	_, err = dummyClient.Apply(ctx, do, hz.WithApplyCreateOnly(true))
 	tu.AssertNoError(t, err)
 	// If we publish messages too quickly the reconciler will only get the last.
 	// Add a little sleep to make sure both messages get handled.
 	time.Sleep(time.Second)
+	// Make a change otherwise apply is no-op.
+	do.Labels = map[string]string{"foo": "bar"}
 	_, err = dummyClient.Apply(ctx, do)
 	tu.AssertNoError(t, err)
 
@@ -261,7 +263,6 @@ func TestReconcilerWaitForFinish(t *testing.T) {
 	client := hz.NewClient(
 		ti.Conn,
 		hz.WithClientInternal(true),
-		hz.WithClientDefaultManager(),
 	)
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
 
@@ -392,9 +393,9 @@ func TestReconcilerConcurrent(t *testing.T) {
 		},
 	}
 	go func() {
-		err = dummyClient.Create(ctx, do)
+		_, err = dummyClient.Apply(ctx, do, hz.WithApplyCreateOnly(true))
 		tu.AssertNoError(t, err)
-		err = childClient.Create(ctx, co)
+		_, err = childClient.Apply(ctx, co, hz.WithApplyCreateOnly(true))
 		tu.AssertNoError(t, err)
 		for i := 0; i < 50; i++ {
 			_, err = dummyClient.Apply(ctx, do)

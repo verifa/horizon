@@ -37,7 +37,6 @@ const (
 type StoreCommand string
 
 const (
-	StoreCommandCreate StoreCommand = "create"
 	StoreCommandApply  StoreCommand = "apply"
 	StoreCommandGet    StoreCommand = "get"
 	StoreCommandList   StoreCommand = "list"
@@ -275,8 +274,6 @@ func (s *Store) handleAPIMsg(ctx context.Context, msg *nats.Msg) {
 		return
 	case StoreCommandGet:
 		req.Verb = auth.VerbRead
-	case StoreCommandCreate:
-		req.Verb = auth.VerbCreate
 	case StoreCommandApply:
 		// This requires checking if it's a create or edit operation.
 		_, err := s.get(ctx, key)
@@ -337,27 +334,48 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 	}
 
 	switch cmd {
-	case StoreCommandCreate:
-		req := CreateRequest{
-			Key:  key,
-			Data: msg.Data,
-		}
-		if err := s.Create(ctx, req); err != nil {
-			_ = hz.RespondError(msg, err)
-			return
-		}
-		_ = hz.RespondStatus(msg, http.StatusCreated, nil)
-		return
 	case StoreCommandApply:
 		manager := msg.Header.Get(hz.HeaderApplyFieldManager)
 		forceStr := msg.Header.Get(hz.HeaderApplyForceConflicts)
-		force, err := strconv.ParseBool(forceStr)
+		createOnlyStr := msg.Header.Get(hz.HeaderApplyCreateOnly)
+		strToBool := func(str string) (bool, error) {
+			if str == "" {
+				return false, nil
+			}
+			force, err := strconv.ParseBool(str)
+			if err != nil {
+				return false, err
+			}
+			return force, nil
+		}
+		force, err := strToBool(forceStr)
 		if err != nil {
 			_ = hz.RespondError(
 				msg,
 				&hz.Error{
-					Status:  http.StatusBadRequest,
-					Message: "invalid header " + hz.HeaderApplyForceConflicts,
+					Status: http.StatusBadRequest,
+					Message: fmt.Sprintf(
+						"invalid header %s: %q: %q",
+						hz.HeaderApplyForceConflicts,
+						forceStr,
+						err.Error(),
+					),
+				},
+			)
+			return
+		}
+		createOnly, err := strToBool(createOnlyStr)
+		if err != nil {
+			_ = hz.RespondError(
+				msg,
+				&hz.Error{
+					Status: http.StatusBadRequest,
+					Message: fmt.Sprintf(
+						"invalid header %s: %q: %q",
+						hz.HeaderApplyCreateOnly,
+						createOnlyStr,
+						err.Error(),
+					),
 				},
 			)
 			return
@@ -373,10 +391,11 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			return
 		}
 		req := ApplyRequest{
-			Data:    msg.Data,
-			Manager: manager,
-			Key:     key,
-			Force:   force,
+			Data:     msg.Data,
+			Manager:  manager,
+			Key:      key,
+			Force:    force,
+			IsCreate: createOnly,
 		}
 
 		status, err := s.Apply(ctx, req)

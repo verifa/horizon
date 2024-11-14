@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats.go"
@@ -353,29 +354,17 @@ func (s *Server) checkRootNamespaceObject(
 	nsClient := hz.ObjectClient[core.Namespace]{
 		Client: hz.NewClient(s.Conn, hz.WithClientInternal(true)),
 	}
-	if _, err := nsClient.Get(
-		ctx,
-		hz.WithGetKey(hz.ObjectKey{
+	applyOp, err := nsClient.Apply(ctx, core.Namespace{
+		ObjectMeta: hz.ObjectMeta{
 			Name:      hz.RootNamespace,
 			Namespace: hz.RootNamespace,
-		}),
-	); err != nil {
-		if !errors.Is(err, hz.ErrNotFound) {
-			return fmt.Errorf("get root namespace: %w", err)
-		}
-		fmt.Println("Checking root namespace object: not found, creating...")
-		// If the root namespace is not found, we need to create it.
-		if err := nsClient.Create(ctx, core.Namespace{
-			ObjectMeta: hz.ObjectMeta{
-				Name:      hz.RootNamespace,
-				Namespace: hz.RootNamespace,
-			},
-			Spec:   &core.NamespaceSpec{},
-			Status: &core.NamespaceStatus{},
-		}); err != nil {
-			return fmt.Errorf("create root namespace: %w", err)
-		}
+		},
+		Spec:   &core.NamespaceSpec{},
+		Status: &core.NamespaceStatus{},
+	})
+	if err != nil {
+		return fmt.Errorf("apply root namespace: %w", err)
 	}
-
+	slog.Info("applied root namespace", "op", applyOp)
 	return nil
 }

@@ -18,8 +18,9 @@ type ApplyRequest struct {
 	// Manager is the name of the field manager for this request.
 	Manager string
 	// Force will force the apply to happen even if there are conflicts.
-	Force bool
-	Key   hz.ObjectKeyer
+	Force    bool
+	Key      hz.ObjectKeyer
+	IsCreate bool
 }
 
 // Apply performs the apply operation on the given request.
@@ -90,6 +91,17 @@ func (s *Store) Apply(ctx context.Context, req ApplyRequest) (int, error) {
 
 	// If the object already exists we need to perform a merge of the objects
 	// and managed fields.
+	// Check if this is a create request. If it is and the object already
+	// exists, return a conflict error.
+	if req.IsCreate {
+		return -1, &hz.Error{
+			Status: http.StatusConflict,
+			Message: fmt.Sprintf(
+				"object already exists: %q",
+				req.Key,
+			),
+		}
+	}
 	// Decode the existing object's managed fields.
 	var generic hz.GenericObject
 	if err := json.Unmarshal(rawObj, &generic); err != nil {

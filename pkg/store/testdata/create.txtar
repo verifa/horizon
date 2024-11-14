@@ -1,4 +1,4 @@
--- {"cmd":"create"} --
+-- {"cmd":"create","manager":"m1"} --
 apiVersion: dummy/v1
 kind: DummyApplyObject
 metadata:
@@ -9,10 +9,19 @@ spec:
   object:
     text: test
     numbers: [1,2,3]
--- {"cmd":"assert"} --
+-- {"cmd":"assert","manager":"m1"} --
 apiVersion: dummy/v1
 kind: DummyApplyObject
 metadata:
+  managedFields:
+  - manager: m1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:spec:
+        f:object:
+          f:text: {}
+          f:numbers: {}
+        f:text: {}
   name: test
   namespace: test
 spec:
@@ -20,7 +29,7 @@ spec:
   object:
     text: test
     numbers: [1,2,3]
--- {"cmd":"create","status":409} --
+-- {"cmd":"create","manager":"m1","status":409} --
 apiVersion: dummy/v1
 kind: DummyApplyObject
 metadata:

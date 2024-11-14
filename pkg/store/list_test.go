@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/internal/managedfields"
 	"github.com/verifa/horizon/pkg/server"
 	tu "github.com/verifa/horizon/pkg/testutil"
 )
@@ -14,6 +15,11 @@ import (
 var cmpOptIgnoreMetaRevision = cmp.FilterPath(func(p cmp.Path) bool {
 	return p.Last().String() == ".Revision" &&
 		p.Last().Type() == reflect.TypeOf(new(uint64))
+}, cmp.Ignore())
+
+var cmpOptIgnoreMetaManagedFields = cmp.FilterPath(func(p cmp.Path) bool {
+	return p.Last().String() == ".ManagedFields" &&
+		p.Last().Type() == reflect.TypeOf(managedfields.ManagedFields{})
 }, cmp.Ignore())
 
 func TestList(t *testing.T) {
@@ -41,7 +47,7 @@ func TestList(t *testing.T) {
 			Namespace: "test",
 		},
 	}
-	if err := client.Create(ctx, obj1); err != nil {
+	if _, err := client.Apply(ctx, obj1); err != nil {
 		t.Fatal("creating obj1: ", err)
 	}
 
@@ -55,12 +61,24 @@ func TestList(t *testing.T) {
 			Namespace: "test",
 		},
 	}
-	if err := client.Create(ctx, obj2); err != nil {
+	if _, err := client.Apply(ctx, obj2); err != nil {
 		t.Fatal("creating obj2: ", err)
 	}
 	objs, err = client.List(ctx)
 	tu.AssertNoError(t, err)
 	tu.AssertEqual(t, 2, len(objs))
-	tu.AssertEqual(t, obj1, objs[0], cmpOptIgnoreMetaRevision)
-	tu.AssertEqual(t, obj2, objs[1], cmpOptIgnoreMetaRevision)
+	tu.AssertEqual(
+		t,
+		obj1,
+		objs[0],
+		cmpOptIgnoreMetaRevision,
+		cmpOptIgnoreMetaManagedFields,
+	)
+	tu.AssertEqual(
+		t,
+		obj2,
+		objs[1],
+		cmpOptIgnoreMetaRevision,
+		cmpOptIgnoreMetaManagedFields,
+	)
 }
