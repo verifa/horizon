@@ -83,7 +83,7 @@ func (d *DefaultHandler) PostNamespaces(
 			Namespace: hz.RootNamespace,
 		},
 	}
-	err := nsClient.Create(r.Context(), ns)
+	_, err := nsClient.Apply(r.Context(), ns, hz.WithApplyCreateOnly(true))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

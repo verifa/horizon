@@ -103,10 +103,9 @@ func (h *PortalHandler) post(rw http.ResponseWriter, req *http.Request) {
 	client := hz.NewClient(
 		h.Conn,
 		hz.WithClientSessionFromRequest(req),
-		hz.WithClientDefaultManager(),
 	)
 	greetClient := hz.ObjectClient[Greeting]{Client: client}
-	if err := greetClient.Create(req.Context(), greeting); err != nil {
+	if _, err := greetClient.Apply(req.Context(), greeting, hz.WithApplyCreateOnly(true)); err != nil {
 		_ = rendr.greetingsControllerForm(reqName, err).
 			Render(req.Context(), rw)
 		return

@@ -24,6 +24,7 @@ const (
 const (
 	HeaderStatus              = "Hz-Status"
 	HeaderAuthorization       = "Hz-Authorization"
+	HeaderApplyCreateOnly     = "Hz-Apply-Create-Only"
 	HeaderApplyFieldManager   = "Hz-Apply-Field-Manager"
 	HeaderApplyForceConflicts = "Hz-Apply-Force-Conflicts"
 )
@@ -100,13 +101,6 @@ const (
 
 type ObjectClient[T Objecter] struct {
 	Client Client
-}
-
-func (oc ObjectClient[T]) Create(
-	ctx context.Context,
-	object T,
-) error {
-	return oc.Client.Create(ctx, WithCreateObject(object))
 }
 
 func (oc ObjectClient[T]) Apply(
@@ -252,12 +246,6 @@ func WithClientSessionFromRequest(req *http.Request) ClientOption {
 	}
 }
 
-func WithClientDefaultManager() ClientOption {
-	return func(co *clientOpts) {
-		co.manager = "hzctl"
-	}
-}
-
 func WithClientManager(manager string) ClientOption {
 	return func(co *clientOpts) {
 		co.manager = manager
@@ -271,7 +259,9 @@ type clientOpts struct {
 }
 
 func NewClient(conn *nats.Conn, opts ...ClientOption) Client {
-	co := clientOpts{}
+	co := clientOpts{
+		manager: "hzctl",
+	}
 	for _, opt := range opts {
 		opt(&co)
 	}
@@ -433,9 +423,10 @@ func (c Client) Validate(
 type ApplyOption func(*applyOptions)
 
 type applyOptions struct {
-	object Objecter
-	data   []byte
-	force  bool
+	object     Objecter
+	data       []byte
+	force      bool
+	createOnly bool
 }
 
 func WithApplyObject(object Objecter) ApplyOption {
@@ -453,6 +444,13 @@ func WithApplyData(data []byte) ApplyOption {
 func WithApplyForce(force bool) ApplyOption {
 	return func(ao *applyOptions) {
 		ao.force = force
+	}
+}
+
+// WithApplyCreateOnly will apply the object only if it does not exist.
+func WithApplyCreateOnly(createOnly bool) ApplyOption {
+	return func(ao *applyOptions) {
+		ao.createOnly = createOnly
 	}
 }
 
@@ -523,6 +521,7 @@ func (c Client) Apply(
 			key.ObjectName(),
 		),
 	)
+	msg.Header.Set(HeaderApplyCreateOnly, strconv.FormatBool(ao.createOnly))
 	msg.Header.Set(HeaderApplyFieldManager, c.Manager)
 	msg.Header.Set(HeaderApplyForceConflicts, strconv.FormatBool(ao.force))
 	msg.Header.Set(HeaderAuthorization, c.Session)
@@ -561,95 +560,6 @@ func (c Client) Apply(
 	default:
 		return ApplyOpResultError, ErrorFromNATS(reply)
 	}
-}
-
-type CreateOption func(*createOptions)
-
-type createOptions struct {
-	object Objecter
-	data   []byte
-}
-
-func WithCreateObject(object Objecter) CreateOption {
-	return func(ao *createOptions) {
-		ao.object = object
-	}
-}
-
-func WithCreateData(data []byte) CreateOption {
-	return func(ao *createOptions) {
-		ao.data = data
-	}
-}
-
-func (c *Client) Create(
-	ctx context.Context,
-	opts ...CreateOption,
-) error {
-	if err := c.checkSession(); err != nil {
-		return err
-	}
-	co := createOptions{}
-	for _, opt := range opts {
-		opt(&co)
-	}
-
-	var (
-		key  ObjectKeyer
-		data []byte
-	)
-	if co.object != nil {
-		var err error
-		data, err = c.marshalObjectWithTypeFields(co.object)
-		if err != nil {
-			return fmt.Errorf("marshalling object: %w", err)
-		}
-		key = co.object
-	}
-	if co.data != nil {
-		var obj MetaOnlyObject
-		if err := json.Unmarshal(co.data, &obj); err != nil {
-			return fmt.Errorf("unmarshalling data: %w", err)
-		}
-		key = obj
-		data = co.data
-	}
-	if key == nil {
-		return fmt.Errorf("create: %w", ErrClientObjectOrDataRequired)
-	}
-	if data == nil {
-		return fmt.Errorf("create: %w", ErrClientObjectOrDataRequired)
-	}
-
-	if err := validateKeyStrict(key); err != nil {
-		return fmt.Errorf("invalid key: %w", err)
-	}
-
-	msg := nats.NewMsg(
-		c.SubjectPrefix() + fmt.Sprintf(
-			SubjectStoreCreate,
-			key.ObjectGroup(),
-			key.ObjectVersion(),
-			key.ObjectKind(),
-			key.ObjectNamespace(),
-			key.ObjectName(),
-		),
-	)
-	msg.Data = data
-	msg.Header.Set(HeaderAuthorization, c.Session)
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	reply, err := c.Conn.RequestMsgWithContext(
-		ctx,
-		msg,
-	)
-	if err != nil {
-		if errors.Is(err, nats.ErrNoResponders) {
-			return ErrStoreNotResponding
-		}
-		return fmt.Errorf("making request to store: %w", err)
-	}
-	return ErrorFromNATS(reply)
 }
 
 type GetOption func(*getOptions)

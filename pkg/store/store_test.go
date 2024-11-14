@@ -139,7 +139,11 @@ func runTest(
 			case testStepCommandCreate:
 				jsonData, err := yaml.YAMLToJSON(file.Data)
 				tu.AssertNoError(t, err, "obj yaml to json")
-				err = client.Create(ctx, hz.WithCreateData(jsonData))
+				_, err = client.Apply(
+					ctx,
+					hz.WithApplyData(jsonData),
+					hz.WithApplyCreateOnly(true),
+				)
 				if ts.Status == nil {
 					tu.AssertNoError(t, err)
 				} else {
