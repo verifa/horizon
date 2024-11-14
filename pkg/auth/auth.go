@@ -7,17 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/verifa/horizon/pkg/hz"
 )
-
-func WithInitTimeout(timeout time.Duration) Option {
-	return func(o *authorizerOptions) {
-		o.timeout = timeout
-	}
-}
 
 func WithAdminGroups(groups ...string) Option {
 	return func(o *authorizerOptions) {
@@ -28,13 +21,10 @@ func WithAdminGroups(groups ...string) Option {
 type Option func(*authorizerOptions)
 
 type authorizerOptions struct {
-	timeout     time.Duration
 	adminGroups []string
 }
 
-var defaultAuthorizerOptions = authorizerOptions{
-	timeout: 5 * time.Second,
-}
+var defaultAuthorizerOptions = authorizerOptions{}
 
 func Start(
 	ctx context.Context,
@@ -119,9 +109,6 @@ func (a *Auth) Start(
 
 func (a *Auth) Close() error {
 	var errs error
-	// if a.Sessions != nil {
-	// 	errs = errors.Join(errs, a.Sessions.Close())
-	// }
 	if a.RBAC != nil {
 		errs = errors.Join(errs, a.RBAC.Close())
 	}
@@ -150,8 +137,9 @@ func (a *Auth) Check(
 		Verb:   req.Verb,
 		Object: req.Object,
 	}
-	slog.Info("checking", "checkRequest", checkRequest)
-	return a.RBAC.Check(ctx, checkRequest), nil
+	ok := a.RBAC.Check(ctx, checkRequest)
+	slog.Info("checking", "checkRequest", checkRequest, "ok", ok)
+	return ok, nil
 }
 
 // Verb is implied (read).

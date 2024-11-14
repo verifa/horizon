@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/verifa/horizon/pkg/auth"
@@ -237,7 +236,6 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		)
 		return
 	}
-	spew.Dump(i)
 
 	var claims auth.UserInfo
 	if err := idToken.Claims(&claims); err != nil {
