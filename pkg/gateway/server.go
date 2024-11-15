@@ -149,6 +149,7 @@ func (s *Server) start(
 			"/ping",
 		},
 		QuietDownPeriod: 10 * time.Second,
+		ResponseHeaders: true,
 	})
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)

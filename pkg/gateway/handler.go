@@ -38,10 +38,7 @@ func (d *DefaultHandler) GetNamespaces(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
 		return
 	}
-	client := hz.Client{
-		Conn:    d.Conn,
-		Session: hz.SessionFromRequest(r),
-	}
+	client := hz.NewClient(d.Conn, hz.WithClientSessionFromRequest(r))
 	nsClient := hz.ObjectClient[core.Namespace]{Client: client}
 	namespaces, err := nsClient.List(r.Context())
 	if err != nil {
@@ -72,10 +69,7 @@ func (d *DefaultHandler) PostNamespaces(
 	r *http.Request,
 ) {
 	name := r.FormValue("namespace-name")
-	client := hz.Client{
-		Conn:    d.Conn,
-		Session: hz.SessionFromRequest(r),
-	}
+	client := hz.NewClient(d.Conn, hz.WithClientSessionFromRequest(r))
 	nsClient := hz.ObjectClient[core.Namespace]{Client: client}
 	ns := core.Namespace{
 		ObjectMeta: hz.ObjectMeta{
@@ -89,4 +83,5 @@ func (d *DefaultHandler) PostNamespaces(
 		return
 	}
 	w.Header().Add("HX-Redirect", "/namespaces/"+name)
+	w.WriteHeader(http.StatusCreated)
 }

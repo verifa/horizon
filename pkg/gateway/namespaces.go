@@ -25,14 +25,14 @@ type NamespaceHandler struct {
 func (h *NamespaceHandler) Router() *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(h.Middleware...)
-	r.Use(h.middlewareAccount)
-	r.Get("/", h.getAccount)
+	r.Use(h.middlewareNamespace)
+	r.Get("/", h.getNamespace)
 	r.HandleFunc("/portal/{portal}", h.servePortal)
 	r.HandleFunc("/portal/{portal}/*", h.servePortal)
 	return r
 }
 
-func (h *NamespaceHandler) middlewareAccount(next http.Handler) http.Handler {
+func (h *NamespaceHandler) middlewareNamespace(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		namespace := chi.URLParam(r, "namespace")
 		if namespace == "" {
@@ -58,10 +58,7 @@ func (h *NamespaceHandler) middlewareAccount(next http.Handler) http.Handler {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		client := hz.Client{
-			Conn:    h.Conn,
-			Session: hz.SessionFromRequest(r),
-		}
+		client := hz.NewClient(h.Conn, hz.WithClientSessionFromRequest(r))
 		if _, err := client.Get(r.Context(), hz.WithGetKey(hz.ObjectKey{
 			Group:     core.ObjectGroup,
 			Version:   core.ObjectVersion,
@@ -69,7 +66,6 @@ func (h *NamespaceHandler) middlewareAccount(next http.Handler) http.Handler {
 			Namespace: hz.RootNamespace,
 			Name:      namespace,
 		})); err != nil {
-			// TODO: display a pretty 404 page instead.
 			httpError(w, err)
 			return
 		}
@@ -77,7 +73,10 @@ func (h *NamespaceHandler) middlewareAccount(next http.Handler) http.Handler {
 	})
 }
 
-func (h *NamespaceHandler) getAccount(w http.ResponseWriter, r *http.Request) {
+func (h *NamespaceHandler) getNamespace(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	userInfo, ok := r.Context().Value(authContext).(auth.UserInfo)
 	if !ok {
 		http.Error(w, "no auth context", http.StatusUnauthorized)
