@@ -28,7 +28,7 @@ func TestHandler(t *testing.T) {
 	tu.AssertNoError(t, err)
 
 	form := url.Values{
-		"namespace-name": {"test"},
+		"namespace-name": {"another"},
 	}
 	createReq, err := http.NewRequest(
 		http.MethodPost,
@@ -49,9 +49,15 @@ func TestHandler(t *testing.T) {
 	nsClient := hz.ObjectClient[core.Namespace]{
 		Client: hz.NewClient(ts.Conn, hz.WithClientSession(sess)),
 	}
-	nss, err := nsClient.List(ctx)
+	ns, err := nsClient.Get(
+		ctx,
+		hz.WithGetKey(hz.ObjectKeyFromObject(core.Namespace{
+			ObjectMeta: hz.ObjectMeta{
+				Namespace: hz.RootNamespace,
+				Name:      "another",
+			},
+		})),
+	)
 	tu.AssertNoError(t, err)
-
-	// Two namespaces: root and the one we created.
-	tu.AssertEqual(t, 2, len(nss))
+	tu.AssertEqual(t, "another", ns.Name)
 }

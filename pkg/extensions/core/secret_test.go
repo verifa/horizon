@@ -28,7 +28,7 @@ func TestSecrets(t *testing.T) {
 	secret := core.Secret{
 		ObjectMeta: hz.ObjectMeta{
 			Name:      "my-secret",
-			Namespace: "my-namespace",
+			Namespace: "test",
 		},
 		Data: core.SecretData{
 			"username": "admin",

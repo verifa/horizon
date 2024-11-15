@@ -16,6 +16,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/tidwall/sjson"
 	"github.com/verifa/horizon/pkg/auth"
+	"github.com/verifa/horizon/pkg/extensions/core"
 	"github.com/verifa/horizon/pkg/hz"
 )
 
@@ -390,6 +391,34 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			)
 			return
 		}
+		// Check that the namespace exists, unless the object is a namespace.
+		checkNamespace := func(ns string) error {
+			if _, err := s.get(ctx, hz.ObjectKeyFromObject(core.Namespace{
+				ObjectMeta: hz.ObjectMeta{
+					Name:      ns,
+					Namespace: hz.RootNamespace,
+				},
+			})); err != nil {
+				if errors.Is(err, hz.ErrNotFound) {
+					return &hz.Error{
+						Status: http.StatusNotFound,
+						Message: fmt.Sprintf(
+							"namespace %q not found",
+							ns,
+						),
+					}
+				}
+				return fmt.Errorf("get namespace: %w", err)
+			}
+			return nil
+		}
+		if !isNamespaceKey(key) {
+			err := checkNamespace(key.Namespace)
+			if err != nil {
+				_ = hz.RespondError(msg, err)
+			}
+		}
+
 		req := ApplyRequest{
 			Data:     msg.Data,
 			Manager:  manager,
@@ -472,4 +501,9 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 
 func removeReadOnlyFields(data []byte) ([]byte, error) {
 	return sjson.DeleteBytes(data, "metadata.revision")
+}
+
+func isNamespaceKey(key hz.ObjectKeyer) bool {
+	return key.ObjectGroup() == core.ObjectGroup &&
+		key.ObjectKind() == core.ObjectKindNamespace
 }

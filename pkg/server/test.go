@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/verifa/horizon/pkg/auth"
+	"github.com/verifa/horizon/pkg/extensions/core"
 	"github.com/verifa/horizon/pkg/gateway"
+	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/natsutil"
 )
 
@@ -35,6 +37,16 @@ func Test(t *testing.T, ctx context.Context, opts ...ServerOption) *Server {
 	s := Server{}
 	if err := s.Start(ctx, opts...); err != nil {
 		t.Fatalf("starting server: %v", err)
+	}
+	// Create "test" namespace to avoid using root.
+	client := hz.NewClient(s.Conn, hz.WithClientInternal(true))
+	if _, err := client.Apply(ctx, hz.WithApplyObject(core.Namespace{
+		ObjectMeta: hz.ObjectMeta{
+			Name:      "test",
+			Namespace: hz.RootNamespace,
+		},
+	})); err != nil {
+		t.Fatal("creating test namespace: ", err)
 	}
 	t.Cleanup(func() {
 		err := s.Close()
