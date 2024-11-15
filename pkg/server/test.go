@@ -6,6 +6,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/gateway"
 	"github.com/verifa/horizon/pkg/natsutil"
 )
@@ -29,6 +30,7 @@ func Test(t *testing.T, ctx context.Context, opts ...ServerOption) *Server {
 			gateway.WithPort(gwPort),
 			gateway.WithDummyAuthDefault(true),
 		),
+		WithAuthOptions(auth.WithAdminGroups("admin")),
 	)
 	s := Server{}
 	if err := s.Start(ctx, opts...); err != nil {

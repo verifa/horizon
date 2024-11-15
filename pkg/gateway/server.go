@@ -111,7 +111,7 @@ func Start(
 type Server struct {
 	Conn       *nats.Conn
 	Auth       *auth.Auth
-	httpServer *http.Server
+	HTTPServer *http.Server
 	dummyOIDC  *dummyoidc.Server
 
 	portals map[string]hz.Portal
@@ -298,7 +298,7 @@ func (s *Server) start(
 		ReadHeaderTimeout: 2 * time.Second,
 		Handler:           r,
 	}
-	s.httpServer = &srv
+	s.HTTPServer = &srv
 
 	go func() {
 		if err := srv.Serve(opt.listener); err != nil {
@@ -313,8 +313,8 @@ func (s *Server) start(
 
 func (s *Server) Close() error {
 	var errs error
-	if s.httpServer != nil {
-		if err := s.httpServer.Shutdown(context.TODO()); err != nil {
+	if s.HTTPServer != nil {
+		if err := s.HTTPServer.Shutdown(context.TODO()); err != nil {
 			errs = errors.Join(
 				errs,
 				fmt.Errorf("shutting down http server: %w", err),

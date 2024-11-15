@@ -31,7 +31,6 @@ func (d *DefaultHandler) GetHome(w http.ResponseWriter, r *http.Request) {
 	_ = layout("Home", &userInfo, home()).Render(r.Context(), w)
 }
 
-// GetNamespaces implements GatewayHandler.
 func (d *DefaultHandler) GetNamespaces(w http.ResponseWriter, r *http.Request) {
 	userInfo, ok := r.Context().Value(authContext).(auth.UserInfo)
 	if !ok {
@@ -42,14 +41,13 @@ func (d *DefaultHandler) GetNamespaces(w http.ResponseWriter, r *http.Request) {
 	nsClient := hz.ObjectClient[core.Namespace]{Client: client}
 	namespaces, err := nsClient.List(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpError(w, err)
 		return
 	}
 	body := namespacesPage(namespaces)
 	_ = layout("Namespaces", &userInfo, body).Render(r.Context(), w)
 }
 
-// GetNamespacesNew implements GatewayHandler.
 func (d *DefaultHandler) GetNamespacesNew(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -63,12 +61,15 @@ func (d *DefaultHandler) GetNamespacesNew(
 	_ = layout("New Namespace", &userInfo, body).Render(r.Context(), w)
 }
 
-// PostNamespaces implements GatewayHandler.
 func (d *DefaultHandler) PostNamespaces(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
 	name := r.FormValue("namespace-name")
+	if name == "" {
+		http.Error(w, "namespace name is required", http.StatusBadRequest)
+		return
+	}
 	client := hz.NewClient(d.Conn, hz.WithClientSessionFromRequest(r))
 	nsClient := hz.ObjectClient[core.Namespace]{Client: client}
 	ns := core.Namespace{
@@ -79,7 +80,7 @@ func (d *DefaultHandler) PostNamespaces(
 	}
 	_, err := nsClient.Apply(r.Context(), ns, hz.WithApplyCreateOnly(true))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpError(w, err)
 		return
 	}
 	w.Header().Add("HX-Redirect", "/namespaces/"+name)
