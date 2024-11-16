@@ -416,6 +416,7 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			err := checkNamespace(key.Namespace)
 			if err != nil {
 				_ = hz.RespondError(msg, err)
+				return
 			}
 		}
 

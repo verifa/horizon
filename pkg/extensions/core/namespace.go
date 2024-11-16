@@ -30,12 +30,6 @@ func (a Namespace) ObjectKind() string {
 	return "Namespace"
 }
 
-// Override ObjectNamespace because namespaces can only exist in the root
-// namespace.
-func (a Namespace) ObjectNamespace() string {
-	return hz.RootNamespace
-}
-
 type NamespaceSpec struct{}
 
 type NamespaceStatus struct{}
