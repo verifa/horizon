@@ -132,8 +132,10 @@ func (a *Auth) Check(
 	if err != nil {
 		return false, err
 	}
-	checkRequest := RBACRequest{
-		Groups: user.Groups,
+	checkRequest := Request{
+		Subject: RequestSubject{
+			Groups: user.Groups,
+		},
 		Verb:   req.Verb,
 		Object: req.Object,
 	}
@@ -162,8 +164,10 @@ func (a *Auth) List(
 		if err := json.Unmarshal(rawObj, &obj); err != nil {
 			return fmt.Errorf("unmarshaling object: %w", err)
 		}
-		ok := a.RBAC.Check(ctx, RBACRequest{
-			Groups: user.Groups,
+		ok := a.RBAC.Check(ctx, Request{
+			Subject: RequestSubject{
+				Groups: user.Groups,
+			},
 			Verb:   VerbRead,
 			Object: obj,
 		})

@@ -132,37 +132,38 @@ type Permissions struct {
 type Verb string
 
 const (
-	// VerbRead is the lowest level of allow access.
-	// VerbRead is the highest level of deny access.
-	// If you are denied read access, you are denied all levels of access.
+	// VerbRead allows/denies a subject to read objects.
 	VerbRead Verb = "read"
-	// VerbUpdate allows a user to update objects.
-	// It implies VerbRead.
+	// VerbUpdate allows/denies a subject to update objects.
 	VerbUpdate Verb = "update"
-	// VerbCreate allows a user to create objects.
-	// It implies VerbRead.
+	// VerbCreate allows/denies a subject to create objects.
 	VerbCreate Verb = "create"
-	// VerbDelete allows a user to delete objects.
-	// It implies VerbRead.
+	// VerbDelete allows/denies a subject to delete objects.
 	VerbDelete Verb = "delete"
-	// VerbRun allows a user to run actions for an actor.
+	// VerbRun allows/denies a subject to run actions for an actor.
 	VerbRun Verb = "run"
+	// VerbAll allows/denies a subject to perform all verbs.
 	VerbAll Verb = "*"
 )
 
-type RBACRequest struct {
-	Groups []string
-	Verb   Verb
-	Object hz.ObjectKeyer
+// Request is a request to check if Subject is allowed to perform Verb on Object.
+type Request struct {
+	Subject RequestSubject
+	Verb    Verb
+	Object  hz.ObjectKeyer
 }
 
-func (r *RBAC) Check(ctx context.Context, req RBACRequest) bool {
+type RequestSubject struct {
+	Groups []string
+}
+
+func (r *RBAC) Check(ctx context.Context, req Request) bool {
 	r.mx.RLock()
 	defer r.mx.RUnlock()
 
 	isAllow := false
 	isDeny := false
-	for _, gr := range req.Groups {
+	for _, gr := range req.Subject.Groups {
 		group, ok := r.Permissions[gr]
 		if !ok {
 			continue

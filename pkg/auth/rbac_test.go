@@ -12,7 +12,7 @@ import (
 func TestRBAC(t *testing.T) {
 	ctx := context.Background()
 	type testcase struct {
-		req    RBACRequest
+		req    Request
 		expect bool
 	}
 
@@ -67,9 +67,11 @@ func TestRBAC(t *testing.T) {
 		},
 		cases: []testcase{
 			{
-				req: RBACRequest{
-					Groups: []string{"group-creator"},
-					Verb:   "read",
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-creator"},
+					},
+					Verb: "read",
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "Namespace",
@@ -80,9 +82,11 @@ func TestRBAC(t *testing.T) {
 				expect: true,
 			},
 			{
-				req: RBACRequest{
-					Groups: []string{"group-creator"},
-					Verb:   "read",
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-creator"},
+					},
+					Verb: "read",
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "Namespace",
@@ -93,9 +97,11 @@ func TestRBAC(t *testing.T) {
 				expect: false,
 			},
 			{
-				req: RBACRequest{
-					Groups: []string{"group-creator"},
-					Verb:   "read",
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-creator"},
+					},
+					Verb: "read",
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "object-test",
@@ -106,9 +112,11 @@ func TestRBAC(t *testing.T) {
 				expect: true,
 			},
 			{
-				req: RBACRequest{
-					Groups: []string{"group-creator"},
-					Verb:   "create",
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-creator"},
+					},
+					Verb: "create",
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "object-test",
@@ -119,9 +127,11 @@ func TestRBAC(t *testing.T) {
 				expect: true,
 			},
 			{
-				req: RBACRequest{
-					Groups: []string{"group-creator"},
-					Verb:   "delete",
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-creator"},
+					},
+					Verb: "delete",
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "object-test",
@@ -132,9 +142,11 @@ func TestRBAC(t *testing.T) {
 				expect: false,
 			},
 			{
-				req: RBACRequest{
-					Groups: []string{"group-unknown"},
-					Verb:   "read",
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-unknown"},
+					},
+					Verb: "read",
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "object-test",
@@ -189,9 +201,11 @@ func TestRBAC(t *testing.T) {
 		},
 		cases: []testcase{
 			{
-				req: RBACRequest{
-					Groups: []string{"group-runner"},
-					Verb:   "run",
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-runner"},
+					},
+					Verb: "run",
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "object-test",
@@ -281,9 +295,11 @@ func TestRBAC(t *testing.T) {
 		},
 		cases: []testcase{
 			{
-				req: RBACRequest{
-					Groups: []string{"group-deny-delete"},
-					Verb:   "run",
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-deny-delete"},
+					},
+					Verb: "run",
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "object-test",
@@ -294,9 +310,11 @@ func TestRBAC(t *testing.T) {
 				expect: true,
 			},
 			{
-				req: RBACRequest{
-					Groups: []string{"group-deny-delete"},
-					Verb:   "create",
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-deny-delete"},
+					},
+					Verb: "create",
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "object-test",
@@ -307,9 +325,11 @@ func TestRBAC(t *testing.T) {
 				expect: true,
 			},
 			{
-				req: RBACRequest{
-					Groups: []string{"group-deny-delete"},
-					Verb:   "delete",
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-deny-delete"},
+					},
+					Verb: "delete",
 					Object: hz.ObjectKey{
 						Name:      "superfluous",
 						Namespace: "namespace-test",
@@ -326,9 +346,11 @@ func TestRBAC(t *testing.T) {
 		adminGroups: []string{"admin"},
 		cases: []testcase{
 			{
-				req: RBACRequest{
-					Groups: []string{"admin"},
-					Verb:   "delete",
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"admin"},
+					},
+					Verb: "delete",
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "object-test",
