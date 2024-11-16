@@ -34,12 +34,11 @@ func TestRBAC(t *testing.T) {
 					Namespace: "namespace-test",
 				},
 				Spec: RoleSpec{
-					Allow: []Verbs{
+					Allow: []Rule{
 						{
-							Create: &VerbFilter{
-								Kind:  hz.P("object-test"),
-								Group: hz.P("group-test"),
-							},
+							Kind:  hz.P("object-test"),
+							Group: hz.P("group-test"),
+							Verbs: []Verb{VerbRead, VerbCreate},
 						},
 					},
 				},
@@ -157,12 +156,11 @@ func TestRBAC(t *testing.T) {
 					Namespace: "namespace-test",
 				},
 				Spec: RoleSpec{
-					Allow: []Verbs{
+					Allow: []Rule{
 						{
-							Run: &VerbFilter{
-								Group: hz.P("group-test"),
-								Kind:  hz.P("object-test"),
-							},
+							Group: hz.P("group-test"),
+							Kind:  hz.P("object-test"),
+							Verbs: []Verb{VerbRun},
 						},
 					},
 				},
@@ -214,13 +212,12 @@ func TestRBAC(t *testing.T) {
 					Namespace: "namespace-test",
 				},
 				Spec: RoleSpec{
-					Allow: []Verbs{
+					Allow: []Rule{
 						{
-							Read:   &VerbFilter{},
-							Update: &VerbFilter{},
-							Create: &VerbFilter{},
-							Delete: &VerbFilter{},
-							Run:    &VerbFilter{},
+							Group: hz.P("*"),
+							Name:  hz.P("*"),
+							Kind:  hz.P("*"),
+							Verbs: []Verb{VerbAll},
 						},
 					},
 				},
@@ -231,9 +228,12 @@ func TestRBAC(t *testing.T) {
 					Namespace: "namespace-test",
 				},
 				Spec: RoleSpec{
-					Deny: []Verbs{
+					Deny: []Rule{
 						{
-							Delete: &VerbFilter{},
+							Group: hz.P("*"),
+							Name:  hz.P("*"),
+							Kind:  hz.P("*"),
+							Verbs: []Verb{VerbDelete},
 						},
 					},
 				},
@@ -368,7 +368,7 @@ func TestRBAC(t *testing.T) {
 			for index, tc := range test.cases {
 				ok := rbac.Check(ctx, tc.req)
 				if ok != tc.expect {
-					t.Fatal("test case failed: ", index)
+					t.Fatal("test case failed: ", index, tc.req)
 				}
 			}
 		})

@@ -12,7 +12,7 @@ import (
 	"github.com/verifa/horizon/pkg/testutil"
 )
 
-func TestRBACServer(t *testing.T) {
+func TestServerRBAC(t *testing.T) {
 	ctx := context.Background()
 	ts := server.Test(t, ctx)
 
@@ -45,13 +45,12 @@ func TestRBACServer(t *testing.T) {
 			Namespace: "team-a",
 		},
 		Spec: auth.RoleSpec{
-			Allow: []auth.Verbs{
+			Allow: []auth.Rule{
 				{
-					Create: &auth.VerbFilter{
-						Group: hz.P("*"),
-						Kind:  hz.P("*"),
-						Name:  hz.P("*"),
-					},
+					Group: hz.P("*"),
+					Kind:  hz.P("*"),
+					Name:  hz.P("*"),
+					Verbs: []auth.Verb{auth.VerbCreate},
 				},
 			},
 		},
@@ -89,13 +88,12 @@ func TestRBACServer(t *testing.T) {
 			Namespace: "team-b",
 		},
 		Spec: auth.RoleSpec{
-			Allow: []auth.Verbs{
+			Allow: []auth.Rule{
 				{
-					Create: &auth.VerbFilter{
-						Group: hz.P("*"),
-						Kind:  hz.P("*"),
-						Name:  hz.P("*"),
-					},
+					Group: hz.P("*"),
+					Kind:  hz.P("*"),
+					Name:  hz.P("*"),
+					Verbs: []auth.Verb{auth.VerbCreate},
 				},
 			},
 		},

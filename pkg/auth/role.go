@@ -23,20 +23,17 @@ func (Role) ObjectKind() string {
 }
 
 type RoleSpec struct {
-	Allow []Verbs `json:"allow,omitempty"`
-	Deny  []Verbs `json:"deny,omitempty"`
+	Allow []Rule `json:"allow,omitempty"`
+	Deny  []Rule `json:"deny,omitempty"`
 }
 
-type Verbs struct {
-	Read   *VerbFilter `json:"read,omitempty"`
-	Update *VerbFilter `json:"update,omitempty"`
-	Create *VerbFilter `json:"create,omitempty"`
-	Delete *VerbFilter `json:"delete,omitempty"`
-	Run    *VerbFilter `json:"run,omitempty"`
-}
-
-type VerbFilter struct {
-	Name  *string `json:"name,omitempty" cue:""`
-	Kind  *string `json:"kind,omitempty" cue:""`
+type Rule struct {
+	// Name of a resource that this rule targets.
+	Name *string `json:"name,omitempty" cue:""`
+	// Kind of a resource that this rule targets.
+	Kind *string `json:"kind,omitempty" cue:""`
+	// Group of a resource that this rule targets.
 	Group *string `json:"group,omitempty" cue:""`
+	// Verbs that this rule enforces.
+	Verbs []Verb `json:"verbs,omitempty" cue:""`
 }

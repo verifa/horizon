@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -124,8 +125,8 @@ type Group struct {
 }
 
 type Permissions struct {
-	Allow []Verbs `json:"allow"`
-	Deny  []Verbs `json:"deny"`
+	Allow []Rule `json:"allow"`
+	Deny  []Rule `json:"deny"`
 }
 
 type Verb string
@@ -146,6 +147,7 @@ const (
 	VerbDelete Verb = "delete"
 	// VerbRun allows a user to run actions for an actor.
 	VerbRun Verb = "run"
+	VerbAll Verb = "*"
 )
 
 type RBACRequest struct {
@@ -174,8 +176,8 @@ func (r *RBAC) Check(ctx context.Context, req RBACRequest) bool {
 		// Merge wildcard and namespace permissions.
 		if ns == nil {
 			ns = &Permissions{
-				Allow: []Verbs{},
-				Deny:  []Verbs{},
+				Allow: []Rule{},
+				Deny:  []Rule{},
 			}
 		}
 		if wildcardNS != nil {
@@ -185,25 +187,7 @@ func (r *RBAC) Check(ctx context.Context, req RBACRequest) bool {
 
 		if !isAllow {
 			for _, allow := range ns.Allow {
-				switch req.Verb {
-				case VerbRead:
-					isAllow = checkVerbFilter(allow.Read, req.Object) ||
-						checkVerbFilter(allow.Update, req.Object) ||
-						checkVerbFilter(allow.Create, req.Object) ||
-						checkVerbFilter(allow.Delete, req.Object)
-
-				case VerbUpdate:
-					isAllow = checkVerbFilter(allow.Update, req.Object)
-				case VerbCreate:
-					isAllow = checkVerbFilter(allow.Create, req.Object)
-				case VerbDelete:
-					isAllow = checkVerbFilter(allow.Delete, req.Object)
-				case VerbRun:
-					isAllow = checkVerbFilter(allow.Run, req.Object)
-				default:
-					// Unknown verb.
-					return false
-				}
+				isAllow = checkVerb(allow, req.Verb, req.Object)
 				if isAllow {
 					break
 				}
@@ -211,24 +195,7 @@ func (r *RBAC) Check(ctx context.Context, req RBACRequest) bool {
 		}
 		if !isDeny {
 			for _, deny := range ns.Deny {
-				switch req.Verb {
-				case VerbRead:
-					isDeny = checkVerbFilter(deny.Read, req.Object)
-				case VerbUpdate:
-					isDeny = checkVerbFilter(deny.Read, req.Object) ||
-						checkVerbFilter(deny.Update, req.Object)
-				case VerbCreate:
-					isDeny = checkVerbFilter(deny.Read, req.Object) ||
-						checkVerbFilter(deny.Create, req.Object)
-				case VerbDelete:
-					isDeny = checkVerbFilter(deny.Read, req.Object) ||
-						checkVerbFilter(deny.Delete, req.Object)
-				case VerbRun:
-					isDeny = checkVerbFilter(deny.Run, req.Object)
-				default:
-					// Unknown verb.
-					return false
-				}
+				isDeny = checkVerb(deny, req.Verb, req.Object)
 				if isDeny {
 					break
 				}
@@ -238,20 +205,22 @@ func (r *RBAC) Check(ctx context.Context, req RBACRequest) bool {
 	return isAllow && !isDeny
 }
 
-func checkVerbFilter(vf *VerbFilter, obj hz.ObjectKeyer) bool {
-	if vf == nil {
+func checkVerb(rule Rule, verb Verb, obj hz.ObjectKeyer) bool {
+	// If the rule does not specify the wildcard ("*") verb, check if the verb is allowed.
+	if !slices.Contains(rule.Verbs, VerbAll) {
+		if !slices.Contains(rule.Verbs, verb) {
+			return false
+		}
+	}
+	if !checkStringPattern(rule.Group, obj.ObjectGroup()) {
 		return false
 	}
-	if !checkStringPattern(vf.Group, obj.ObjectGroup()) {
+	if !checkStringPattern(rule.Kind, obj.ObjectKind()) {
 		return false
 	}
-	if !checkStringPattern(vf.Kind, obj.ObjectKind()) {
+	if !checkStringPattern(rule.Name, obj.ObjectName()) {
 		return false
 	}
-	if !checkStringPattern(vf.Name, obj.ObjectName()) {
-		return false
-	}
-
 	return true
 }
 
@@ -355,8 +324,8 @@ func (r *RBAC) refresh() {
 			permissions, ok := group.Namespaces[roleBinding.Namespace]
 			if !ok {
 				permissions = &Permissions{
-					Allow: []Verbs{},
-					Deny:  []Verbs{},
+					Allow: []Rule{},
+					Deny:  []Rule{},
 				}
 				group.Namespaces[roleBinding.Namespace] = permissions
 			}
@@ -403,18 +372,16 @@ func (r *RBAC) refresh() {
 				rootNS, ok := group.Namespaces[hz.RootNamespace]
 				if !ok {
 					rootNS = &Permissions{
-						Allow: []Verbs{},
-						Deny:  []Verbs{},
+						Allow: []Rule{},
+						Deny:  []Rule{},
 					}
 					group.Namespaces[hz.RootNamespace] = rootNS
 				}
 
-				rootNS.Allow = append(rootNS.Allow, Verbs{
-					Read: &VerbFilter{
-						Name: &localNS,
-						Kind: hz.P(core.ObjectKindNamespace),
-						// Group: hz.P("TODO"),
-					},
+				rootNS.Allow = append(rootNS.Allow, Rule{
+					Name:  &localNS,
+					Kind:  hz.P(core.ObjectKindNamespace),
+					Verbs: []Verb{VerbRead},
 				})
 			}
 		}
@@ -433,17 +400,16 @@ func (r *RBAC) refresh() {
 		ns, ok := group.Namespaces["*"]
 		if !ok {
 			ns = &Permissions{
-				Allow: []Verbs{},
-				Deny:  []Verbs{},
+				Allow: []Rule{},
+				Deny:  []Rule{},
 			}
 			group.Namespaces["*"] = ns
 		}
-		ns.Allow = append(ns.Allow, Verbs{
-			Read:   &VerbFilter{},
-			Update: &VerbFilter{},
-			Create: &VerbFilter{},
-			Delete: &VerbFilter{},
-			Run:    &VerbFilter{},
+		ns.Allow = append(ns.Allow, Rule{
+			Group: hz.P("*"),
+			Kind:  hz.P("*"),
+			Name:  hz.P("*"),
+			Verbs: []Verb{VerbAll},
 		})
 	}
 
