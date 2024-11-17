@@ -29,7 +29,7 @@ type RoleSpec struct {
 
 type Rule struct {
 	// Name of a resource that this rule targets.
-	Name *string `json:"name,omitempty" cue:""`
+	Name *string `json:"name,omitempty"`
 	// Kind of a resource that this rule targets.
 	Kind *string `json:"kind,omitempty" cue:""`
 	// Group of a resource that this rule targets.

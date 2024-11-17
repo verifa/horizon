@@ -212,12 +212,6 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		s.Broker = &broker
 	}
 	if opt.runGateway {
-		defaultOptions := []gateway.ServerOption{
-			gateway.WithDummyAuthDefault(true),
-		}
-		if opt.gatewayOptions == nil {
-			opt.gatewayOptions = defaultOptions
-		}
 		gw, err := gateway.Start(ctx, s.Conn, s.Auth, opt.gatewayOptions...)
 		if err != nil {
 			return fmt.Errorf("starting gateway: %w", err)

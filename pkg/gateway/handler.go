@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/nats-io/nats.go"
@@ -67,7 +68,8 @@ func (d *DefaultHandler) PostNamespaces(
 ) {
 	name := r.FormValue("namespace-name")
 	if name == "" {
-		http.Error(w, "namespace name is required", http.StatusBadRequest)
+		_ = namespacesNewForm(name, fmt.Errorf("namespace name is required")).
+			Render(r.Context(), w)
 		return
 	}
 	client := hz.NewClient(d.Conn, hz.WithClientSessionFromRequest(r))
@@ -80,7 +82,8 @@ func (d *DefaultHandler) PostNamespaces(
 	}
 	_, err := nsClient.Apply(r.Context(), ns, hz.WithApplyCreateOnly(true))
 	if err != nil {
-		httpError(w, err)
+		_ = namespacesNewForm(name, err).
+			Render(r.Context(), w)
 		return
 	}
 	w.Header().Add("HX-Redirect", "/namespaces/"+name)

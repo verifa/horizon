@@ -30,7 +30,6 @@ func Test(t *testing.T, ctx context.Context, opts ...ServerOption) *Server {
 		),
 		WithGatewayOptions(
 			gateway.WithPort(gwPort),
-			gateway.WithDummyAuthDefault(true),
 		),
 		WithAuthOptions(auth.WithAdminGroups("admin")),
 	)

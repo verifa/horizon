@@ -17,6 +17,12 @@ const (
 	bucketSession = "hz_session"
 )
 
+const (
+	// GroupSystemAuthenticated is a group all users with a session belong to.
+	// It is a way of identifying "anyone who is authenticated".
+	GroupSystemAuthenticated = "system:authenticated"
+)
+
 var (
 	ErrAuthenticationMissing = &hz.Error{
 		Status:  http.StatusBadRequest,
@@ -96,6 +102,8 @@ func (s *Sessions) Get(ctx context.Context, session string) (UserInfo, error) {
 			Message: "unmarshal user: " + err.Error(),
 		}
 	}
+	// Add default groups.
+	user.Groups = append(user.Groups, GroupSystemAuthenticated)
 	return user, nil
 }
 

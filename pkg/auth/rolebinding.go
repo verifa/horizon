@@ -44,3 +44,11 @@ type Subject struct {
 	// Name is the name of the subject.
 	Name string `json:"name" cue:""`
 }
+
+func RoleRefFromRole(role Role) RoleRef {
+	return RoleRef{
+		Group: role.ObjectGroup(),
+		Kind:  role.ObjectKind(),
+		Name:  role.ObjectMeta.Name,
+	}
+}

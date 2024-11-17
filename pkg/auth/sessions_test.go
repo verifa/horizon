@@ -44,6 +44,8 @@ func TestSessions(t *testing.T) {
 
 	userInfo, err := sessions.Get(ctx, sessionID)
 	tu.AssertNoError(t, err)
+	// Add default groups to claims, as expected.
+	claims.Groups = append(claims.Groups, GroupSystemAuthenticated)
 	tu.AssertEqual(t, claims, userInfo)
 
 	err = sessions.Delete(ctx, sessionID)

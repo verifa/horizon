@@ -61,12 +61,6 @@ func WithDummyAuthUsers(users ...storage.User) ServerOption {
 	}
 }
 
-func WithDummyAuthDefault(b bool) ServerOption {
-	return func(o *serverOptions) {
-		o.dummyAuthDefault = b
-	}
-}
-
 func WithPort(port int) ServerOption {
 	return func(o *serverOptions) {
 		o.port = port
@@ -79,8 +73,7 @@ type serverOptions struct {
 	Conn *nats.Conn
 	oidc *OIDCConfig
 
-	dummyAuthUsers   map[string]*storage.User
-	dummyAuthDefault bool
+	dummyAuthUsers map[string]*storage.User
 
 	listener net.Listener
 	port     int
@@ -164,32 +157,24 @@ func (s *Server) start(
 	)
 	r.Use(middleware.Recoverer)
 
-	if !validateOneTrue(
-		opt.oidc != nil,
-		opt.dummyAuthUsers != nil,
-		opt.dummyAuthDefault,
-	) {
-		opt.dummyAuthDefault = true
-	}
 	//
 	// Auth
 	//
 	if opt.oidc == nil {
-		if opt.dummyAuthDefault {
-			opt.dummyAuthUsers = map[string]*storage.User{
-				"admin": {
-					ID:            "admin",
-					Username:      "admin",
-					Password:      "admin",
-					Groups:        []string{"admin"},
-					FirstName:     "Admin",
-					LastName:      "Admin",
-					Email:         "admin@localhost",
-					EmailVerified: true,
-					// How posh of you, admin!
-					PreferredLanguage: language.BritishEnglish,
-				},
-			}
+		if opt.dummyAuthUsers == nil {
+			opt.dummyAuthUsers = make(map[string]*storage.User)
+		}
+		opt.dummyAuthUsers["admin"] = &storage.User{
+			ID:            "admin",
+			Username:      "admin",
+			Password:      "admin",
+			Groups:        []string{"admin"},
+			FirstName:     "Admin",
+			LastName:      "Admin",
+			Email:         "admin@localhost",
+			EmailVerified: true,
+			// How posh of you, admin!
+			PreferredLanguage: language.BritishEnglish,
 		}
 		// Configure the dummyoidc server.
 		dummyServer, err := dummyoidc.Start(ctx, dummyoidc.Config{
@@ -355,16 +340,6 @@ func (s *Server) handlePortalEvent(
 func (s *Server) serveLoggedOut(w http.ResponseWriter, r *http.Request) {
 	body := loggedOutPage()
 	layout("Logged Out", nil, body).Render(r.Context(), w)
-}
-
-func validateOneTrue(b ...bool) bool {
-	var count int
-	for _, v := range b {
-		if v {
-			count++
-		}
-	}
-	return count == 1
 }
 
 func httpError(w http.ResponseWriter, err error) {

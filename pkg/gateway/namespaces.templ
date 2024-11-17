@@ -1,8 +1,6 @@
 package gateway
 
-import (
-	"github.com/verifa/horizon/pkg/extensions/core"
-)
+import "github.com/verifa/horizon/pkg/extensions/core"
 
 templ home() {
 	<div class="prose prose-a:no-underline mx-auto max-w-7xl px-8 py-8">
@@ -37,6 +35,17 @@ templ namespacePage() {
 templ namespacesNewPage() {
 	<div class="prose prose-a:no-underline mx-auto max-w-7xl px-8 py-8">
 		<h1>New Namespace</h1>
-		<form hx-post="/namespaces"><label class="label"><span class="label-text">Name</span></label><input type="text" placeholder="e.g. team-123" id="namespace-name" name="namespace-name" class="input input-bordered w-full max-w-xs"/><button type="submit" class="btn">Submit</button></form>
+		@namespacesNewForm("", nil)
 	</div>
+}
+
+templ namespacesNewForm(name string, err error) {
+	<form hx-post="/namespaces" hx-swap="outerHTML">
+		<label class="label"><span class="label-text">Name</span></label>
+		<input type="text" placeholder="e.g. team-123" id="namespace-name" name="namespace-name" class="input input-bordered w-full max-w-xs" value={ name }/>
+		<button type="submit" class="btn">Submit</button>
+		if err != nil {
+			<p class="text-error">{ "Error: "+ err.Error() }</p>
+		}
+	</form>
 }
