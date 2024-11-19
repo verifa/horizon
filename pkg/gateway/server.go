@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/gateway/dummyoidc"
 	"github.com/verifa/horizon/pkg/gateway/dummyoidc/storage"
@@ -189,6 +190,12 @@ func (s *Server) start(
 			ClientID:     "web",
 			ClientSecret: "secret",
 			RedirectURL:  "http://localhost:9999/auth/callback",
+			Scopes: []string{
+				oidc.ScopeOpenID,
+				"profile",
+				"email",
+				"groups",
+			},
 		}
 	}
 	oidcHandler, err := newOIDCHandler(ctx, s.Conn, s.Auth, *opt.oidc)

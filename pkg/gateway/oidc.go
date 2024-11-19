@@ -27,6 +27,7 @@ type OIDCConfig struct {
 	ClientID     string
 	ClientSecret string
 	RedirectURL  string
+	Scopes       []string
 	// TODO: add more...
 }
 
@@ -55,7 +56,7 @@ func newOIDCHandler(
 		Endpoint: provider.Endpoint(),
 
 		// "openid" is a required scope for OpenID Connect flows.
-		Scopes: []string{oidc.ScopeOpenID, "profile", "email", "groups"},
+		Scopes: config.Scopes,
 	}
 	oidcConfig := &oidc.Config{
 		ClientID: oauth2Config.ClientID,
@@ -227,15 +228,6 @@ func (or *oidcHandler) authCallback(w http.ResponseWriter, req *http.Request) {
 		)
 		return
 	}
-	var i interface{}
-	if err := userInfo.Claims(&i); err != nil {
-		http.Error(
-			w,
-			"unmarshalling user info: "+err.Error(),
-			http.StatusUnauthorized,
-		)
-		return
-	}
 
 	var claims auth.UserInfo
 	if err := idToken.Claims(&claims); err != nil {
@@ -286,15 +278,6 @@ func (or *oidcHandler) stateCookie(
 	// }
 	// cookieValue = hex.EncodeToString(encrypted)
 	hexCookieValue := hex.EncodeToString([]byte(cookieValue))
-	slog.Info(
-		"state cookie",
-		"return_url",
-		returnURL,
-		"cookie_value",
-		cookieValue,
-		"hex_cookie_value",
-		hexCookieValue,
-	)
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    hexCookieValue,
