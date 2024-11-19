@@ -42,7 +42,7 @@ func Test(t *testing.T, ctx context.Context, opts ...ServerOption) *Server {
 	if _, err := client.Apply(ctx, hz.WithApplyObject(core.Namespace{
 		ObjectMeta: hz.ObjectMeta{
 			Name:      "test",
-			Namespace: hz.RootNamespace,
+			Namespace: hz.NamespaceRoot,
 		},
 	})); err != nil {
 		t.Fatal("creating test namespace: ", err)

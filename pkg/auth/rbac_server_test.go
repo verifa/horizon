@@ -22,13 +22,13 @@ func TestServerRBAC(t *testing.T) {
 	teamANS := core.Namespace{
 		ObjectMeta: hz.ObjectMeta{
 			Name:      "team-a",
-			Namespace: hz.RootNamespace,
+			Namespace: hz.NamespaceRoot,
 		},
 	}
 	teamBNS := core.Namespace{
 		ObjectMeta: hz.ObjectMeta{
 			Name:      "team-b",
-			Namespace: hz.RootNamespace,
+			Namespace: hz.NamespaceRoot,
 		},
 	}
 	client := hz.NewClient(ts.Conn, hz.WithClientInternal(true))

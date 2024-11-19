@@ -53,7 +53,7 @@ func TestHandler(t *testing.T) {
 		ctx,
 		hz.WithGetKey(hz.ObjectKeyFromObject(core.Namespace{
 			ObjectMeta: hz.ObjectMeta{
-				Namespace: hz.RootNamespace,
+				Namespace: hz.NamespaceRoot,
 				Name:      "another",
 			},
 		})),

@@ -75,7 +75,7 @@ func TestRBAC(t *testing.T) {
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "Namespace",
-						Namespace: hz.RootNamespace,
+						Namespace: hz.NamespaceRoot,
 						Name:      "namespace-test",
 					},
 				},
@@ -90,7 +90,7 @@ func TestRBAC(t *testing.T) {
 					Object: hz.ObjectKey{
 						Group:     "group-test",
 						Kind:      "Namespace",
-						Namespace: hz.RootNamespace,
+						Namespace: hz.NamespaceRoot,
 						Name:      "namespace-another",
 					},
 				},

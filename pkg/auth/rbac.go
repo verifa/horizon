@@ -146,7 +146,8 @@ const (
 	VerbAll Verb = "*"
 )
 
-// Request is a request to check if Subject is allowed to perform Verb on Object.
+// Request is a request to check if Subject is allowed to perform Verb on
+// Object.
 type Request struct {
 	Subject RequestSubject
 	Verb    Verb
@@ -207,7 +208,8 @@ func (r *RBAC) Check(ctx context.Context, req Request) bool {
 }
 
 func checkVerb(rule Rule, verb Verb, obj hz.ObjectKeyer) bool {
-	// If the rule does not specify the wildcard ("*") verb, check if the verb is allowed.
+	// If the rule does not specify the wildcard ("*") verb, check if the verb
+	// is allowed.
 	if !slices.Contains(rule.Verbs, VerbAll) {
 		if !slices.Contains(rule.Verbs, verb) {
 			return false
@@ -364,19 +366,19 @@ func (r *RBAC) refresh() {
 	// access to the namespace object, implicitly.
 	for _, group := range cache {
 		for nsName, permissions := range group.Namespaces {
-			if nsName == hz.RootNamespace {
+			if nsName == hz.NamespaceRoot {
 				continue
 			}
 			localNS := nsName
 
 			if len(permissions.Allow) > 0 {
-				rootNS, ok := group.Namespaces[hz.RootNamespace]
+				rootNS, ok := group.Namespaces[hz.NamespaceRoot]
 				if !ok {
 					rootNS = &Permissions{
 						Allow: []Rule{},
 						Deny:  []Rule{},
 					}
-					group.Namespaces[hz.RootNamespace] = rootNS
+					group.Namespaces[hz.NamespaceRoot] = rootNS
 				}
 
 				rootNS.Allow = append(rootNS.Allow, Rule{

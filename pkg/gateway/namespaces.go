@@ -45,7 +45,7 @@ func (h *NamespaceHandler) middlewareNamespace(next http.Handler) http.Handler {
 			Object: hz.ObjectKey{
 				Group:     core.ObjectGroup,
 				Kind:      core.ObjectKindNamespace,
-				Namespace: hz.RootNamespace,
+				Namespace: hz.NamespaceRoot,
 				Name:      namespace,
 			},
 		})
@@ -63,7 +63,7 @@ func (h *NamespaceHandler) middlewareNamespace(next http.Handler) http.Handler {
 			Group:     core.ObjectGroup,
 			Version:   core.ObjectVersion,
 			Kind:      core.ObjectKindNamespace,
-			Namespace: hz.RootNamespace,
+			Namespace: hz.NamespaceRoot,
 			Name:      namespace,
 		})); err != nil {
 			httpError(w, err)

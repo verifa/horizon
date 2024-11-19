@@ -18,7 +18,7 @@ const extName = "greetings"
 
 var Portal = hz.Portal{
 	ObjectMeta: hz.ObjectMeta{
-		Namespace: hz.RootNamespace,
+		Namespace: hz.NamespaceRoot,
 		Name:      extName,
 	},
 	Spec: &hz.PortalSpec{

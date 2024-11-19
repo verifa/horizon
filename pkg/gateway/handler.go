@@ -77,7 +77,7 @@ func (d *DefaultHandler) PostNamespaces(
 	ns := core.Namespace{
 		ObjectMeta: hz.ObjectMeta{
 			Name:      name,
-			Namespace: hz.RootNamespace,
+			Namespace: hz.NamespaceRoot,
 		},
 	}
 	_, err := nsClient.Apply(r.Context(), ns, hz.WithApplyCreateOnly(true))

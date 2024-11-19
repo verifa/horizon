@@ -350,8 +350,8 @@ func (s *Server) checkRootNamespaceObject(
 	}
 	applyOp, err := nsClient.Apply(ctx, core.Namespace{
 		ObjectMeta: hz.ObjectMeta{
-			Name:      hz.RootNamespace,
-			Namespace: hz.RootNamespace,
+			Name:      hz.NamespaceRoot,
+			Namespace: hz.NamespaceRoot,
 		},
 		Spec:   &core.NamespaceSpec{},
 		Status: &core.NamespaceStatus{},

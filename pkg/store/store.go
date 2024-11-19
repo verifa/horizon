@@ -396,7 +396,7 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			if _, err := s.get(ctx, hz.ObjectKeyFromObject(core.Namespace{
 				ObjectMeta: hz.ObjectMeta{
 					Name:      ns,
-					Namespace: hz.RootNamespace,
+					Namespace: hz.NamespaceRoot,
 				},
 			})); err != nil {
 				if errors.Is(err, hz.ErrNotFound) {
