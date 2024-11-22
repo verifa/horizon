@@ -19,12 +19,12 @@ type RBAC struct {
 	Conn *nats.Conn
 	// TODO: RoleBindings and Roles maps are not thread safe.
 	// E.g. HandleRoleEvent and refresh both write and read from Roles.
-	RoleBindings map[string]RoleBinding `json:"roleBindings,omitempty"`
-	Roles        map[string]Role        `json:"roles,omitempty"`
+	RoleBindings map[string]RoleBinding
+	Roles        map[string]Role
 
-	Permissions map[string]*Group `json:"permissions,omitempty"`
+	Permissions map[string]*Group
 
-	AdminGroups []string `json:"adminGroups,omitempty"`
+	AdminGroup string
 
 	// init is true if the RBAC has been initialised.
 	// RBAC has been initialised if all watchers have been started and
@@ -129,6 +129,20 @@ type Permissions struct {
 	Deny  []Rule `json:"deny"`
 }
 
+func (p *Permissions) AllowRules() []Rule {
+	if p == nil {
+		return nil
+	}
+	return p.Allow
+}
+
+func (p *Permissions) DenyRules() []Rule {
+	if p == nil {
+		return nil
+	}
+	return p.Deny
+}
+
 type Verb string
 
 const (
@@ -159,6 +173,10 @@ type RequestSubject struct {
 }
 
 func (r *RBAC) Check(ctx context.Context, req Request) bool {
+	// Members of the admin group is allowed to do anything.
+	if slices.Contains(req.Subject.Groups, r.AdminGroup) {
+		return true
+	}
 	r.mx.RLock()
 	defer r.mx.RUnlock()
 
@@ -169,26 +187,26 @@ func (r *RBAC) Check(ctx context.Context, req Request) bool {
 		if !ok {
 			continue
 		}
-		wildcardNS, wildcardOK := group.Namespaces["*"]
+		rootNS, wildcardOK := group.Namespaces[hz.NamespaceRoot]
 		ns, nsOK := group.Namespaces[req.Object.ObjectNamespace()]
-		if !wildcardOK && !nsOK {
+		// Exit early if there are no permissions for either.
+		if !(wildcardOK || nsOK) {
 			continue
 		}
 
+		lenAllow := len(rootNS.AllowRules()) + len(ns.AllowRules())
+		lenDeny := len(rootNS.DenyRules()) + len(ns.DenyRules())
+
 		// Merge wildcard and namespace permissions.
-		if ns == nil {
-			ns = &Permissions{
-				Allow: []Rule{},
-				Deny:  []Rule{},
-			}
+		perm := &Permissions{
+			Allow: make([]Rule, 0, lenAllow),
+			Deny:  make([]Rule, 0, lenDeny),
 		}
-		if wildcardNS != nil {
-			ns.Allow = append(ns.Allow, wildcardNS.Allow...)
-			ns.Deny = append(ns.Deny, wildcardNS.Deny...)
-		}
+		perm.Allow = append(rootNS.AllowRules(), ns.AllowRules()...)
+		perm.Deny = append(rootNS.DenyRules(), ns.DenyRules()...)
 
 		if !isAllow {
-			for _, allow := range ns.Allow {
+			for _, allow := range perm.Allow {
 				isAllow = checkVerb(allow, req.Verb, req.Object)
 				if isAllow {
 					break
@@ -196,7 +214,7 @@ func (r *RBAC) Check(ctx context.Context, req Request) bool {
 			}
 		}
 		if !isDeny {
-			for _, deny := range ns.Deny {
+			for _, deny := range perm.Deny {
 				isDeny = checkVerb(deny, req.Verb, req.Object)
 				if isDeny {
 					break
@@ -388,32 +406,6 @@ func (r *RBAC) refresh() {
 				})
 			}
 		}
-	}
-
-	// Add admin group permissions (if any).
-	for _, adminGroup := range r.AdminGroups {
-		group, ok := cache[adminGroup]
-		if !ok {
-			group = &Group{
-				Name:       adminGroup,
-				Namespaces: make(map[string]*Permissions),
-			}
-			cache[adminGroup] = group
-		}
-		ns, ok := group.Namespaces["*"]
-		if !ok {
-			ns = &Permissions{
-				Allow: []Rule{},
-				Deny:  []Rule{},
-			}
-			group.Namespaces["*"] = ns
-		}
-		ns.Allow = append(ns.Allow, Rule{
-			Group: hz.P("*"),
-			Kind:  hz.P("*"),
-			Name:  hz.P("*"),
-			Verbs: []Verb{VerbAll},
-		})
 	}
 
 	r.mx.Lock()

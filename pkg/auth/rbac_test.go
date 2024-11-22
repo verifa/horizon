@@ -17,10 +17,10 @@ func TestRBAC(t *testing.T) {
 	}
 
 	type test struct {
-		name        string
-		adminGroups []string
-		roles       []Role
-		bindings    []RoleBinding
+		name       string
+		adminGroup string
+		roles      []Role
+		bindings   []RoleBinding
 
 		cases []testcase
 	}
@@ -342,8 +342,8 @@ func TestRBAC(t *testing.T) {
 	}
 
 	testAdminGroup := test{
-		name:        "admin-group",
-		adminGroups: []string{"admin"},
+		name:       "admin-group",
+		adminGroup: "admin",
 		cases: []testcase{
 			{
 				req: Request{
@@ -363,11 +363,86 @@ func TestRBAC(t *testing.T) {
 		},
 	}
 
+	testAllowRootNamespace := test{
+		name: "allow-root-namespace",
+		roles: []Role{
+			{
+				ObjectMeta: hz.ObjectMeta{
+					Name:      "role-allow-root-namespace",
+					Namespace: hz.NamespaceRoot,
+				},
+				Spec: RoleSpec{
+					Allow: []Rule{
+						{
+							Group: hz.P("*"),
+							Kind:  hz.P("*"),
+							Verbs: []Verb{VerbAll},
+						},
+					},
+				},
+			},
+		},
+		bindings: []RoleBinding{
+			{
+				ObjectMeta: hz.ObjectMeta{
+					Name:      "rolebinding-allow-root-namespace",
+					Namespace: hz.NamespaceRoot,
+				},
+				Spec: RoleBindingSpec{
+					RoleRef: RoleRef{
+						Group: "core",
+						Kind:  "Role",
+						Name:  "role-allow-root-namespace",
+					},
+					Subjects: []Subject{
+						{
+							Kind: "Group",
+							Name: "group-allow-root-namespace",
+						},
+					},
+				},
+			},
+		},
+		cases: []testcase{
+			{
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-allow-root-namespace"},
+					},
+					Verb: "read",
+					Object: hz.ObjectKey{
+						Group:     "group-test",
+						Kind:      "object-test",
+						Namespace: hz.NamespaceRoot,
+						Name:      "superfluous",
+					},
+				},
+				expect: true,
+			},
+			{
+				req: Request{
+					Subject: RequestSubject{
+						Groups: []string{"group-allow-root-namespace"},
+					},
+					Verb: "read",
+					Object: hz.ObjectKey{
+						Group:     "group-test",
+						Kind:      "object-test",
+						Namespace: "any-other-namespace",
+						Name:      "superfluous",
+					},
+				},
+				expect: true,
+			},
+		},
+	}
+
 	tests := []test{
 		testAdminGroup,
 		testCreateAllowsRead,
 		testAllowRun,
 		testDenyDelete,
+		testAllowRootNamespace,
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -375,7 +450,7 @@ func TestRBAC(t *testing.T) {
 				RoleBindings: make(map[string]RoleBinding),
 				Roles:        make(map[string]Role),
 				Permissions:  make(map[string]*Group),
-				AdminGroups:  test.adminGroups,
+				AdminGroup:   test.adminGroup,
 			}
 			for _, role := range test.roles {
 				_, err := rbac.HandleRoleEvent(event(t, role))

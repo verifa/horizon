@@ -12,16 +12,16 @@ import (
 	"github.com/verifa/horizon/pkg/hz"
 )
 
-func WithAdminGroups(groups ...string) Option {
+func WithAdminGroups(group string) Option {
 	return func(o *authorizerOptions) {
-		o.adminGroups = append(o.adminGroups, groups...)
+		o.adminGroup = group
 	}
 }
 
 type Option func(*authorizerOptions)
 
 type authorizerOptions struct {
-	adminGroups []string
+	adminGroup string
 }
 
 var defaultAuthorizerOptions = authorizerOptions{}
@@ -98,7 +98,7 @@ func (a *Auth) Start(
 		RoleBindings: make(map[string]RoleBinding),
 		Roles:        make(map[string]Role),
 		Permissions:  make(map[string]*Group),
-		AdminGroups:  ao.adminGroups,
+		AdminGroup:   ao.adminGroup,
 	}
 	if err := rbac.Start(ctx); err != nil {
 		return fmt.Errorf("starting rbac: %w", err)
