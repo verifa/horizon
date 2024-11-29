@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/verifa/horizon/examples/greetings"
+	"github.com/verifa/horizon/pkg/controller"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/hztest"
 	"github.com/verifa/horizon/pkg/server"
@@ -29,12 +30,12 @@ func TestGreeting(t *testing.T) {
 	recon := greetings.GreetingReconciler{
 		GreetingClient: greetClient,
 	}
-	ctlr, err := hz.StartController(
+	ctlr, err := controller.StartController(
 		ctx,
 		ts.Conn,
-		hz.WithControllerFor(greetings.Greeting{}),
-		hz.WithControllerValidator(&validr),
-		hz.WithControllerReconciler(&recon),
+		controller.WithControllerFor(greetings.Greeting{}),
+		controller.WithControllerValidator(&validr),
+		controller.WithControllerReconciler(&recon),
 	)
 	if err != nil {
 		t.Fatal("starting greeting controller: ", err)

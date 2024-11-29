@@ -10,6 +10,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/verifa/horizon/pkg/auth"
 	"github.com/verifa/horizon/pkg/broker"
+	"github.com/verifa/horizon/pkg/controller"
 	"github.com/verifa/horizon/pkg/extensions/core"
 	"github.com/verifa/horizon/pkg/gateway"
 	"github.com/verifa/horizon/pkg/hz"
@@ -20,16 +21,6 @@ import (
 func WithDevMode() ServerOption {
 	return func(o *serverOptions) {
 		o.devMode = true
-
-		o.runNATSServer = true
-		o.runAuth = true
-		o.runBroker = true
-		o.runStore = true
-		o.runGateway = true
-
-		o.runSecretsController = true
-		o.runNamespaceController = true
-		o.runPortalController = true
 	}
 }
 
@@ -110,15 +101,16 @@ type serverOptions struct {
 	runStore      bool
 	runGateway    bool
 
-	runSecretsController   bool
-	runNamespaceController bool
-	runPortalController    bool
+	runCustomResourceDefinitionController bool
+	runSecretsController                  bool
+	runNamespaceController                bool
+	runPortalController                   bool
 
 	natsOptions                []natsutil.ServerOption
 	authOptions                []auth.Option
 	storeOptions               []store.StoreOption
 	gatewayOptions             []gateway.ServerOption
-	namespaceControllerOptions []hz.ControllerOption
+	namespaceControllerOptions []controller.ControllerOption
 }
 
 type Server struct {
@@ -130,9 +122,10 @@ type Server struct {
 	Store   *store.Store
 	Gateway *gateway.Server
 
-	CtlrSecrets    *hz.Controller
-	CtlrNamespaces *hz.Controller
-	CltrPortals    *hz.Controller
+	CtlrCustomResourceDefinitions *controller.Controller
+	CtlrSecrets                   *controller.Controller
+	CtlrNamespaces                *controller.Controller
+	CltrPortals                   *controller.Controller
 }
 
 func Start(
@@ -148,7 +141,18 @@ func Start(
 }
 
 func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
-	opt := serverOptions{}
+	opt := serverOptions{
+		runNATSServer: true,
+		runAuth:       true,
+		runBroker:     true,
+		runStore:      true,
+		runGateway:    true,
+
+		runCustomResourceDefinitionController: true,
+		runSecretsController:                  true,
+		runNamespaceController:                true,
+		runPortalController:                   true,
+	}
 	for _, o := range opts {
 		o(&opt)
 	}
@@ -219,11 +223,29 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		s.Gateway = gw
 	}
 
-	if opt.runSecretsController {
-		ctlr, err := hz.StartController(
+	if opt.runCustomResourceDefinitionController {
+		ctlr, err := controller.StartController(
 			ctx,
 			s.Conn,
-			hz.WithControllerFor(core.Secret{}),
+			controller.WithControllerFor(core.CustomResourceDefinition{}),
+			controller.WithControllerValidatorCUE(false),
+			controller.WithControllerValidator(
+				&hz.ValidateNamespaceRoot{},
+			),
+			controller.WithControllerValidator(
+				&core.CustomResourceDefinitionValidate{},
+			),
+		)
+		if err != nil {
+			return fmt.Errorf("starting crd controller: %w", err)
+		}
+		s.CtlrCustomResourceDefinitions = ctlr
+	}
+	if opt.runSecretsController {
+		ctlr, err := controller.StartController(
+			ctx,
+			s.Conn,
+			controller.WithControllerFor(core.Secret{}),
 		)
 		if err != nil {
 			return fmt.Errorf("starting secrets controller: %w", err)
@@ -231,11 +253,12 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		s.CtlrSecrets = ctlr
 	}
 	if opt.runNamespaceController {
-		defaultOptions := []hz.ControllerOption{
-			hz.WithControllerFor(core.Namespace{}),
+		defaultOptions := []controller.ControllerOption{
+			controller.WithControllerFor(core.Namespace{}),
+			controller.WithControllerValidator(&hz.ValidateNamespaceRoot{}),
 		}
 
-		ctlr, err := hz.StartController(
+		ctlr, err := controller.StartController(
 			ctx,
 			s.Conn,
 			append(defaultOptions, opt.namespaceControllerOptions...)...,
@@ -246,10 +269,11 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		s.CtlrNamespaces = ctlr
 	}
 	if opt.runPortalController {
-		ctlr, err := hz.StartController(
+		ctlr, err := controller.StartController(
 			ctx,
 			s.Conn,
-			hz.WithControllerFor(hz.Portal{}),
+			controller.WithControllerFor(hz.Portal{}),
+			controller.WithControllerValidator(&hz.ValidateNamespaceRoot{}),
 		)
 		if err != nil {
 			return fmt.Errorf("starting portal controller: %w", err)

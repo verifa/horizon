@@ -1,4 +1,4 @@
-package hz
+package controller
 
 import (
 	"context"
@@ -125,4 +125,15 @@ func (l *lock) Release() error {
 	}
 	l.released = true
 	return nil
+}
+
+// isErrWrongLastSequence returns true if the error is caused by a write
+// operation to a stream with the wrong last sequence.
+// For example, if a kv update with an outdated revision.
+func isErrWrongLastSequence(err error) bool {
+	var apiErr *jetstream.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.ErrorCode == jetstream.JSErrCodeStreamWrongLastSequence
+	}
+	return false
 }

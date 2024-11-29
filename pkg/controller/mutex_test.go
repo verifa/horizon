@@ -1,10 +1,11 @@
-package hz_test
+package controller_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/verifa/horizon/pkg/controller"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/server"
 	tu "github.com/verifa/horizon/pkg/testutil"
@@ -16,14 +17,14 @@ func TestMutex(t *testing.T) {
 
 	js, err := jetstream.New(ti.Conn)
 	tu.AssertNoError(t, err)
-	mutex, err := hz.MutexFromBucket(ctx, js, hz.BucketObjects)
+	mutex, err := controller.MutexFromBucket(ctx, js, hz.BucketObjects)
 	tu.AssertNoError(t, err)
 
 	lock, err := mutex.Lock(ctx, "test")
 	tu.AssertNoError(t, err)
 
 	_, err = mutex.Lock(ctx, "test")
-	tu.AssertErrorIs(t, err, hz.ErrKeyLocked)
+	tu.AssertErrorIs(t, err, controller.ErrKeyLocked)
 
 	err = lock.Release()
 	tu.AssertNoError(t, err)

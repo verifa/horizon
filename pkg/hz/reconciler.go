@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-const NamespaceRoot = "root"
-
 type Reconciler interface {
 	Reconcile(context.Context, Request) (Result, error)
 }

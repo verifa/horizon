@@ -453,11 +453,11 @@ func TestRBAC(t *testing.T) {
 				AdminGroup:   test.adminGroup,
 			}
 			for _, role := range test.roles {
-				_, err := rbac.HandleRoleEvent(event(t, role))
+				_, err := rbac.handleRoleEvent(event(t, role))
 				testutil.AssertNoError(t, err)
 			}
 			for _, binding := range test.bindings {
-				_, err := rbac.HandleRoleBindingEvent(event(t, binding))
+				_, err := rbac.handleRoleBindingEvent(event(t, binding))
 				testutil.AssertNoError(t, err)
 			}
 			// Call refresh in case of no roles or rolebindings.

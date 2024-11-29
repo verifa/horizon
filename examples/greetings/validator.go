@@ -12,7 +12,7 @@ import (
 var _ (hz.Validator) = (*GreetingValidator)(nil)
 
 type GreetingValidator struct {
-	hz.ZeroValidator
+	hz.ValidateNothing
 }
 
 func (*GreetingValidator) ValidateCreate(

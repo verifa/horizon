@@ -9,6 +9,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/verifa/horizon/examples/greetings"
+	"github.com/verifa/horizon/pkg/controller"
 	"github.com/verifa/horizon/pkg/hz"
 )
 
@@ -57,12 +58,12 @@ func run() error {
 			),
 		},
 	}
-	ctlr, err := hz.StartController(
+	ctlr, err := controller.StartController(
 		ctx,
 		conn,
-		hz.WithControllerFor(greetings.Greeting{}),
-		hz.WithControllerReconciler(&reconciler),
-		hz.WithControllerValidator(&validator),
+		controller.WithControllerFor(greetings.Greeting{}),
+		controller.WithControllerReconciler(&reconciler),
+		controller.WithControllerValidator(&validator),
 	)
 	if err != nil {
 		return fmt.Errorf("start controller: %w", err)

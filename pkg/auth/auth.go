@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"github.com/nats-io/nats.go"
+	"github.com/verifa/horizon/pkg/controller"
 	"github.com/verifa/horizon/pkg/hz"
 )
 
@@ -47,7 +48,7 @@ type Auth struct {
 	Sessions *Sessions
 	RBAC     *RBAC
 
-	controllers []*hz.Controller
+	controllers []*controller.Controller
 }
 
 func (a *Auth) Start(
@@ -62,20 +63,20 @@ func (a *Auth) Start(
 	//
 	// Start controllers.
 	//
-	ctlrRole, err := hz.StartController(
+	ctlrRole, err := controller.StartController(
 		ctx,
 		a.Conn,
-		hz.WithControllerFor(&Role{}),
+		controller.WithControllerFor(&Role{}),
 	)
 	if err != nil {
 		return fmt.Errorf("starting role controller: %w", err)
 	}
 	a.controllers = append(a.controllers, ctlrRole)
 
-	ctlrRoleBinding, err := hz.StartController(
+	ctlrRoleBinding, err := controller.StartController(
 		ctx,
 		a.Conn,
-		hz.WithControllerFor(&RoleBinding{}),
+		controller.WithControllerFor(&RoleBinding{}),
 	)
 	if err != nil {
 		return fmt.Errorf("starting rolebinding controller: %w", err)

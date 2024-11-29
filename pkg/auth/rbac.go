@@ -45,9 +45,9 @@ func (r *RBAC) Start(ctx context.Context) error {
 			var err error
 			switch event.Key.ObjectKind() {
 			case "Role":
-				result, err = r.HandleRoleEvent(event)
+				result, err = r.handleRoleEvent(event)
 			case "RoleBinding":
-				result, err = r.HandleRoleBindingEvent(event)
+				result, err = r.handleRoleBindingEvent(event)
 			default:
 				err = fmt.Errorf(
 					"unexpected object kind: %v",
@@ -273,7 +273,7 @@ func checkStringPattern(pattern *string, value string) bool {
 	return true
 }
 
-func (r *RBAC) HandleRoleBindingEvent(event hz.Event) (hz.Result, error) {
+func (r *RBAC) handleRoleBindingEvent(event hz.Event) (hz.Result, error) {
 	var rb RoleBinding
 	if err := json.Unmarshal(event.Data, &rb); err != nil {
 		return hz.Result{}, fmt.Errorf("unmarshalling role binding: %w", err)
@@ -298,7 +298,7 @@ func (r *RBAC) HandleRoleBindingEvent(event hz.Event) (hz.Result, error) {
 	return hz.Result{}, nil
 }
 
-func (r *RBAC) HandleRoleEvent(event hz.Event) (hz.Result, error) {
+func (r *RBAC) handleRoleEvent(event hz.Event) (hz.Result, error) {
 	var role Role
 	if err := json.Unmarshal(event.Data, &role); err != nil {
 		return hz.Result{}, fmt.Errorf("unmarshalling role: %w", err)

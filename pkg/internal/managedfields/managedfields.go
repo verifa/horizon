@@ -77,20 +77,17 @@ func managedFieldsV1Array(
 		switch elem := elem.(type) {
 		case map[string]interface{}:
 			// HACK: for now we hardcode that an object within an array must
-			// have an
-			// id field. This is the merge key.
+			// have an id field. This is the merge key.
 			idv, ok := elem["id"]
 			if !ok {
 				// If the merge key does not exist, we must say that this
-				// manager
-				// owns this field. This is bad and wrong.
+				// manager owns this field. This is bad and wrong.
 				return defaultFields
 			}
 			idStr, ok := idv.(string)
 			if !ok {
 				// If the merge key is not a string, we must say that this
-				// manager
-				// owns this field. This is bad and wrong.
+				// manager owns this field. This is bad and wrong.
 				return defaultFields
 			}
 			key := FieldsV1Key{

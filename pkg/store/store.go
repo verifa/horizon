@@ -412,7 +412,7 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			}
 			return nil
 		}
-		if !isNamespaceKey(key) {
+		if !isKindNamespace(key) {
 			err := checkNamespace(key.Namespace)
 			if err != nil {
 				_ = hz.RespondError(msg, err)
@@ -504,7 +504,7 @@ func removeReadOnlyFields(data []byte) ([]byte, error) {
 	return sjson.DeleteBytes(data, "metadata.revision")
 }
 
-func isNamespaceKey(key hz.ObjectKeyer) bool {
+func isKindNamespace(key hz.ObjectKeyer) bool {
 	return key.ObjectGroup() == core.ObjectGroup &&
 		key.ObjectKind() == core.ObjectKindNamespace
 }

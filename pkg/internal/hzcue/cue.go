@@ -1,4 +1,4 @@
-package hz
+package hzcue
 
 import (
 	"bytes"
@@ -16,7 +16,17 @@ import (
 	"github.com/verifa/horizon/pkg/internal/managedfields"
 )
 
-func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
+type Objecter interface {
+	ObjectGroup() string
+	ObjectVersion() string
+	ObjectKind() string
+}
+
+type CueExpressioner interface {
+	CueExpr(*cue.Context) (cue.Value, error)
+}
+
+func SpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 	cueVal := cCtx.CompileString("{}")
 
 	kindPath := cue.ParsePath("kind")
@@ -40,7 +50,7 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 		)
 	}
 	t := reflect.TypeOf(obj)
-	cueObj, err := cueEncodeStruct(cCtx, t)
+	cueObj, err := encodeStruct(cCtx, t)
 	if err != nil {
 		return cue.Value{}, fmt.Errorf("encoding struct: %w", err)
 	}
@@ -65,9 +75,9 @@ func cueSpecFromObject(cCtx *cue.Context, obj Objecter) (cue.Value, error) {
 	return cueDef, nil
 }
 
-func cueEncodeStruct(cCtx *cue.Context, t reflect.Type) (cue.Value, error) {
+func encodeStruct(cCtx *cue.Context, t reflect.Type) (cue.Value, error) {
 	if t.Kind() == reflect.Ptr {
-		return cueEncodeStruct(cCtx, t.Elem())
+		return encodeStruct(cCtx, t.Elem())
 	}
 	if t.Kind() != reflect.Struct {
 		return cue.Value{}, errors.New("value must be a struct")
@@ -76,7 +86,7 @@ func cueEncodeStruct(cCtx *cue.Context, t reflect.Type) (cue.Value, error) {
 	// Handle special case of struct with one field which is embedded, like
 	// [Time] in the ObjectMeta struct.
 	if t.NumField() == 1 && t.Field(0).Anonymous {
-		return cueEncodeStruct(cCtx, t.Field(0).Type)
+		return encodeStruct(cCtx, t.Field(0).Type)
 	}
 
 	val := cCtx.CompileString("{}")
@@ -91,7 +101,7 @@ func cueEncodeStruct(cCtx *cue.Context, t reflect.Type) (cue.Value, error) {
 		if fieldType.Kind() == reflect.Pointer {
 			fieldType = fieldType.Elem()
 		}
-		fieldPath, ok := cueFieldPath(field)
+		fieldPath, ok := fieldPath(field)
 		if !ok {
 			continue
 		}
@@ -102,7 +112,7 @@ func cueEncodeStruct(cCtx *cue.Context, t reflect.Type) (cue.Value, error) {
 			jTag, ok := field.Tag.Lookup("json")
 			// If no json tag, or a json tag with an empty name.
 			if !ok || strings.Split(jTag, ",")[0] == "" {
-				embedVal, err := cueEncodeStruct(cCtx, fieldType)
+				embedVal, err := encodeStruct(cCtx, fieldType)
 				if err != nil {
 					return cue.Value{}, fmt.Errorf(
 						"encoding embedded struct %q: %w",
@@ -115,7 +125,7 @@ func cueEncodeStruct(cCtx *cue.Context, t reflect.Type) (cue.Value, error) {
 			}
 		}
 
-		fieldExpr, err := cueEncodeField(cCtx, fieldType)
+		fieldExpr, err := encodeField(cCtx, fieldType)
 		if err != nil {
 			return cue.Value{}, fmt.Errorf(
 				"encoding field %q: %w",
@@ -145,18 +155,20 @@ func cueEncodeStruct(cCtx *cue.Context, t reflect.Type) (cue.Value, error) {
 	return val, nil
 }
 
-func cueEncodeField(
+func encodeField(
 	cCtx *cue.Context,
 	fieldType reflect.Type,
 ) (cue.Value, error) {
 	if fieldType.Kind() == reflect.Ptr {
-		return cueEncodeField(cCtx, fieldType.Elem())
+		return encodeField(cCtx, fieldType.Elem())
 	}
 
 	// Handle special types.
 	iVal := reflect.New(fieldType).Elem().Interface()
-	switch iVal.(type) {
-	case Time, time.Time:
+	switch val := iVal.(type) {
+	case CueExpressioner:
+		return val.CueExpr(cCtx)
+	case time.Time:
 		// This was the best attempt at getting formatting for time, but it
 		// involves importing stuff and complicated things a lot right now.
 		// 	importTime := ast.NewImport(nil, "time")
@@ -179,7 +191,7 @@ func cueEncodeField(
 
 	switch fieldType.Kind() {
 	case reflect.Struct:
-		return cueEncodeStruct(cCtx, fieldType)
+		return encodeStruct(cCtx, fieldType)
 
 	// Had an error treating arrays differently when generating the OpenAPI
 	// spec, from cue. So just treat them like slices... sigh.
@@ -200,7 +212,7 @@ func cueEncodeField(
 	// 	return cCtx.NewList(vals...), nil
 	case reflect.Slice, reflect.Array:
 		elem := fieldType.Elem()
-		elemVal, err := cueEncodeField(cCtx, elem)
+		elemVal, err := encodeField(cCtx, elem)
 		if err != nil {
 			return cue.Value{}, err
 		}
@@ -277,7 +289,7 @@ func cueEncodeField(
 	}
 }
 
-func cueFieldPath(field reflect.StructField) (cue.Path, bool) {
+func fieldPath(field reflect.StructField) (cue.Path, bool) {
 	fieldName := field.Name
 	isRequired := false
 	jTag, ok := field.Tag.Lookup("json")

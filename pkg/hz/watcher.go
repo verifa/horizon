@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -326,3 +327,34 @@ const (
 	// store.
 	EventOperationPurge EventOperation = "purge"
 )
+
+// keyFromMsgSubject takes the subject for a msg and converts it to the
+// corresponding key for a kv store.
+//
+// Under the hood, a nats kv store creates a stream.
+// The subjects for messages on that stream contain a prefix.
+// If we remove the prefix, we get the key which can be used to access values
+// (messages) from the kv store.
+func keyFromMsgSubject(kv jetstream.KeyValue, msg jetstream.Msg) string {
+	key := strings.TrimPrefix(
+		msg.Subject(),
+		fmt.Sprintf("$KV.%s.", kv.Bucket()),
+	)
+	return key
+}
+
+func opFromMsg(msg jetstream.Msg) jetstream.KeyValueOp {
+	kvop := jetstream.KeyValuePut
+	if len(msg.Headers()) > 0 {
+		op := msg.Headers().Get("KV-Operation")
+		switch op {
+		case "DEL":
+			kvop = jetstream.KeyValueDelete
+		case "PURGE":
+			kvop = jetstream.KeyValuePurge
+		default:
+			kvop = jetstream.KeyValuePut
+		}
+	}
+	return kvop
+}

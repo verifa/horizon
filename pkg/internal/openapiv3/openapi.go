@@ -1,64 +1,15 @@
-package hz
+package openapiv3
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-
-	"cuelang.org/go/cue"
-	"cuelang.org/go/cue/cuecontext"
-	"cuelang.org/go/encoding/openapi"
 )
-
-func OpenAPIFromObject(obj Objecter) ([]byte, error) {
-	cCtx := cuecontext.New()
-	cueSpec, err := cueSpecFromObject(cCtx, obj)
-	if err != nil {
-		return nil, err
-	}
-
-	// We need to wrap the cue spec into a schema definition.
-	defPath := cue.MakePath(cue.Def(obj.ObjectKind()))
-	oapiSpec := cCtx.CompileString("{}").FillPath(defPath, cueSpec)
-	bOpenAPI, err := openapi.Gen(oapiSpec, &openapi.Config{
-		ExpandReferences: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("generating open api spec: %w", err)
-	}
-	return bOpenAPI, nil
-}
-
-func OpenAPISpecFromObject(obj Objecter) (*Spec, error) {
-	bOpenAPI, err := OpenAPIFromObject(obj)
-	if err != nil {
-		return nil, err
-	}
-	spec := Spec{}
-	if err := json.Unmarshal(bOpenAPI, &spec); err != nil {
-		return nil, fmt.Errorf("unmarshalling open api spec: %w", err)
-	}
-	return &spec, nil
-}
 
 type Spec struct {
 	Openapi    string     `json:"openapi"`
 	Info       Info       `json:"info"` // Required.
 	Components Components `json:"components,omitempty"`
-}
-
-func (s Spec) Schema() (Schema, error) {
-	if len(s.Components.Schemas) != 1 {
-		return Schema{}, fmt.Errorf(
-			"expected 1 schema, got %d",
-			len(s.Components.Schemas),
-		)
-	}
-	for key, schema := range s.Components.Schemas {
-		schema.Key = key
-		return schema, nil
-	}
-	return Schema{}, fmt.Errorf("no schema")
 }
 
 type Info struct {

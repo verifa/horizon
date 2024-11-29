@@ -2,29 +2,37 @@ package hz
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
 	cueerrors "cuelang.org/go/cue/errors"
+	"github.com/verifa/horizon/pkg/internal/hzcue"
 )
 
 type Validator interface {
 	ValidateCreate(ctx context.Context, data []byte) error
 	ValidateUpdate(ctx context.Context, old, data []byte) error
-	ValidateDelete(ctx context.Context, data []byte) error
 }
 
-var _ Validator = (*ZeroValidator)(nil)
+var _ Validator = (*ValidateNothing)(nil)
 
-type ZeroValidator struct{}
+// ValidateNothing is a validator that does not validate anything but it
+// implements [Validator].
+// It is therefore useful to embed in other validators that only need to
+// implement a subset of the [Validator] interface orr for testing.
+type ValidateNothing struct{}
 
-func (z *ZeroValidator) ValidateCreate(ctx context.Context, data []byte) error {
+func (z *ValidateNothing) ValidateCreate(
+	ctx context.Context,
+	data []byte,
+) error {
 	return nil
 }
 
-func (z *ZeroValidator) ValidateUpdate(
+func (z *ValidateNothing) ValidateUpdate(
 	ctx context.Context,
 	old []byte,
 	data []byte,
@@ -32,23 +40,20 @@ func (z *ZeroValidator) ValidateUpdate(
 	return nil
 }
 
-func (z *ZeroValidator) ValidateDelete(ctx context.Context, data []byte) error {
-	return nil
-}
+var _ Validator = (*ValidateCUE)(nil)
 
-var _ Validator = (*CUEValidator)(nil)
-
-type CUEValidator struct {
+// ValidateCUE is a validator that uses CUE to validate objects.
+type ValidateCUE struct {
 	Object Objecter
 	cCtx   *cue.Context
 	cueDef cue.Value
 }
 
-func (v *CUEValidator) ValidateCreate(ctx context.Context, data []byte) error {
+func (v *ValidateCUE) ValidateCreate(ctx context.Context, data []byte) error {
 	return v.validate(ctx, data)
 }
 
-func (v *CUEValidator) ValidateUpdate(
+func (v *ValidateCUE) ValidateUpdate(
 	ctx context.Context,
 	old []byte,
 	data []byte,
@@ -56,16 +61,12 @@ func (v *CUEValidator) ValidateUpdate(
 	return v.validate(ctx, data)
 }
 
-func (v *CUEValidator) ValidateDelete(ctx context.Context, data []byte) error {
-	return nil
-}
-
-func (v *CUEValidator) ParseObject() error {
+func (v *ValidateCUE) ParseObject() error {
 	if v.cCtx != nil {
 		return errors.New("cue context already initialised")
 	}
 	cCtx := cuecontext.New()
-	cueSpec, err := cueSpecFromObject(cCtx, v.Object)
+	cueSpec, err := hzcue.SpecFromObject(cCtx, v.Object)
 	if err != nil {
 		return fmt.Errorf("generating cue spec: %w", err)
 	}
@@ -74,7 +75,7 @@ func (v *CUEValidator) ParseObject() error {
 	return nil
 }
 
-func (v *CUEValidator) validate(_ context.Context, data []byte) error {
+func (v *ValidateCUE) validate(_ context.Context, data []byte) error {
 	if v.cCtx == nil {
 		err := v.ParseObject()
 		if err != nil {
@@ -113,6 +114,43 @@ func (v *CUEValidator) validate(_ context.Context, data []byte) error {
 			)
 		}
 		return fmt.Errorf("validating cue value: %w", err)
+	}
+	return nil
+}
+
+var _ Validator = (*ValidateNamespaceRoot)(nil)
+
+// ValidateNamespaceRoot is a validator that checks if the namespace is root.
+type ValidateNamespaceRoot struct{}
+
+func (v *ValidateNamespaceRoot) ValidateCreate(
+	ctx context.Context,
+	data []byte,
+) error {
+	return v.validateRootNamespace(data)
+}
+
+func (v *ValidateNamespaceRoot) ValidateUpdate(
+	ctx context.Context,
+	old []byte,
+	data []byte,
+) error {
+	return v.validateRootNamespace(data)
+}
+
+func (v *ValidateNamespaceRoot) validateRootNamespace(
+	data []byte,
+) error {
+	meta := MetaOnlyObject{}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return fmt.Errorf("unmarshal data metadata: %w", err)
+	}
+	if meta.Namespace != NamespaceRoot {
+		return fmt.Errorf(
+			"namespace must be %q but is %q",
+			NamespaceRoot,
+			meta.Namespace,
+		)
 	}
 	return nil
 }

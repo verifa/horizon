@@ -1,4 +1,4 @@
-package hz
+package hzcue_test
 
 import (
 	"encoding/json"
@@ -9,13 +9,15 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/format"
 	"cuelang.org/go/encoding/openapi"
+	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/internal/hzcue"
 	tu "github.com/verifa/horizon/pkg/testutil"
 )
 
 type cueObj struct {
-	ObjectMeta `json:"metadata,omitempty" cue:""`
-	Spec       cueSpec   `json:"spec"`
-	Status     cueStatus `json:"status"`
+	hz.ObjectMeta `json:"metadata,omitempty" cue:""`
+	Spec          cueSpec   `json:"spec"`
+	Status        cueStatus `json:"status"`
 }
 
 func (s cueObj) ObjectKind() string {
@@ -138,7 +140,7 @@ func TestCueDefinition(t *testing.T) {
 	// testRaw := cueValToBytes(t, testType)
 	// fmt.Println(string(testRaw))
 
-	cueDef, err := cueSpecFromObject(cCtx, cueObj{})
+	cueDef, err := hzcue.SpecFromObject(cCtx, cueObj{})
 	tu.AssertNoError(t, err)
 	tu.AssertNoError(t, cueDef.Err())
 	tu.AssertNoError(t, cueDef.Validate(cue.All()))

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/verifa/horizon/pkg/controller"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/internal/managedfields"
 	"github.com/verifa/horizon/pkg/server"
@@ -27,10 +28,10 @@ func TestList(t *testing.T) {
 	ti := server.Test(t, ctx)
 
 	// SETUP DUMMY CONTROLLER
-	ctlr, err := hz.StartController(
+	ctlr, err := controller.StartController(
 		ctx,
 		ti.Conn,
-		hz.WithControllerFor(DummyApplyObject{}),
+		controller.WithControllerFor(DummyApplyObject{}),
 	)
 	tu.AssertNoError(t, err)
 	t.Cleanup(func() {

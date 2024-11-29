@@ -161,3 +161,10 @@ func RespondStatus(
 	response.Header.Add(HeaderStatus, fmt.Sprintf("%d", status))
 	return msg.RespondMsg(response)
 }
+
+func IgnoreNotFound(err error) error {
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	return err
+}
