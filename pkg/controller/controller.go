@@ -15,49 +15,54 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/verifa/horizon/pkg/extensions/core"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/internal/openapiv3"
 )
 
-type ControllerOption func(*controllerOption)
+type Option func(*controllerOption)
 
-func WithControllerBucket(bucketObjects string) ControllerOption {
+func WithBucket(bucketObjects string) Option {
 	return func(ro *controllerOption) {
 		ro.bucketObjects = bucketObjects
 	}
 }
 
-func WithControllerReconciler(reconciler hz.Reconciler) ControllerOption {
+func WithReconciler(reconciler hz.Reconciler) Option {
 	return func(ro *controllerOption) {
 		ro.reconciler = reconciler
 	}
 }
 
-func WithControllerValidator(validator hz.Validator) ControllerOption {
+func WithValidator(validator hz.Validator) Option {
 	return func(ro *controllerOption) {
 		ro.validators = append(ro.validators, validator)
 	}
 }
 
-func WithControllerValidatorCUE(b bool) ControllerOption {
+func WithValidatorCUE(b bool) Option {
 	return func(ro *controllerOption) {
 		ro.cueValidator = b
 	}
 }
 
-func WithControllerFor(obj hz.Objecter) ControllerOption {
+// WithFor sets the object for which the controller is running for.
+// A controller can only reconcile one object.
+func WithFor(obj hz.Objecter) Option {
 	return func(ro *controllerOption) {
 		ro.forObject = obj
 	}
 }
 
-func WithControllerOwns(obj hz.Objecter) ControllerOption {
+// WithOwns sets objects that should be watched and checked if they are owned by
+// the object given with [WithFor].
+func WithOwns(obj hz.Objecter) Option {
 	return func(ro *controllerOption) {
 		ro.reconOwns = append(ro.reconOwns, obj)
 	}
 }
 
-func WithControllerStopTimeout(d time.Duration) ControllerOption {
+func WithStopTimeout(d time.Duration) Option {
 	return func(ro *controllerOption) {
 		ro.stopTimeout = d
 	}
@@ -78,17 +83,10 @@ type controllerOption struct {
 	stopTimeout time.Duration
 }
 
-var controllerOptionsDefault = controllerOption{
-	bucketObjects: hz.BucketObjects,
-	bucketMutex:   hz.BucketMutex,
-	cueValidator:  true,
-	stopTimeout:   time.Minute * 10,
-}
-
-func StartController(
+func Start(
 	ctx context.Context,
 	nc *nats.Conn,
-	opts ...ControllerOption,
+	opts ...Option,
 ) (*Controller, error) {
 	ctlr := Controller{
 		Conn: nc,
@@ -112,9 +110,14 @@ type Controller struct {
 
 func (c *Controller) Start(
 	ctx context.Context,
-	opts ...ControllerOption,
+	opts ...Option,
 ) error {
-	ro := controllerOptionsDefault
+	ro := controllerOption{
+		bucketObjects: hz.BucketObjects,
+		bucketMutex:   hz.BucketMutex,
+		cueValidator:  true,
+		stopTimeout:   time.Minute * 10,
+	}
 	for _, opt := range opts {
 		opt(&ro)
 	}
@@ -137,8 +140,11 @@ func (c *Controller) Start(
 		// Make sure the default validator comes first.
 		ro.validators = append([]hz.Validator{cueValidator}, ro.validators...)
 	}
-	if err := c.startSchema(ctx, ro); err != nil {
-		return fmt.Errorf("start schema: %w", err)
+	// if err := c.startSchema(ctx, ro); err != nil {
+	// 	return fmt.Errorf("start schema: %w", err)
+	// }
+	if err := c.applyCustomResourceDefinition(ctx, ro); err != nil {
+		return fmt.Errorf("apply custom resource definition: %w", err)
 	}
 
 	if err := c.startValidators(ctx, ro); err != nil {
@@ -152,14 +158,53 @@ func (c *Controller) Start(
 	return nil
 }
 
-func (c *Controller) publishCustomResourceDefinition(
+func (c *Controller) applyCustomResourceDefinition(
 	ctx context.Context,
 	opt controllerOption,
 ) error {
-	// TODO: cyclic dependency.
-	// crd := core.CustomResourceDefinition{
+	var (
+		schema *openapiv3.Schema
+		err    error
+	)
+	if oapiv3, ok := opt.forObject.(hz.ObjectOpenAPIV3Schemer); ok {
+		schema, err = oapiv3.OpenAPIV3Schema()
+	} else {
+		schema, err = OpenAPIV3SchemaFromObject(opt.forObject)
+	}
+	if err != nil {
+		return fmt.Errorf("getting object schema: %w", err)
+	}
 
-	// }
+	name := fmt.Sprintf(
+		"%s-%s-%s",
+		opt.forObject.ObjectGroup(),
+		opt.forObject.ObjectVersion(),
+		opt.forObject.ObjectKind(),
+	)
+	singularName := strings.ToLower(opt.forObject.ObjectKind())
+	crd := core.CustomResourceDefinition{
+		ObjectMeta: hz.ObjectMeta{
+			Name:      name,
+			Namespace: hz.NamespaceRoot,
+		},
+		Spec: &core.CustomResourceDefinitionSpec{
+			Group:   hz.P(opt.forObject.ObjectGroup()),
+			Version: hz.P(opt.forObject.ObjectVersion()),
+			Names: &core.CustomResourceDefinitionNames{
+				Kind:     hz.P(opt.forObject.ObjectKind()),
+				Singular: &singularName,
+			},
+			Schema: &core.CustomResourceDefinitionSchema{
+				OpenAPIV3Schema: schema,
+			},
+		},
+	}
+
+	client := hz.NewClient(c.Conn, hz.WithClientInternal(true))
+	_, err = client.Apply(ctx, hz.WithApplyObject(crd))
+	if err != nil {
+		return fmt.Errorf("applying custom resource definition: %w", err)
+	}
 
 	return nil
 }

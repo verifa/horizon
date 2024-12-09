@@ -30,12 +30,12 @@ func TestGreeting(t *testing.T) {
 	recon := greetings.GreetingReconciler{
 		GreetingClient: greetClient,
 	}
-	ctlr, err := controller.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ts.Conn,
-		controller.WithControllerFor(greetings.Greeting{}),
-		controller.WithControllerValidator(&validr),
-		controller.WithControllerReconciler(&recon),
+		controller.WithFor(greetings.Greeting{}),
+		controller.WithValidator(&validr),
+		controller.WithReconciler(&recon),
 	)
 	if err != nil {
 		t.Fatal("starting greeting controller: ", err)

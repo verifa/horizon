@@ -63,20 +63,20 @@ func (a *Auth) Start(
 	//
 	// Start controllers.
 	//
-	ctlrRole, err := controller.StartController(
+	ctlrRole, err := controller.Start(
 		ctx,
 		a.Conn,
-		controller.WithControllerFor(&Role{}),
+		controller.WithFor(&Role{}),
 	)
 	if err != nil {
 		return fmt.Errorf("starting role controller: %w", err)
 	}
 	a.controllers = append(a.controllers, ctlrRole)
 
-	ctlrRoleBinding, err := controller.StartController(
+	ctlrRoleBinding, err := controller.Start(
 		ctx,
 		a.Conn,
-		controller.WithControllerFor(&RoleBinding{}),
+		controller.WithFor(&RoleBinding{}),
 	)
 	if err != nil {
 		return fmt.Errorf("starting rolebinding controller: %w", err)

@@ -58,12 +58,12 @@ func run() error {
 			),
 		},
 	}
-	ctlr, err := controller.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		conn,
-		controller.WithControllerFor(greetings.Greeting{}),
-		controller.WithControllerReconciler(&reconciler),
-		controller.WithControllerValidator(&validator),
+		controller.WithFor(greetings.Greeting{}),
+		controller.WithReconciler(&reconciler),
+		controller.WithValidator(&validator),
 	)
 	if err != nil {
 		return fmt.Errorf("start controller: %w", err)

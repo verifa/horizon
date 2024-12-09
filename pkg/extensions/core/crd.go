@@ -111,7 +111,7 @@ func (c *CustomResourceDefinitionValidate) validateName(
 	}
 
 	expectedName := fmt.Sprintf(
-		"%s.%s.%s",
+		"%s-%s-%s",
 		*crd.Spec.Group,
 		*crd.Spec.Version,
 		*crd.Spec.Names.Kind,

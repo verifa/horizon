@@ -30,12 +30,12 @@ func TestService(t *testing.T) {
 	recon := services.Reconciler{
 		Client: serviceClient,
 	}
-	ctlr, err := controller.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ts.Conn,
-		controller.WithControllerFor(services.Service{}),
-		controller.WithControllerValidator(&validr),
-		controller.WithControllerReconciler(&recon),
+		controller.WithFor(services.Service{}),
+		controller.WithValidator(&validr),
+		controller.WithReconciler(&recon),
 	)
 	if err != nil {
 		t.Fatal("starting service controller: ", err)

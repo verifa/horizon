@@ -28,10 +28,10 @@ func TestList(t *testing.T) {
 	ti := server.Test(t, ctx)
 
 	// SETUP DUMMY CONTROLLER
-	ctlr, err := controller.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		controller.WithControllerFor(DummyApplyObject{}),
+		controller.WithFor(DummyApplyObject{}),
 	)
 	tu.AssertNoError(t, err)
 	t.Cleanup(func() {

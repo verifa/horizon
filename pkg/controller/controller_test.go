@@ -85,22 +85,22 @@ func TestReconciler(t *testing.T) {
 	dr := DummyReconciler{
 		DummyClient: dummyClient,
 	}
-	ctlr, err := controller.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		controller.WithControllerReconciler(&dr),
-		controller.WithControllerFor(&DummyObject{}),
-		controller.WithControllerOwns(&ChildObject{}),
+		controller.WithReconciler(&dr),
+		controller.WithFor(&DummyObject{}),
+		controller.WithOwns(&ChildObject{}),
 	)
 	tu.AssertNoError(t, err)
 	defer ctlr.Stop()
 
 	// Start controller for child object.
-	childCtlr, err := controller.StartController(
+	childCtlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		controller.WithControllerReconciler(&ChildReconciler{}),
-		controller.WithControllerFor(&ChildObject{}),
+		controller.WithReconciler(&ChildReconciler{}),
+		controller.WithFor(&ChildObject{}),
 	)
 	tu.AssertNoError(t, err)
 	defer childCtlr.Stop()
@@ -161,11 +161,11 @@ func TestReconcilerPanic(t *testing.T) {
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
 	pr := PanicReconciler{}
 	pr.wg.Add(2)
-	ctlr, err := controller.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		controller.WithControllerReconciler(&pr),
-		controller.WithControllerFor(&DummyObject{}),
+		controller.WithReconciler(&pr),
+		controller.WithFor(&DummyObject{}),
 	)
 	tu.AssertNoError(t, err)
 	defer ctlr.Stop()
@@ -236,11 +236,11 @@ func TestReconcilerSlow(t *testing.T) {
 
 	sr := SlowReconciler{}
 	sr.wg.Add(2)
-	ctlr, err := controller.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		controller.WithControllerReconciler(&sr),
-		controller.WithControllerFor(&DummyObject{}),
+		controller.WithReconciler(&sr),
+		controller.WithFor(&DummyObject{}),
 	)
 	tu.AssertNoError(t, err)
 	t.Cleanup(func() {
@@ -309,11 +309,11 @@ func TestReconcilerWaitForFinish(t *testing.T) {
 	sr := SleepReconciler{
 		dur: time.Second * 3,
 	}
-	ctlr, err := controller.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		controller.WithControllerReconciler(&sr),
-		controller.WithControllerFor(&DummyObject{}),
+		controller.WithReconciler(&sr),
+		controller.WithFor(&DummyObject{}),
 	)
 	tu.AssertNoError(t, err)
 
@@ -380,21 +380,21 @@ func TestReconcilerConcurrent(t *testing.T) {
 	}
 	// Start a few instances of the controller.
 	for i := 0; i < 5; i++ {
-		ctlr, err := controller.StartController(
+		ctlr, err := controller.Start(
 			ctx,
 			ti.Conn,
-			controller.WithControllerReconciler(&cr),
-			controller.WithControllerFor(&DummyObject{}),
+			controller.WithReconciler(&cr),
+			controller.WithFor(&DummyObject{}),
 		)
 		tu.AssertNoError(t, err)
 		defer ctlr.Stop()
 	}
 	// Start controller for child object
-	childCtlr, err := controller.StartController(
+	childCtlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		controller.WithControllerReconciler(&ChildReconciler{}),
-		controller.WithControllerFor(&ChildObject{}),
+		controller.WithReconciler(&ChildReconciler{}),
+		controller.WithFor(&ChildObject{}),
 	)
 	tu.AssertNoError(t, err)
 	defer childCtlr.Stop()

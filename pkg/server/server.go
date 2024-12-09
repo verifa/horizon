@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats.go"
@@ -110,7 +109,7 @@ type serverOptions struct {
 	authOptions                []auth.Option
 	storeOptions               []store.StoreOption
 	gatewayOptions             []gateway.ServerOption
-	namespaceControllerOptions []controller.ControllerOption
+	namespaceControllerOptions []controller.Option
 }
 
 type Server struct {
@@ -185,6 +184,32 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 	if err := store.InitKeyValue(ctx, s.Conn, opt.storeOptions...); err != nil {
 		return fmt.Errorf("initializing key value store: %w", err)
 	}
+	if opt.runStore {
+		store, err := store.Start(ctx, s.Conn, s.Auth, opt.storeOptions...)
+		if err != nil {
+			return fmt.Errorf("starting store: %w", err)
+		}
+		s.Store = store
+	}
+
+	if opt.runCustomResourceDefinitionController {
+		ctlr, err := controller.Start(
+			ctx,
+			s.Conn,
+			controller.WithFor(core.CustomResourceDefinition{}),
+			controller.WithValidatorCUE(false),
+			controller.WithValidator(
+				&hz.ValidateNamespaceRoot{},
+			),
+			controller.WithValidator(
+				&core.CustomResourceDefinitionValidate{},
+			),
+		)
+		if err != nil {
+			return fmt.Errorf("starting crd controller: %w", err)
+		}
+		s.CtlrCustomResourceDefinitions = ctlr
+	}
 
 	if opt.runAuth {
 		auth, err := auth.Start(ctx, s.Conn, opt.authOptions...)
@@ -198,13 +223,6 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		return errors.New("auth service/component required")
 	}
 
-	if opt.runStore {
-		store, err := store.StartStore(ctx, s.Conn, s.Auth, opt.storeOptions...)
-		if err != nil {
-			return fmt.Errorf("starting store: %w", err)
-		}
-		s.Store = store
-	}
 	if opt.runBroker {
 		broker := broker.Broker{
 			Conn: s.Conn,
@@ -223,29 +241,11 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		s.Gateway = gw
 	}
 
-	if opt.runCustomResourceDefinitionController {
-		ctlr, err := controller.StartController(
-			ctx,
-			s.Conn,
-			controller.WithControllerFor(core.CustomResourceDefinition{}),
-			controller.WithControllerValidatorCUE(false),
-			controller.WithControllerValidator(
-				&hz.ValidateNamespaceRoot{},
-			),
-			controller.WithControllerValidator(
-				&core.CustomResourceDefinitionValidate{},
-			),
-		)
-		if err != nil {
-			return fmt.Errorf("starting crd controller: %w", err)
-		}
-		s.CtlrCustomResourceDefinitions = ctlr
-	}
 	if opt.runSecretsController {
-		ctlr, err := controller.StartController(
+		ctlr, err := controller.Start(
 			ctx,
 			s.Conn,
-			controller.WithControllerFor(core.Secret{}),
+			controller.WithFor(core.Secret{}),
 		)
 		if err != nil {
 			return fmt.Errorf("starting secrets controller: %w", err)
@@ -253,12 +253,12 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		s.CtlrSecrets = ctlr
 	}
 	if opt.runNamespaceController {
-		defaultOptions := []controller.ControllerOption{
-			controller.WithControllerFor(core.Namespace{}),
-			controller.WithControllerValidator(&hz.ValidateNamespaceRoot{}),
+		defaultOptions := []controller.Option{
+			controller.WithFor(core.Namespace{}),
+			controller.WithValidator(&hz.ValidateNamespaceRoot{}),
 		}
 
-		ctlr, err := controller.StartController(
+		ctlr, err := controller.Start(
 			ctx,
 			s.Conn,
 			append(defaultOptions, opt.namespaceControllerOptions...)...,
@@ -269,28 +269,16 @@ func (s *Server) Start(ctx context.Context, opts ...ServerOption) error {
 		s.CtlrNamespaces = ctlr
 	}
 	if opt.runPortalController {
-		ctlr, err := controller.StartController(
+		ctlr, err := controller.Start(
 			ctx,
 			s.Conn,
-			controller.WithControllerFor(hz.Portal{}),
-			controller.WithControllerValidator(&hz.ValidateNamespaceRoot{}),
+			controller.WithFor(hz.Portal{}),
+			controller.WithValidator(&hz.ValidateNamespaceRoot{}),
 		)
 		if err != nil {
 			return fmt.Errorf("starting portal controller: %w", err)
 		}
 		s.CltrPortals = ctlr
-	}
-
-	// Check that the root namespace exists as an object.
-	// This is a little bit fidgety, because the root account *will* exist in
-	// NATS, but we want it to exist as a horizon namespace object in the store.
-	// We cannot create the horizon object when we create the account in nats
-	// because we would need the store to run, which cannot run until the root
-	// account exists in nats...
-	// For now, create it here but when we split the server out we'll need to
-	// find a good startup process.
-	if err := s.checkRootNamespaceObject(ctx); err != nil {
-		return fmt.Errorf("checking root namespace object: %w", err)
 	}
 
 	if opt.devMode {
@@ -364,25 +352,4 @@ func (s *Server) Close() error {
 		}
 	}
 	return errs
-}
-
-func (s *Server) checkRootNamespaceObject(
-	ctx context.Context,
-) error {
-	nsClient := hz.ObjectClient[core.Namespace]{
-		Client: hz.NewClient(s.Conn, hz.WithClientInternal(true)),
-	}
-	applyOp, err := nsClient.Apply(ctx, core.Namespace{
-		ObjectMeta: hz.ObjectMeta{
-			Name:      hz.NamespaceRoot,
-			Namespace: hz.NamespaceRoot,
-		},
-		Spec:   &core.NamespaceSpec{},
-		Status: &core.NamespaceStatus{},
-	})
-	if err != nil {
-		return fmt.Errorf("apply root namespace: %w", err)
-	}
-	slog.Info("applied root namespace", "op", applyOp)
-	return nil
 }

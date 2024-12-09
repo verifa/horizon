@@ -79,11 +79,11 @@ func TestStore(t *testing.T) {
 	for _, txtarFile := range txtarFiles {
 		ti := server.Test(t, ctx)
 		// SETUP DUMMY CONTROLLER
-		ctlr, err := controller.StartController(
+		ctlr, err := controller.Start(
 			ctx,
 			ti.Conn,
-			controller.WithControllerFor(DummyApplyObject{}),
-			controller.WithControllerValidatorCUE(false),
+			controller.WithFor(DummyApplyObject{}),
+			controller.WithValidatorCUE(false),
 		)
 		tu.AssertNoError(t, err)
 		t.Cleanup(func() {

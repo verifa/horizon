@@ -16,10 +16,10 @@ func TestSecrets(t *testing.T) {
 	ctx := context.Background()
 	ts := server.Test(t, ctx)
 
-	ctlr, err := controller.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ts.Conn,
-		controller.WithControllerFor(core.Secret{}),
+		controller.WithFor(core.Secret{}),
 	)
 	tu.AssertNoError(t, err)
 	t.Cleanup(func() {
