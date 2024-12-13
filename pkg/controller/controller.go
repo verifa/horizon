@@ -1,4 +1,4 @@
-package hz
+package controller
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
-	"reflect"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -16,56 +15,54 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/verifa/horizon/pkg/extensions/core"
+	"github.com/verifa/horizon/pkg/hz"
+	"github.com/verifa/horizon/pkg/internal/openapiv3"
 )
 
-type ControllerOption func(*controllerOption)
+type Option func(*controllerOption)
 
-func WithControllerBucket(bucketObjects string) ControllerOption {
+func WithBucket(bucketObjects string) Option {
 	return func(ro *controllerOption) {
 		ro.bucketObjects = bucketObjects
 	}
 }
 
-func WithControllerReconciler(reconciler Reconciler) ControllerOption {
+func WithReconciler(reconciler hz.Reconciler) Option {
 	return func(ro *controllerOption) {
 		ro.reconciler = reconciler
 	}
 }
 
-func WithControllerValidator(validator Validator) ControllerOption {
+func WithValidator(validator hz.Validator) Option {
 	return func(ro *controllerOption) {
 		ro.validators = append(ro.validators, validator)
 	}
 }
 
-func WithControllerValidatorCUE(b bool) ControllerOption {
+func WithValidatorCUE(b bool) Option {
 	return func(ro *controllerOption) {
 		ro.cueValidator = b
 	}
 }
 
-// WithControllerValidatorForceNone forces the controller to accept no
-// validators. It is intended for testing purposes. It is highly recommended to
-// use a validator to ensure data quality.
-func WithControllerValidatorForceNone() ControllerOption {
-	return func(ro *controllerOption) {
-		ro.validatorForceNone = true
-	}
-}
-
-func WithControllerFor(obj Objecter) ControllerOption {
+// WithFor sets the object for which the controller is running for.
+// A controller can only reconcile one object.
+func WithFor(obj hz.Objecter) Option {
 	return func(ro *controllerOption) {
 		ro.forObject = obj
 	}
 }
 
-func WithControllerOwns(obj Objecter) ControllerOption {
+// WithOwns sets objects that should be watched and checked if they are owned by
+// the object given with [WithFor].
+func WithOwns(obj hz.Objecter) Option {
 	return func(ro *controllerOption) {
 		ro.reconOwns = append(ro.reconOwns, obj)
 	}
 }
 
-func WithControllerStopTimeout(d time.Duration) ControllerOption {
+func WithStopTimeout(d time.Duration) Option {
 	return func(ro *controllerOption) {
 		ro.stopTimeout = d
 	}
@@ -75,28 +72,21 @@ type controllerOption struct {
 	bucketObjects string
 	bucketMutex   string
 
-	reconciler         Reconciler
-	validators         []Validator
-	cueValidator       bool
-	validatorForceNone bool
+	reconciler   hz.Reconciler
+	validators   []hz.Validator
+	cueValidator bool
+	// validatorForceNone bool
 
-	forObject Objecter
-	reconOwns []Objecter
+	forObject hz.Objecter
+	reconOwns []hz.Objecter
 
 	stopTimeout time.Duration
 }
 
-var controllerOptionsDefault = controllerOption{
-	bucketObjects: BucketObjects,
-	bucketMutex:   BucketMutex,
-	cueValidator:  true,
-	stopTimeout:   time.Minute * 10,
-}
-
-func StartController(
+func Start(
 	ctx context.Context,
 	nc *nats.Conn,
-	opts ...ControllerOption,
+	opts ...Option,
 ) (*Controller, error) {
 	ctlr := Controller{
 		Conn: nc,
@@ -120,9 +110,14 @@ type Controller struct {
 
 func (c *Controller) Start(
 	ctx context.Context,
-	opts ...ControllerOption,
+	opts ...Option,
 ) error {
-	ro := controllerOptionsDefault
+	ro := controllerOption{
+		bucketObjects: hz.BucketObjects,
+		bucketMutex:   hz.BucketMutex,
+		cueValidator:  true,
+		stopTimeout:   time.Minute * 10,
+	}
 	for _, opt := range opts {
 		opt(&ro)
 	}
@@ -131,33 +126,25 @@ func (c *Controller) Start(
 	}
 
 	c.stopTimeout = ro.stopTimeout
-	// Check the forObject value is not a pointer, as this causes problems for
-	// the cue encoder. If it is a pointer, get its element.
-	if reflect.ValueOf(ro.forObject).Type().Kind() == reflect.Ptr {
-		var ok bool
-		ro.forObject, ok = reflect.ValueOf(ro.forObject).
-			Elem().
-			Interface().(Objecter)
-		if !ok {
-			return fmt.Errorf("getting element from object pointer")
-		}
-	}
 	if ro.bucketMutex == "" {
 		ro.bucketMutex = ro.bucketObjects + "_mutex"
 	}
 	if ro.cueValidator {
 		// Add the cue validator for the object.
-		cueValidator := &CUEValidator{
+		cueValidator := &hz.ValidateCUE{
 			Object: ro.forObject,
 		}
 		if err := cueValidator.ParseObject(); err != nil {
 			return fmt.Errorf("parsing object: %w", err)
 		}
 		// Make sure the default validator comes first.
-		ro.validators = append([]Validator{cueValidator}, ro.validators...)
+		ro.validators = append([]hz.Validator{cueValidator}, ro.validators...)
 	}
-	if err := c.startSchema(ctx, ro); err != nil {
-		return fmt.Errorf("start schema: %w", err)
+	// if err := c.startSchema(ctx, ro); err != nil {
+	// 	return fmt.Errorf("start schema: %w", err)
+	// }
+	if err := c.applyCustomResourceDefinition(ctx, ro); err != nil {
+		return fmt.Errorf("apply custom resource definition: %w", err)
 	}
 
 	if err := c.startValidators(ctx, ro); err != nil {
@@ -171,25 +158,81 @@ func (c *Controller) Start(
 	return nil
 }
 
+func (c *Controller) applyCustomResourceDefinition(
+	ctx context.Context,
+	opt controllerOption,
+) error {
+	var (
+		schema *openapiv3.Schema
+		err    error
+	)
+	if oapiv3, ok := opt.forObject.(hz.ObjectOpenAPIV3Schemer); ok {
+		schema, err = oapiv3.OpenAPIV3Schema()
+	} else {
+		schema, err = OpenAPIV3SchemaFromObject(opt.forObject)
+	}
+	if err != nil {
+		return fmt.Errorf("getting object schema: %w", err)
+	}
+
+	name := fmt.Sprintf(
+		"%s-%s-%s",
+		opt.forObject.ObjectGroup(),
+		opt.forObject.ObjectVersion(),
+		opt.forObject.ObjectKind(),
+	)
+	singularName := strings.ToLower(opt.forObject.ObjectKind())
+	crd := core.CustomResourceDefinition{
+		ObjectMeta: hz.ObjectMeta{
+			Name:      name,
+			Namespace: hz.NamespaceRoot,
+		},
+		Spec: &core.CustomResourceDefinitionSpec{
+			Group:   hz.P(opt.forObject.ObjectGroup()),
+			Version: hz.P(opt.forObject.ObjectVersion()),
+			Names: &core.CustomResourceDefinitionNames{
+				Kind:     hz.P(opt.forObject.ObjectKind()),
+				Singular: &singularName,
+			},
+			Schema: &core.CustomResourceDefinitionSchema{
+				OpenAPIV3Schema: schema,
+			},
+		},
+	}
+
+	client := hz.NewClient(c.Conn, hz.WithClientInternal(true))
+	_, err = client.Apply(ctx, hz.WithApplyObject(crd))
+	if err != nil {
+		return fmt.Errorf("applying custom resource definition: %w", err)
+	}
+
+	return nil
+}
+
 func (c *Controller) startSchema(
 	_ context.Context,
 	opt controllerOption,
 ) error {
 	obj := opt.forObject
-	objSpec, err := OpenAPISpecFromObject(obj)
-	if err != nil {
-		return fmt.Errorf("getting object spec: %w", err)
+	var (
+		schema *openapiv3.Schema
+		err    error
+	)
+
+	if oapiv3, ok := opt.forObject.(hz.ObjectOpenAPIV3Schemer); ok {
+		schema, err = oapiv3.OpenAPIV3Schema()
+	} else {
+		schema, err = OpenAPIV3SchemaFromObject(obj)
 	}
-	schema, err := objSpec.Schema()
 	if err != nil {
-		return fmt.Errorf("getting schema: %w", err)
+		return fmt.Errorf("getting object schema: %w", err)
 	}
 	bSchema, err := json.Marshal(schema)
 	if err != nil {
 		return fmt.Errorf("marshalling schema: %w", err)
 	}
 	subject := fmt.Sprintf(
-		SubjectCtlrSchema,
+		hz.SubjectCtlrSchema,
 		obj.ObjectGroup(),
 		obj.ObjectVersion(),
 		obj.ObjectKind(),
@@ -215,7 +258,7 @@ func (c *Controller) startValidators(
 	obj := opt.forObject
 	{
 		subject := fmt.Sprintf(
-			SubjectCtlrValidateCreate,
+			hz.SubjectCtlrValidateCreate,
 			obj.ObjectGroup(),
 			obj.ObjectVersion(),
 			obj.ObjectKind(),
@@ -234,7 +277,7 @@ func (c *Controller) startValidators(
 	}
 	{
 		subject := fmt.Sprintf(
-			SubjectCtlrValidateUpdate,
+			hz.SubjectCtlrValidateUpdate,
 			obj.ObjectGroup(),
 			obj.ObjectVersion(),
 			obj.ObjectKind(),
@@ -259,10 +302,10 @@ func (c *Controller) handleValidateCreate(
 	opt controllerOption,
 	msg *nats.Msg,
 ) {
-	var vErr *Error
+	var vErr *hz.Error
 	for _, validator := range opt.validators {
 		if err := validator.ValidateCreate(ctx, msg.Data); err != nil {
-			vErr = &Error{
+			vErr = &hz.Error{
 				Status:  http.StatusBadRequest,
 				Message: err.Error(),
 			}
@@ -271,10 +314,10 @@ func (c *Controller) handleValidateCreate(
 		}
 	}
 	if vErr != nil {
-		_ = RespondError(msg, vErr)
+		_ = hz.RespondError(msg, vErr)
 		return
 	}
-	_ = RespondOK(msg, nil)
+	_ = hz.RespondOK(msg, nil)
 }
 
 func (c *Controller) handleValidateUpdate(
@@ -282,9 +325,9 @@ func (c *Controller) handleValidateUpdate(
 	opt controllerOption,
 	msg *nats.Msg,
 ) {
-	var metaObj MetaOnlyObject
+	var metaObj hz.MetaOnlyObject
 	if err := json.Unmarshal(msg.Data, &metaObj); err != nil {
-		_ = RespondError(msg, &Error{
+		_ = hz.RespondError(msg, &hz.Error{
 			Status: http.StatusBadRequest,
 			Message: fmt.Sprintf(
 				"unmarshalling object: %s",
@@ -294,10 +337,10 @@ func (c *Controller) handleValidateUpdate(
 		return
 	}
 	// Need to fetch the existing object and pass it to the validators.
-	client := NewClient(c.Conn, WithClientInternal(true))
-	old, err := client.Get(ctx, WithGetKey(metaObj))
+	client := hz.NewClient(c.Conn, hz.WithClientInternal(true))
+	old, err := client.Get(ctx, hz.WithGetKey(metaObj))
 	if err != nil {
-		_ = RespondError(msg, &Error{
+		_ = hz.RespondError(msg, &hz.Error{
 			Status: http.StatusInternalServerError,
 			Message: fmt.Sprintf(
 				"getting existing object from store: %s",
@@ -306,10 +349,10 @@ func (c *Controller) handleValidateUpdate(
 		})
 		return
 	}
-	var vErr *Error
+	var vErr *hz.Error
 	for _, validator := range opt.validators {
 		if err := validator.ValidateUpdate(ctx, old, msg.Data); err != nil {
-			vErr = &Error{
+			vErr = &hz.Error{
 				Status:  http.StatusBadRequest,
 				Message: err.Error(),
 			}
@@ -318,10 +361,10 @@ func (c *Controller) handleValidateUpdate(
 		}
 	}
 	if vErr != nil {
-		_ = RespondError(msg, vErr)
+		_ = hz.RespondError(msg, vErr)
 		return
 	}
-	_ = RespondOK(msg, nil)
+	_ = hz.RespondOK(msg, nil)
 }
 
 func (c *Controller) startReconciler(
@@ -352,7 +395,7 @@ func (c *Controller) startReconciler(
 	if err != nil {
 		return fmt.Errorf("stream: %w", err)
 	}
-	subject := "$KV." + kv.Bucket() + "." + KeyFromObject(forObj)
+	subject := "$KV." + kv.Bucket() + "." + hz.KeyFromObject(forObj)
 	con, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 		Name:           "rc_" + forObj.ObjectKind(),
 		Durable:        "rc_" + forObj.ObjectKind(),
@@ -405,7 +448,7 @@ func (c *Controller) startReconciler(
 	c.consumeContexts = append(c.consumeContexts, cc)
 
 	for _, obj := range opt.reconOwns {
-		subject := "$KV." + kv.Bucket() + "." + KeyFromObject(obj)
+		subject := "$KV." + kv.Bucket() + "." + hz.KeyFromObject(obj)
 		con, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 			Name:           "rc_" + forObj.ObjectKind() + "_o_" + obj.ObjectKind(),
 			Description:    "Reconciler for " + forObj.ObjectKind() + " owns " + obj.ObjectKind(),
@@ -433,7 +476,7 @@ func (c *Controller) startReconciler(
 			// This consumer is for the child objects of the parent object.
 			// Hence, check if the child object (msg) is owned by the parent
 			// for which the reconciler is running.
-			var emptyObject MetaOnlyObject
+			var emptyObject hz.MetaOnlyObject
 			if err := json.Unmarshal(msg.Data(), &emptyObject); err != nil {
 				slog.Error("unmarshal msg to empty object", "error", err)
 				_ = msg.Term()
@@ -449,7 +492,7 @@ func (c *Controller) startReconciler(
 				return
 			}
 			// Key for the owner (parent) object.
-			key := KeyFromObject(ObjectKey{
+			key := hz.KeyFromObject(hz.ObjectKey{
 				Group:     ownerRef.Group,
 				Kind:      ownerRef.Kind,
 				Name:      ownerRef.Name,
@@ -538,7 +581,7 @@ func (c *Controller) stopWaitTimeout() bool {
 // owner object of the child (parent).
 func (c *Controller) handleControlLoop(
 	ctx context.Context,
-	reconciler Reconciler,
+	reconciler hz.Reconciler,
 	kv jetstream.KeyValue,
 	mutex mutex,
 	key string,
@@ -568,7 +611,7 @@ func (c *Controller) handleControlLoop(
 		return
 	}
 	// Get the object key from the nats subject / kv key.
-	objKey, err := ObjectKeyFromString(key)
+	objKey, err := hz.ObjectKeyFromString(key)
 	if err != nil {
 		slog.Error("getting object key from key", "key", key, "error", err)
 		_ = msg.NakWithDelay(time.Second)
@@ -598,11 +641,11 @@ func (c *Controller) handleControlLoop(
 	}()
 
 	// Prepare the request and call the reconciler.
-	req := Request{
+	req := hz.Request{
 		Key: objKey,
 	}
 	var (
-		reconcileResult Result
+		reconcileResult hz.Result
 		reconcileErr    error
 		reconcileDone   = make(chan struct{})
 	)
@@ -766,11 +809,4 @@ func opFromMsg(msg jetstream.Msg) jetstream.KeyValueOp {
 		}
 	}
 	return kvop
-}
-
-func IgnoreNotFound(err error) error {
-	if errors.Is(err, ErrNotFound) {
-		return nil
-	}
-	return err
 }

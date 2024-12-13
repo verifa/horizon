@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/verifa/horizon/pkg/controller"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/server"
 	"github.com/verifa/horizon/pkg/store"
@@ -78,12 +79,11 @@ func TestStore(t *testing.T) {
 	for _, txtarFile := range txtarFiles {
 		ti := server.Test(t, ctx)
 		// SETUP DUMMY CONTROLLER
-		ctlr, err := hz.StartController(
+		ctlr, err := controller.Start(
 			ctx,
 			ti.Conn,
-			hz.WithControllerFor(DummyApplyObject{}),
-			hz.WithControllerValidatorCUE(false),
-			hz.WithControllerValidatorForceNone(),
+			controller.WithFor(DummyApplyObject{}),
+			controller.WithValidatorCUE(false),
 		)
 		tu.AssertNoError(t, err)
 		t.Cleanup(func() {

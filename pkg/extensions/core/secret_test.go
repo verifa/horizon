@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/verifa/horizon/pkg/controller"
 	"github.com/verifa/horizon/pkg/extensions/core"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/server"
@@ -15,10 +16,10 @@ func TestSecrets(t *testing.T) {
 	ctx := context.Background()
 	ts := server.Test(t, ctx)
 
-	ctlr, err := hz.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ts.Conn,
-		hz.WithControllerFor(core.Secret{}),
+		controller.WithFor(core.Secret{}),
 	)
 	tu.AssertNoError(t, err)
 	t.Cleanup(func() {

@@ -1,4 +1,4 @@
-package hz_test
+package controller_test
 
 import (
 	"context"
@@ -7,11 +7,51 @@ import (
 	"testing"
 	"time"
 
+	"github.com/verifa/horizon/pkg/controller"
 	"github.com/verifa/horizon/pkg/hz"
 	"github.com/verifa/horizon/pkg/server"
 	"github.com/verifa/horizon/pkg/store"
 	tu "github.com/verifa/horizon/pkg/testutil"
 )
+
+var _ (hz.Objecter) = (*DummyObject)(nil)
+
+type DummyObject struct {
+	hz.ObjectMeta `json:"metadata,omitempty" cue:""`
+
+	Spec   struct{} `json:"spec,omitempty"   cue:""`
+	Status struct{} `json:"status,omitempty"`
+}
+
+func (o DummyObject) ObjectVersion() string {
+	return "v1"
+}
+
+func (o DummyObject) ObjectGroup() string {
+	return "DummyGroup"
+}
+
+func (o DummyObject) ObjectKind() string {
+	return "DummyObject"
+}
+
+type ChildObject struct {
+	hz.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec struct{} `json:"spec,omitempty" cue:",opt"`
+}
+
+func (o ChildObject) ObjectGroup() string {
+	return "ChildGroup"
+}
+
+func (o ChildObject) ObjectVersion() string {
+	return "v1"
+}
+
+func (o ChildObject) ObjectKind() string {
+	return "ChildObject"
+}
 
 type DummyReconciler struct {
 	DummyClient hz.ObjectClient[DummyObject]
@@ -45,22 +85,22 @@ func TestReconciler(t *testing.T) {
 	dr := DummyReconciler{
 		DummyClient: dummyClient,
 	}
-	ctlr, err := hz.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		hz.WithControllerReconciler(&dr),
-		hz.WithControllerFor(&DummyObject{}),
-		hz.WithControllerOwns(&ChildObject{}),
+		controller.WithReconciler(&dr),
+		controller.WithFor(&DummyObject{}),
+		controller.WithOwns(&ChildObject{}),
 	)
 	tu.AssertNoError(t, err)
 	defer ctlr.Stop()
 
 	// Start controller for child object.
-	childCtlr, err := hz.StartController(
+	childCtlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		hz.WithControllerReconciler(&ChildReconciler{}),
-		hz.WithControllerFor(&ChildObject{}),
+		controller.WithReconciler(&ChildReconciler{}),
+		controller.WithFor(&ChildObject{}),
 	)
 	tu.AssertNoError(t, err)
 	defer childCtlr.Stop()
@@ -84,8 +124,8 @@ func TestReconciler(t *testing.T) {
 					Group:     do.ObjectGroup(),
 					Version:   do.ObjectVersion(),
 					Kind:      do.ObjectKind(),
-					Namespace: do.Namespace,
-					Name:      do.Name,
+					Namespace: do.ObjectNamespace(),
+					Name:      do.ObjectName(),
 				},
 			},
 		},
@@ -121,11 +161,11 @@ func TestReconcilerPanic(t *testing.T) {
 	dummyClient := hz.ObjectClient[DummyObject]{Client: client}
 	pr := PanicReconciler{}
 	pr.wg.Add(2)
-	ctlr, err := hz.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		hz.WithControllerReconciler(&pr),
-		hz.WithControllerFor(&DummyObject{}),
+		controller.WithReconciler(&pr),
+		controller.WithFor(&DummyObject{}),
 	)
 	tu.AssertNoError(t, err)
 	defer ctlr.Stop()
@@ -196,11 +236,11 @@ func TestReconcilerSlow(t *testing.T) {
 
 	sr := SlowReconciler{}
 	sr.wg.Add(2)
-	ctlr, err := hz.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		hz.WithControllerReconciler(&sr),
-		hz.WithControllerFor(&DummyObject{}),
+		controller.WithReconciler(&sr),
+		controller.WithFor(&DummyObject{}),
 	)
 	tu.AssertNoError(t, err)
 	t.Cleanup(func() {
@@ -269,11 +309,11 @@ func TestReconcilerWaitForFinish(t *testing.T) {
 	sr := SleepReconciler{
 		dur: time.Second * 3,
 	}
-	ctlr, err := hz.StartController(
+	ctlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		hz.WithControllerReconciler(&sr),
-		hz.WithControllerFor(&DummyObject{}),
+		controller.WithReconciler(&sr),
+		controller.WithFor(&DummyObject{}),
 	)
 	tu.AssertNoError(t, err)
 
@@ -340,21 +380,21 @@ func TestReconcilerConcurrent(t *testing.T) {
 	}
 	// Start a few instances of the controller.
 	for i := 0; i < 5; i++ {
-		ctlr, err := hz.StartController(
+		ctlr, err := controller.Start(
 			ctx,
 			ti.Conn,
-			hz.WithControllerReconciler(&cr),
-			hz.WithControllerFor(&DummyObject{}),
+			controller.WithReconciler(&cr),
+			controller.WithFor(&DummyObject{}),
 		)
 		tu.AssertNoError(t, err)
 		defer ctlr.Stop()
 	}
 	// Start controller for child object
-	childCtlr, err := hz.StartController(
+	childCtlr, err := controller.Start(
 		ctx,
 		ti.Conn,
-		hz.WithControllerReconciler(&ChildReconciler{}),
-		hz.WithControllerFor(&ChildObject{}),
+		controller.WithReconciler(&ChildReconciler{}),
+		controller.WithFor(&ChildObject{}),
 	)
 	tu.AssertNoError(t, err)
 	defer childCtlr.Stop()

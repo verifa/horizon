@@ -72,7 +72,7 @@ type storeOptions struct {
 	stopTimeout time.Duration
 }
 
-func StartStore(
+func Start(
 	ctx context.Context,
 	conn *nats.Conn,
 	auth *auth.Auth,
@@ -177,6 +177,10 @@ func (s *Store) Start(
 		return fmt.Errorf("start garbage collector: %w", err)
 	}
 	s.gc = gc
+
+	if err := s.applyRootNamespaceObject(ctx); err != nil {
+		return fmt.Errorf("applying root namespace object: %w", err)
+	}
 	return nil
 }
 
@@ -200,6 +204,35 @@ func (s *Store) Close() error {
 		)
 	}
 	return errs
+}
+
+func (s *Store) applyRootNamespaceObject(
+	ctx context.Context,
+) error {
+	ns := core.Namespace{
+		ObjectMeta: hz.ObjectMeta{
+			Name:      hz.NamespaceRoot,
+			Namespace: hz.NamespaceRoot,
+		},
+		Spec:   &core.NamespaceSpec{},
+		Status: &core.NamespaceStatus{},
+	}
+	data, err := json.Marshal(ns)
+	if err != nil {
+		return fmt.Errorf("marshalling root namespace: %w", err)
+	}
+	if _, err := s.kv.Put(ctx, hz.KeyFromObject(ns), data); err != nil {
+		return fmt.Errorf("put root namespace: %w", err)
+	}
+	// if _, err := s.Apply(ctx, ApplyRequest{
+	// 	Key:     hz.ObjectKeyFromObject(ns),
+	// 	Data:    data,
+	// 	Manager: "hz-store",
+	// 	Force:   true,
+	// }); err != nil {
+	// 	return fmt.Errorf("apply root namespace: %w", err)
+	// }
+	return nil
 }
 
 func (s *Store) stopWaitTimeout() bool {
@@ -412,7 +445,7 @@ func (s *Store) handleInternalMsg(ctx context.Context, msg *nats.Msg) {
 			}
 			return nil
 		}
-		if !isNamespaceKey(key) {
+		if !isKindNamespace(key) {
 			err := checkNamespace(key.Namespace)
 			if err != nil {
 				_ = hz.RespondError(msg, err)
@@ -504,7 +537,7 @@ func removeReadOnlyFields(data []byte) ([]byte, error) {
 	return sjson.DeleteBytes(data, "metadata.revision")
 }
 
-func isNamespaceKey(key hz.ObjectKeyer) bool {
+func isKindNamespace(key hz.ObjectKeyer) bool {
 	return key.ObjectGroup() == core.ObjectGroup &&
 		key.ObjectKind() == core.ObjectKindNamespace
 }

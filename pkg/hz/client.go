@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/tidwall/sjson"
 )
 
@@ -321,37 +320,6 @@ func (c Client) SubjectPrefix() string {
 		return "HZ.internal."
 	}
 	return "HZ.api."
-}
-
-func (c Client) Schema(
-	ctx context.Context,
-	key ObjectKeyer,
-) (Schema, error) {
-	subject := c.SubjectPrefix() + fmt.Sprintf(
-		SubjectStoreSchema,
-		key.ObjectGroup(),
-		key.ObjectVersion(),
-		key.ObjectKind(),
-	)
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	reply, err := c.Conn.RequestWithContext(ctx, subject, nil)
-	if err != nil {
-		if errors.Is(err, nats.ErrNoResponders) {
-			return Schema{}, errors.New("controller not responding")
-		}
-		return Schema{}, fmt.Errorf("request: %w", err)
-	}
-
-	var schema Schema
-	if err := json.Unmarshal(reply.Data, &schema); err != nil {
-		return Schema{}, fmt.Errorf(
-			"unmarshal reply error: %w",
-			err,
-		)
-	}
-
-	return schema, nil
 }
 
 type ValidateOption func(*validateOptions)
@@ -936,17 +904,6 @@ func (c *Client) Run(
 	}
 
 	return reply.Data, nil
-}
-
-// isErrWrongLastSequence returns true if the error is caused by a write
-// operation to a stream with the wrong last sequence.
-// For example, if a kv update with an outdated revision.
-func isErrWrongLastSequence(err error) bool {
-	var apiErr *jetstream.APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.ErrorCode == jetstream.JSErrCodeStreamWrongLastSequence
-	}
-	return false
 }
 
 type RunMsg struct {

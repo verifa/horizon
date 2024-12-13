@@ -29,24 +29,6 @@ func (o DummyObject) ObjectKind() string {
 	return "DummyObject"
 }
 
-type ChildObject struct {
-	hz.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec struct{} `json:"spec,omitempty" cue:",opt"`
-}
-
-func (o ChildObject) ObjectGroup() string {
-	return "ChildGroup"
-}
-
-func (o ChildObject) ObjectVersion() string {
-	return "v1"
-}
-
-func (o ChildObject) ObjectKind() string {
-	return "ChildObject"
-}
-
 func TestGenericObjectMarshal(t *testing.T) {
 	expObj := map[string]interface{}{
 		"apiVersion": "core/v1",

@@ -1,0 +1,49 @@
+package services
+
+import "github.com/verifa/horizon/pkg/hz"
+
+templ (r *PortalRenderer) home() {
+	<div class="prose md:prose-lg lg:prose-xl xl:prose-2xl">
+		<h1>Services</h1>
+		<table class="table">
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Ready</th>
+				</tr>
+			</thead>
+			<tbody hx-get={ r.URL() } hx-trigger="load, every 5s, newService from:body" hx-swap="innerHTML"></tbody>
+		</table>
+	</div>
+}
+
+templ (r *PortalRenderer) form(name string, err error) {
+	<form hx-post={ r.URL() } hx-swap="outerHTML">
+		<label class="label">
+			<span class="label-text">Name</span>
+		</label>
+		<input type="text" name="name" placeholder="Name of the counter..." value={ name } class={ "input input-bordered w-full max-w-xs", templ.KV("input-error", err != nil) }/>
+		<button type="submit" class="btn">Apply</button>
+		if err != nil {
+			<p class="text-error">{ "Error: "+ err.Error() }</p>
+		}
+	</form>
+}
+
+templ (r *PortalRenderer) tableBody(services []Service) {
+	if len(services) == 0 {
+		<tr>
+			<td colSpan="2" class="text-center">No services yet</td>
+		</tr>
+	}
+	for _, service := range services {
+		<tr id={ hz.KeyFromObject(service) }>
+			<td>{ service.ObjectMeta.Name }</td>
+			if isServiceReady(service.Status) {
+				<td>Ready</td>
+			} else {
+				<td>Not Ready</td>
+			}
+		</tr>
+	}
+}

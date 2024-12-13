@@ -73,6 +73,20 @@ func TestManagedFieldsV1(t *testing.T) {
 			},
 		},
 		{
+			name: "array without id",
+			json: `
+			{
+				"slice": [
+					{"field": "value"}
+				]
+			}`,
+			exp: FieldsV1{
+				Fields: map[FieldsV1Key]FieldsV1{
+					fkey("slice"): {},
+				},
+			},
+		},
+		{
 			name: "empty-metadata",
 			json: `{
 				"metadata": {

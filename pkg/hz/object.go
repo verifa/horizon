@@ -7,8 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/ast"
+	"github.com/verifa/horizon/pkg/internal/hzcue"
 	"github.com/verifa/horizon/pkg/internal/managedfields"
+	"github.com/verifa/horizon/pkg/internal/openapiv3"
 )
+
+const NamespaceRoot = "root"
 
 // Objecter is an interface that represents an object in the Horizon API.
 type Objecter interface {
@@ -27,6 +33,10 @@ type ObjectKeyer interface {
 	ObjectKind() string
 	ObjectNamespace() string
 	ObjectName() string
+}
+
+type ObjectOpenAPIV3Schemer interface {
+	OpenAPIV3Schema() (*openapiv3.Schema, error)
 }
 
 func validateKeyStrict(key ObjectKeyer) error {
@@ -336,6 +346,8 @@ func (o OwnerReference) IsOwnedBy(owner Objecter) bool {
 		o.Namespace == owner.ObjectNamespace()
 }
 
+var _ hzcue.CueExpressioner = (*Time)(nil)
+
 type Time struct {
 	time.Time
 }
@@ -345,6 +357,10 @@ func (t *Time) IsPast() bool {
 		return false
 	}
 	return t.Before(time.Now())
+}
+
+func (t Time) CueExpr(cCtx *cue.Context) (cue.Value, error) {
+	return cCtx.BuildExpr(ast.NewIdent("string")), nil
 }
 
 // Finalizers are a way to prevent garbage collection of objects until a
